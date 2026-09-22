@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 partial deposit, one side only
-# note: dedust_v2_deposit_partial matcher; only amount1 present, deposit contract stays open
+# note: The one sided deposit stays open and classifies as a partial liquidity deposit
 # trace: a4iGagV3jl5etlZ77Zxj8krjyQn7Z3Uqzb7YRYIOY_U=
 actions:
   - type: call_contract

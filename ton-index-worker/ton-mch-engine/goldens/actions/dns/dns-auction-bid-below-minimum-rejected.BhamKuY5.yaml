@@ -1,5 +1,5 @@
 # dns / .ton DNS auction, bid below the 105% minimum increment is rejected (composed)
-# note: synthetic: composed message against real code+state, snapshot mc 91102300, root message hash BhamKuY5; empty-body TON transfer at 104% of the standing max_bid; item transaction aborted exit 407, no ownership_assigned, bounce back to sender; provenance: ton-blockchain/dns-contract@d081310:func/nft-item.fc:180-263 (op-0 bid below 105% of the standing bid throws 407); excluded from production comparison
+# note: synthetic: A bid below the minimum increment is rejected and classifies as a failed auction bid
 # trace: BhamKuY5ryJZPt6DOvbigcj8pbB31TrfMT2VMmEV1_4=
 actions:
   - type: auction_bid

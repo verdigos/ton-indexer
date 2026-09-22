@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / stonfi v2 withdraw no lp wallet
-# note: synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_both_reject_without_lp_wallet by pyir-w2 lane P; not a chain trace
+# note: synthetic: A STON.fi withdrawal without an LP wallet classifies as two jetton transfers
 # trace: s8itPcpYUOtg1Aq8U_Oyt_99ucaGcK7HPrF4WZWQqRc=
 actions:
   - type: call_contract

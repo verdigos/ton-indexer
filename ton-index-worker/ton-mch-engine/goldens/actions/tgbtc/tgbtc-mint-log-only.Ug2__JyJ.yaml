@@ -1,5 +1,5 @@
 # tgbtc / tgbtc mint log only
-# note: synthetic: built from test_tgbtc_log_only.py::test_log_only_parity[mint] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A mint log classifies as a tgBTC mint fallback
 # trace: Ug2__JyJgoH0xBJBkjfjhjdJAHf6gIY-4PW1kPbqsZo=
 actions:
   - type: call_contract

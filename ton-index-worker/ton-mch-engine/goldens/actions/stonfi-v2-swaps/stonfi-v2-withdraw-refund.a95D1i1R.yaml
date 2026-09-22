@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / stonfi v2 withdraw refund
-# note: synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_parity_refund by pyir-w2 lane P; not a chain trace
+# note: synthetic: A refunded STON.fi v2 withdrawal classifies as a liquidity withdrawal
 # trace: a95D1i1RGPzPj4YShaKEi8TeiBANeN4CAExMcq5PaYg=
 actions:
   - type: dex_withdraw_liquidity

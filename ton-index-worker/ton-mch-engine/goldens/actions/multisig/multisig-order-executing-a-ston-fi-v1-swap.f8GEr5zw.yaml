@@ -1,5 +1,5 @@
 # multisig / Multisig order executing a STON.fi v1 swap
-# note: approve call 0xa762230f is unsuccessful, execution still proceeds
+# note: The order executes despite a failed approval call and classifies as a STON.fi v1 swap
 # trace: f8GEr5zwfv66Lc66oG0zxFjYbcD42KzPylO-RKv1vGQ=
 actions:
   - type: call_contract

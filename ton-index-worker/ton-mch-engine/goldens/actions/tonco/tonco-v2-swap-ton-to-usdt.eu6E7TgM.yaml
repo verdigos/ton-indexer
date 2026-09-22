@@ -1,5 +1,5 @@
 # tonco / tonco v2 swap TON to USDT (pool exit 200)
-# note: bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; Tonco v2 pool SWAP body and v2 PayTo coinsinfo
+# note: The TON swap uses v2 pool and payout bodies and classifies as a Tonco jetton swap
 # trace: eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=
 actions:
   - type: call_contract

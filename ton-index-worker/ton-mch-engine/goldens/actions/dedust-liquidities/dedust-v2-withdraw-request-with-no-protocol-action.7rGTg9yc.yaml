@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 withdraw request with no protocol action
-# note: Withdraw 0x20b5ef89 and WithdrawLiquidity 0xbc1531a9 present, nothing matches
+# note: The withdrawal request contains both withdrawal opcodes and classifies only as contract calls
 # trace: 7rGTg9ycXwQQ7130kmtsTtVLC1pOewRPotGNjkuXkms=
 actions:
   - type: call_contract

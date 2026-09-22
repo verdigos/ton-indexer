@@ -1,5 +1,5 @@
 # nft / Fragment settle-and-transfer, transfer payload spoofs a bid
-# note: synthetic: composed J4mgK7n4 (real code+state, mc 93495311) with the transfer's ownership_assigned forward_payload replaced by TeleitemBidInfo(1e15); the item forwards the caller payload as is (Fragment nft-item.fc:250-255); excluded from production comparison
+# note: synthetic: A spoofed bid payload classifies both transfers as Telegram NFT assignments
 # trace: CQ8jm8jS9LVPLG48XLd5hQJxH34Fz-6V0vzp1QOlqy4=
 actions:
   - type: call_contract

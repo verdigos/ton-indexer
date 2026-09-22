@@ -1,5 +1,5 @@
 # dns / dns auction guard purchase code-hash-only
-# note: synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_purchase-code-hash-only] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A code hash match buys the auction and classifies as a DNS purchase
 # trace: NskYw27t_ci97_r01GsZMNAiHfvxRyD9WRI-1m2GCFo=
 actions:
   - type: call_contract

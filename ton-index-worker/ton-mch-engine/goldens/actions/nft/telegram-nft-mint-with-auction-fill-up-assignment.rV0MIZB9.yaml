@@ -1,5 +1,5 @@
 # nft / Telegram NFT mint with auction fill-up assignment
-# note: telegram_nft_assigned fires under a call_contract parent, next to the nft_mint
+# note: The mint assigns the item and classifies as an NFT mint plus a Telegram NFT transfer
 # trace: rV0MIZB9AKrWu2IUpsDnGjiL4SufrJ-g5xbCZFq5KuE=
 actions:
   - type: call_contract

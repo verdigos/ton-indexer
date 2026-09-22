@@ -1,5 +1,5 @@
 # dedust-swaps / DeDust v2 two-hop swap jetton to TON to USDT
-# note: two peer_swaps steps, no intermediate jetton transfer actions
+# note: The two hop route crosses TON and classifies as one DeDust v2 swap
 # trace: APLmhF6A2x2HJkhGrBOB86fUizlonodaK7bUPNGDOIU=
 actions:
   - type: jetton_swap

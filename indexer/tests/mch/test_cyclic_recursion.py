@@ -49,9 +49,6 @@ def _compile_cyclic():
     return compiled
 
 
-# ---------------------------------------------------------------------------
-# Compile and emit
-# ---------------------------------------------------------------------------
 def test_cyclic_rule_compiles_without_r006():
     compiled = _compile_cyclic()
     assert [c.name for c in compiled] == ["cyc"]
@@ -87,9 +84,6 @@ def test_cyclic_ir_emits_strategy_and_back_edge():
     assert cycle, "no back-edge to the body root in the emitted IR"
 
 
-# ---------------------------------------------------------------------------
-# C012 diagnostics
-# ---------------------------------------------------------------------------
 def _expect_c012(src: str) -> None:
     reg = _registries()
     with pytest.raises(CompileError) as ei:

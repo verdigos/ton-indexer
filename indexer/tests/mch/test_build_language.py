@@ -17,9 +17,6 @@ from indexer.events.mch.resolver import resolve
 from indexer.events.mch.tokens import TokenKind
 
 
-# ==========================================================================
-# Helpers
-# ==========================================================================
 
 def _kinds(text: str) -> list[TokenKind]:
     return [t.kind for t in tokenize(text, "f.mch") if t.kind is not TokenKind.EOF]
@@ -58,9 +55,6 @@ def _resolve(src: str):
     return resolve(_parse(src), _fb_registries())
 
 
-# ==========================================================================
-# Lexer
-# ==========================================================================
 
 def test_lex_comparison_and_expr_operators():
     assert _kinds("== != <= >= < > ?? - , :") == [
@@ -94,9 +88,6 @@ def test_lex_bare_bang_is_error():
     assert exc.value.code == "L002_UNKNOWN_CHAR"
 
 
-# ==========================================================================
-# Parser — build statements
-# ==========================================================================
 
 def test_parse_stmt_roundtrips():
     m = _matcher("op Foo @x\nparse x as JettonTransfer")
@@ -165,9 +156,6 @@ def test_full_matcher_combines_pattern_and_build_stmts():
     ]
 
 
-# ==========================================================================
-# Parser — expression precedence
-# ==========================================================================
 
 def test_or_binds_looser_than_and():
     # a or b and c  ==  a or (b and c)
@@ -267,9 +255,6 @@ def test_where_named_predicate_still_parses():
     assert node.where_expr is None
 
 
-# ==========================================================================
-# Resolver
-# ==========================================================================
 
 def test_resolver_carries_build_stmts():
     rf = _resolve(

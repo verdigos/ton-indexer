@@ -1,5 +1,5 @@
 # nominator / nominator non pool
-# note: synthetic: built from test_nominator_withdraw.py::test_rejects_non_nominator_pool by pyir-w2 lane P; not a chain trace
+# note: synthetic: A non pool withdrawal attempt classifies only as two TON transfers
 # trace: hAEvldgk1ghxDfzmVB_8Isoqp2I0zvZ8piAQFkAsYMY=
 actions:
   - type: ton_transfer

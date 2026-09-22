@@ -1,5 +1,5 @@
 # nominator / nominator two payouts
-# note: synthetic: built from test_nominator_withdraw.py::test_two_payouts_parity_same_granularity by pyir-w2 lane P; not a chain trace
+# note: synthetic: Two nominator payouts classify as two stake withdrawals
 # trace: WtV2kLkWvCQof0ePvUGgvVzObSMAzhZ4C19fYM_lxL8=
 actions:
   - type: stake_withdrawal

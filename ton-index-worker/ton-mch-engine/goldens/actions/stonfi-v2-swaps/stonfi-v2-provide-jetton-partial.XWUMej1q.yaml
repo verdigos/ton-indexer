@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / single jetton partial
-# note: synthetic: built from test_stonfi_v2_provide.py::test_single_jetton_partial_survives by pyir-w2 lane P; not a chain trace
+# note: synthetic: A single jetton contribution classifies as a partial liquidity deposit
 # trace: XWUMej1qmb9Q3YEpmoHNDlG5yHsIfJr4l5_6vdBJaSQ=
 actions:
   - type: dex_deposit_liquidity

@@ -57,10 +57,9 @@ enum class FailureCategory {
 //     incomplete    — payload buffer count != assembler node count, or (task mode)
 //                     identity / count / end mismatch against the inventory;
 //     unexpected_trace — (task mode) completed trace absent from the inventory;
-//     lone_tick_tock — the trace is exactly one tick-tock transaction; python
-//                      returns an empty success before matching
-//                      (trace_processor.py `_is_tick_tock_transaction`).
-//                      Tick-tock roots with children are classified normally.
+//     lone_tick_tock: the trace is exactly one tick-tock transaction and is
+//                      skipped before matching. Tick-tock roots with
+//                      children are classified normally.
 enum class TraceOutcome {
   classified,
   fallback,

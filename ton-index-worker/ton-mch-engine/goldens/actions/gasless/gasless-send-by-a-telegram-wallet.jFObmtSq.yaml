@@ -1,5 +1,5 @@
 # gasless / Gasless send by a Telegram wallet
-# note: named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden
+# note: The Telegram wallet sends TON and classifies as a gasless request plus a TON transfer
 # trace: jFObmtSqr6Fzn6QnPonxGlzgTWjWvRcoi0BF_wSCjcM=
 actions:
   - type: call_contract

@@ -1,5 +1,5 @@
 # dns / change dns failed
-# note: synthetic: built from test_dns.py::test_change_dns_parity_failed by pyir-w2 lane P; not a chain trace
+# note: synthetic: A failed DNS record change classifies as a failed DNS change
 # trace: Nmv_O6y9aJnZFx_GflgmIe2dNEkAUxwvC8f5w4dDd3g=
 actions:
   - type: change_dns

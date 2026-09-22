@@ -1,5 +1,5 @@
 # dns / change dns
-# note: synthetic: built from test_dns.py::test_change_dns_parity by pyir-w2 lane P; not a chain trace
+# note: synthetic: A DNS record changes and classifies as a DNS change
 # trace: 1WiA9HaREX5QRs_4bN0AARpD-wPid__NEEw73KY_6TQ=
 actions:
   - type: change_dns

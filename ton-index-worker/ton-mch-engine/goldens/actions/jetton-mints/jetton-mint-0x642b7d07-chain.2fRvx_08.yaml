@@ -1,5 +1,5 @@
 # jetton-mints / jetton mint 0x642b7d07 chain (api-sourced)
-# note: api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 91215721 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace d9f46fc7… from the sign-off comparator run; pins jetton_mint for the 0x642b7d07 mint chain
+# note: The 0x642b7d07 mint chain classifies as one jetton mint and one contract call
 # trace: 2fRvx_087KHoYhZfp2QzslArb4FdUEsbbRjSIeUDgMY=
 actions:
   - type: call_contract

@@ -1,5 +1,5 @@
 # gasless / Fan-out and recursive gasless requests
-# note: named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden
+# note: The requests fan out recursively and classify as three gasless requests and two TON transfers
 # trace: Uc8KYt0t3y8-gnvbfOxMZBW8F5k945xqkllMS-ZMISE=
 actions:
   - type: call_contract

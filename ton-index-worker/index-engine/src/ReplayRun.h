@@ -5,8 +5,8 @@
 // replaces rows per completion seqno. One controller and one assembler per
 // run; an aborted run is destroyed, never resumed.
 //
-// Root policy is fixed, not configured: any root transaction is admitted
-// (system accounts included, as python does); a trace that is a single
+// Root policy is fixed, not configured: any root transaction is admitted,
+// including system accounts; a trace that is a single
 // tick-tock transaction takes `TraceOutcome::skipped_lone_tick_tock`.
 #pragma once
 
@@ -25,8 +25,7 @@ namespace mch {
 // Tunables with their defaults. Every value is a configuration constant, not a
 // measurement; change here or through the CLI, never per trace.
 struct ClassifyPolicy {
-  // Per-trace transaction cap; exceeding it makes the trace `capped` (python's
-  // `big_traces_threshold`).
+  // Per-trace transaction cap; exceeding it makes the trace `capped`.
   std::size_t trace_cap = 8000;
   // Classification workers; the block barrier waits for all jobs of a block.
   std::uint32_t workers = 4;

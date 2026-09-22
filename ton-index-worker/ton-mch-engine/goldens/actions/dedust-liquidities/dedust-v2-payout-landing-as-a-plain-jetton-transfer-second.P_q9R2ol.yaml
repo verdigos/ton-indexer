@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 payout landing as a plain jetton transfer, second sample
-# note: same shape as the first sample, no DeDust payout 0x3216ca09 leg
+# note: The second payout chain omits the DeDust payout leg and classifies as one jetton transfer
 # trace: P_q9R2ol2k_yoMr0eDfQvHzrYAh430TiyJoyVtcsalQ=
 actions:
   - type: call_contract

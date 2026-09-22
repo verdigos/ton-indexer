@@ -1,5 +1,5 @@
 # dedust-swaps / DeDust hybrid swap jetton to TON with extra payout legs
-# note: hybrid DeDust spec fixture; three standalone jetton transfers accompany the single swap
+# note: The hybrid route classifies as one DeDust v2 swap and three DeDust swaps
 # trace: 7bcODUs7IVJBjdApVMCJyUKoztjS_k4msfHyYOwt3qk=
 actions:
   - type: jetton_swap

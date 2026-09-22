@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / both partial absorb parent
-# note: synthetic: built from test_stonfi_v2_provide.py::test_both_partial_condition_fail_absorbs_parent by pyir-w2 lane P; not a chain trace
+# note: synthetic: Two partial contributions combine and classify as one partial liquidity deposit
 # trace: ad1uBns5aHx3mmclzuhqLZhvnn8NZl1mQ5gZD_VH4TU=
 actions:
   - type: dex_deposit_liquidity

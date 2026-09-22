@@ -1,5 +1,5 @@
 # dns / renew dns
-# note: synthetic: built from test_dns.py::test_renew_dns_parity by pyir-w2 lane P; not a chain trace
+# note: synthetic: A DNS record renews and classifies as a DNS renewal
 # trace: iKIdaDv0_s_z2KdL39WLKHMBDvlbAxIjn6jfeuK4P2U=
 actions:
   - type: renew_dns

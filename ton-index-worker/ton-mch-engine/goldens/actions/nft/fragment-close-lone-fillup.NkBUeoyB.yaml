@@ -1,5 +1,5 @@
 # nft / Fragment auction close by external message, lone fill-up
-# note: bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; one fill-up leg (telegram matcher-pass finding 2)
+# note: The auction closes with one payout leg and classifies as a Telegram NFT transfer
 # trace: NkBUeoyBHQRqKV1iVuVPFqhAhh3PUJCJB0BJcvYxPko=
 actions:
   - type: nft_transfer

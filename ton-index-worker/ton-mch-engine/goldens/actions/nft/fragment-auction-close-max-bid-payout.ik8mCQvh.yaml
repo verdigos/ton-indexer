@@ -1,5 +1,5 @@
 # nft / Fragment auction close, maximum bid closes the auction and pays out the seller (composed)
-# note: synthetic: composed message against real code+state, snapshot mc 91102300, root message hash ik8mCQvh; empty-body TON transfer at the auction's max_bid closes it: refund to the outbid standing bidder, ownership transferred to the sender, royalty + seller fill_up payouts; provenance: Fragment I1 nft-item.fc:144-267 (Tonviewer-verified I1 source, mch-docs/_analysis/host-audit-2026-09/synthetic-cases.md); excluded from production comparison
+# note: synthetic: A maximum bid closes the auction and classifies as a Telegram NFT transfer
 # trace: ik8mCQvh-fd_bSqcpf7qBKH5_rxdFBJNsNe0s3xX3kY=
 actions:
   - type: call_contract

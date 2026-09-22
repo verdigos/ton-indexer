@@ -1,5 +1,5 @@
 # dns / dns auction guard release collection-only
-# note: synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_release-collection-only] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A collection match releases the auction and classifies as a DNS release
 # trace: 03OcVXvf6lWKtlTLy5QYtEMQSjt1x6j0bwz3O5C2SN0=
 actions:
   - type: call_contract

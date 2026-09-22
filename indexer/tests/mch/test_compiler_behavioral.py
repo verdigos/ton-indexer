@@ -25,9 +25,6 @@ def _error_codes(src: str, reg: Registries) -> list[str]:
     return [d.code for d in exc.value.bag.items]
 
 
-# ==========================================================================
-# C007 — captures after a recursive rule reference in the same sequence
-# ==========================================================================
 
 def test_capture_after_recursion_rejected():
     src = """
@@ -47,9 +44,6 @@ def test_capture_after_recursion_rejected():
     assert "C007_CAPTURE_AFTER_RECURSION" in _error_codes(src, reg)
 
 
-# ==========================================================================
-# C008 — a children block may only attach to a chain edge
-# ==========================================================================
 
 
 def test_children_block_inside_alternative_branch_rejected():
@@ -127,9 +121,6 @@ def test_children_block_rule_body_root_rejected():
     assert "C008_CHILDREN_BLOCK_BARE" in [d.code for d in exc.value.bag.items]
 
 
-# ==========================================================================
-# An or block inside a recursive rule compiles cleanly
-# ==========================================================================
 
 def test_or_inside_recursive_rule_compiles():
     """`rule r = or { op A @a ; maybe $r }` lowers without error."""

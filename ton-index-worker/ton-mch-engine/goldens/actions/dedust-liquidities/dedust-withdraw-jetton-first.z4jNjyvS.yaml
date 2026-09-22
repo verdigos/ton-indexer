@@ -1,5 +1,5 @@
 # dedust-liquidities / dedust withdraw jetton first
-# note: synthetic: built from test_dedust_withdraw.py::test_dedust_withdraw_parity_jetton_first and test_dedust_withdraw.py::test_dedust_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace
+# note: synthetic: A jetton first DeDust withdrawal classifies as a liquidity withdrawal
 # trace: z4jNjyvSAu_aT7RjH2LJuco1jh5jBEexFJ6IssIpC9E=
 actions:
   - type: dex_withdraw_liquidity

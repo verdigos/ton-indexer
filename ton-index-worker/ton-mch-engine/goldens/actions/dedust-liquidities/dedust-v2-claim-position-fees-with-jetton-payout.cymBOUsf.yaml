@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 claim position fees with jetton payout
-# note: fee claim followed by a jetton_transfer carrying the jetton leg
+# note: The fee claim pays a jetton and classifies as a fee claim plus a jetton transfer
 # trace: cymBOUsfra7ZhoecaxwLyvSZi3EhpOFmvTPTSaKHfeA=
 actions:
   - type: call_contract

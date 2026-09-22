@@ -1,5 +1,5 @@
 # nft / Fragment self-outbid (standing bidder raises)
-# note: bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; refund goes back to the same bidder
+# note: The standing bidder raises their own bid and classifies as a bid plus an outbid
 # trace: BO8nQf-fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=
 actions:
   - type: auction_bid

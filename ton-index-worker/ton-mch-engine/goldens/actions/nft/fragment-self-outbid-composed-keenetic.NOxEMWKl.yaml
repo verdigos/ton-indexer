@@ -1,5 +1,5 @@
 # nft / Fragment self-outbid, standing bidder raises against their own bid (composed)
-# note: synthetic: composed message against real code+state, snapshot mc 91102300, root message hash NOxEMWKl; empty-body TON transfer from the standing bidder re-raises their own bid; provenance: Fragment I1 nft-item.fc:144-267 (Tonviewer-verified I1 source, mch-docs/_analysis/host-audit-2026-09/synthetic-cases.md); excluded from production comparison
+# note: synthetic: A standing bidder raises their own bid and classifies as a bid plus an outbid
 # trace: NOxEMWKlKAr_xUxRG_9kouRZgfXEq5hwV1V2dVH4rCU=
 actions:
   - type: auction_bid

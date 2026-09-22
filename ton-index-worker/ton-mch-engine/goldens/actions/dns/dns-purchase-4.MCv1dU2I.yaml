@@ -1,5 +1,5 @@
 # dns / DNS purchase 4 (change_dns parent)
-# note: AuctionFillUp whose parent is the winner's ChangeDnsRecord; dns_purchase must register before change_dns
+# note: The winner changes the DNS record and the trace classifies as a DNS purchase plus a DNS change
 # trace: MCv1dU2InQwPfgQCpgjEVVqBkIyp4yWMqI-R5-cT-jk=
 actions:
   - type: call_contract

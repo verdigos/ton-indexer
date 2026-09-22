@@ -1,5 +1,5 @@
 # nft / getgems dual payout, owner leg is the payout (api-sourced)
-# note: api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 92792879 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace 7ea01c01… from the sign-off comparator run; GetGems v3r3 sales with two TON legs to the same owner, payout_amount = the owner leg (price - fee - royalty), not the royalty leg
+# note: Four GetGems sales use the owner payout leg and classify as NFT purchases
 # trace: fqAcATrl5jO8Ott89ZvpRe3UNwb11z-eHaP6VwHDfAs=
 actions:
   - type: nft_purchase

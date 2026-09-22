@@ -1,5 +1,5 @@
 # nft / teleitem cancel auction (gift)
-# note: same gift item as teleitem-start-auction-gift, cancelled at mc 93200063; the item has no auction config after the cancel and is still detected as Telemint
+# note: The gift auction is cancelled and classifies as a teleitem auction cancellation
 # trace: M7jZ4RsZzzwtKgEWo6H_UEVu35iQARusm99XESHx6l0=
 actions:
   - type: call_contract

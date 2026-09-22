@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 claim reward with jetton payout
-# note: reward claim followed by a jetton_transfer carrying the payout
+# note: The reward claim pays a jetton and classifies as a reward claim plus a jetton transfer
 # trace: i-gQwY3nWC6BQx1XOSWliBC-b1Pt7Y-Fn5jphK5uCGk=
 actions:
   - type: call_contract

@@ -1,5 +1,5 @@
 # dns / dns auction lookup miss release
-# note: synthetic: built from test_dns.py::test_dns_auction_lookup_miss_rejects[dns_release] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A release with a missing auction lookup classifies only as a contract call
 # trace: 7tUfAoNLuIstTBudeatHwPn7mprTH-NQuocqxZKeX78=
 actions:
   - type: call_contract

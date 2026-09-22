@@ -1,5 +1,5 @@
 # nominator / nominator single payout
-# note: synthetic: built from test_nominator_withdraw.py::test_single_payout_parity by pyir-w2 lane P; not a chain trace
+# note: synthetic: A nominator payout classifies as a stake withdrawal
 # trace: qfK9maJDE9nJM-GqEdvubEUOXrmOI8tOWjOXvVk_Ta4=
 actions:
   - type: stake_withdrawal

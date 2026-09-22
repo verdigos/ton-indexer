@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / stonfi v2 deposit slot order (api-sourced)
-# note: api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 93104681 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace ba358cd8… from the sign-off comparator run; pins post_process_stonfi_v2_liquidity canonical (depth, min_lt) slot order
+# note: The STON.fi v2 deposit keeps canonical slot order and classifies as a liquidity deposit
 # trace: ujWM2IApMQAaYi_oBO5VWgPJj258sUBZRi52gesSB-A=
 actions:
   - type: contract_deploy

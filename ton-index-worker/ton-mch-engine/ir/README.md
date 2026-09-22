@@ -8,11 +8,6 @@ frontend.
   the compiler frontend into `generated/expr_vectors.json` in the CMake build
   tree. CMake compiles them into `ton-mch-engine`; ctest `mch_expr_vectors`
   runs them with `--expr-vectors-test`.
-- `devtools/ir/build_vectors.json` contains 81 build-program conformance cases.
-  It is maintained by hand because it has no generator. Devtools CMake compiles
-  it into `ton-mch-dev-engine`; ctests `mch_local_build_vectors` and
-  `mch_local_build_vectors_interp` run the generated and interpreted paths.
-
 ## Build-time mch_ir.json generation
 
 On a normal build, CMake runs the emitter twice and writes:
@@ -46,7 +41,6 @@ tree (`<binary-dir>/ton-mch-engine/generated/`) and is NOT in git:
 | generated/mch_ir.json† | mch-codegen --matchers --suffix ir     | matchers_ir_generated.cpp     | `gen_matchers_ir()`, `gen_matchers_ir_source_sha()`       |
 | generated/mch_ir.json† | mch-codegen --wheres --suffix ir       | wheres_ir_generated.cpp       | `gen_wheres_ir()`, `gen_wheres_ir_source_sha()`           |
 | generated/mch_ir.json† | mch-codegen --builds --suffix ir       | builds_ir_generated.cpp       | `gen_builds_ir()`, `gen_builds_ir_source_sha()`           |
-| devtools/ir/build_vectors.json | mch-codegen --builds --suffix vectors | builds_vectors_generated.cpp | `gen_builds_vectors()`, `gen_builds_vectors_source_sha()` |
 | tlb/mch-msgs.tlb       | tlbc                                   | mch-msgs-tlb.{cpp,h}          | `mchmsg::gen::*`                                          |
 
 † the three CLASSIFY tables come from `MCH_CLASSIFY_ARTIFACT`, which is
@@ -91,10 +85,6 @@ is consumed directly by CMake:
 - `generated/expr_vectors.json` comes from `generate_expr_vectors.py` in this
   directory. Every vector's `expr` comes from the compiler frontend; `env` and
   `expect` are authored in the generator.
-- `devtools/ir/build_vectors.json` is the build-program corpus. It is the input
-  to both devtools build-vector runners and has no generator.
-
 The `mch_expr_vectors` ctest runs the build-tree expression corpus through the
-C++ engine. The devtools build-vector ctests run the overlay corpus. The build
-also handles production `mch_ir.json`, generated table pairing, and the
-determinism copy.
+C++ engine. The build also handles production `mch_ir.json`, generated table
+pairing, and the determinism copy.

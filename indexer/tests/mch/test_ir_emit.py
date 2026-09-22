@@ -337,9 +337,6 @@ def test_predicate_anchor_emits_pred_record():
     }
 
 
-# ---------------------------------------------------------------------------
-# Expressions and build programs for an inline matcher.
-# ---------------------------------------------------------------------------
 
 _BUILD_PROGRAM_SRC = """\
 opcode TestBuildOp  = 0x1001

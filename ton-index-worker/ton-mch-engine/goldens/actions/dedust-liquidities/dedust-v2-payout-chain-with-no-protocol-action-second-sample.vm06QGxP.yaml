@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 payout chain with no protocol action, second sample
-# note: same opcode chain as the first sample, different pool and trace
+# note: The second payout chain uses the same opcodes and classifies only as contract calls
 # trace: vm06QGxPVgGqBfV7IInJ010KtOh94Ianp30ExnwISq4=
 actions:
   - type: call_contract

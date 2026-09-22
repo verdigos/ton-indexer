@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 payout landing as a plain jetton transfer
-# note: only the jetton_transfer matcher fires; the surrounding DeDust payout chain stays unclassified
+# note: The payout chain lands as one jetton transfer while the other calls stay unclassified
 # trace: OVUczRKE1uzsXPhTEAJQhJWb0yAPrnMLZZocBRwMJd0=
 actions:
   - type: call_contract

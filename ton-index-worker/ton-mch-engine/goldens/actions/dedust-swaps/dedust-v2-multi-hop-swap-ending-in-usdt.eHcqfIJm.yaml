@@ -1,5 +1,5 @@
 # dedust-swaps / DeDust v2 multi-hop swap ending in USDT
-# note: three peer_swaps steps chained through TON and an intermediate jetton
+# note: The three step route crosses TON and another jetton and classifies as one DeDust v2 swap
 # trace: eHcqfIJmDvinqBcPrSLJOFfYRr7gE8vtrq6hn1nTu70=
 actions:
   - type: jetton_swap

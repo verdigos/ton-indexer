@@ -67,9 +67,11 @@ BOC-valued fields render as the cell hash.
 Fixture-path code-hash gates read the `code_hashes` map; `code_hashes` added by hand from `VESTING_CONTRACT_CODE_HASH`: 03RZCW7m, 03XZQ1Ck, 1NL0tCMr, IG3rAERJ.
 NftSale/NftAuction `code_hash` added by hand from toncenter v3 account state: EzvOGPJe, F73aJsg-, LQB6Qv2a, M2rUrfJX, Mk9O4OZz, _4VnZDY_, mG5NGg-.
 
-A `synthetic:` note in `fixtures.json` marks a fixture that no chain trace
-produced, so its `.lz4` is edited in place through a JSON round trip. From
-`indexer/`:
+A fixture note is an optional one-line scenario of at most 100 characters. Only
+synthetic fixtures prefix the note with `synthetic: `; chain and API-built
+fixtures have no label. A
+synthetic fixture has no unmodified chain or API capture, so its `.lz4` is edited
+in place through a JSON round trip. From `indexer/`:
 
 ```
 python -m tests.utils.fixture_json unpack indexer/tests/traces/<trace-id>.lz4 -o /tmp/fixture.json
@@ -79,6 +81,5 @@ python -m tests.utils.fixture_json pack /tmp/fixture.json -o indexer/tests/trace
 
 The JSON form is the fixture map 1:1; msgpack bin values spell as
 `{"$b64": "<base64>"}` and a map with non-string keys as
-`{"$map": [[key, value], ...]}`. Keep the fixture's `note` in `fixtures.json`:
-the manifest is the only record of provenance. Re-generate the golden with the
-regenerate command above and review the diff.
+`{"$map": [[key, value], ...]}`. Re-generate the golden with the regenerate
+command above and review the diff.

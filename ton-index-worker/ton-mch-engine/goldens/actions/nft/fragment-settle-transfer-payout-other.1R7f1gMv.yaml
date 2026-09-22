@@ -1,5 +1,5 @@
 # nft / Fragment settle-and-transfer, payout to a third party
-# note: real chain trace (mc 93466105, prod sample 2026-09-19): bid settle pays two fill_up legs (royalty + beneficiary != the seller), relay bot re-transfers the item in the same trace; saved by ton-fixture-save, which stores no code_hash / collection state, so the telemint_collection lookup returns unknown here (tool limitation, not a detector defect)
+# note: The settlement pays a third party and relay transfers the item, classifying as two NFT transfers
 # trace: 1R7f1gMvE3QXICasO27zO4ag0Zb2tYs42XZMI6fLFa8=
 actions:
   - type: call_contract

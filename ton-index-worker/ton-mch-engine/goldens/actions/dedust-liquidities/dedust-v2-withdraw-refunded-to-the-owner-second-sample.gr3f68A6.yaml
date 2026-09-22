@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 withdraw refunded to the owner, second sample
-# note: same refund payload and lp_tokens_burnt as the first refund sample, different trace
+# note: The second refund returns LP tokens and classifies as a failed liquidity withdrawal
 # trace: gr3f68A6xHUJI3qtHGaK3GqK2MxE86NK6vOYPQM4Rz4=
 actions:
   - type: call_contract

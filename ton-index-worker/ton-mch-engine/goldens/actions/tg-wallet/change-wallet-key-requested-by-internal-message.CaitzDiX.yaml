@@ -1,5 +1,5 @@
 # tg-wallet / Change wallet key requested by internal message
-# note: named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden
+# note: An internal request changes the wallet key and classifies as a key change and gasless request
 # trace: CaitzDiXgDuUMWIvvPLZwCI8YcDfz_M5dbXyaOs7Occ=
 actions:
   - type: change_wallet_key

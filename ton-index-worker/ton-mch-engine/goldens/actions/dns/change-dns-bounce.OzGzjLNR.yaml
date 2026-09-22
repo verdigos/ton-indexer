@@ -1,5 +1,5 @@
 # dns / change dns bounce
-# note: synthetic: built from test_dns.py::test_change_dns_parity_with_bounce by pyir-w2 lane P; not a chain trace
+# note: synthetic: A bounced DNS record change classifies as a successful DNS change
 # trace: OzGzjLNR3FBEZx3-_xl4V5W1MMea5dnOcyrJCs9iicc=
 actions:
   - type: change_dns

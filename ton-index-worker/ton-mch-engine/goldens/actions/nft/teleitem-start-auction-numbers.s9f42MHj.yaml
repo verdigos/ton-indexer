@@ -1,5 +1,5 @@
 # nft / teleitem start auction (Numbers)
-# note: Numbers item 0:9DB0E1DC…, mc 93200064
+# note: The Numbers item starts an auction and classifies as a teleitem auction start
 # trace: s9f42MHj95A2xmDTz--g2k-Ux08haA11743gA5oA2mM=
 actions:
   - type: call_contract

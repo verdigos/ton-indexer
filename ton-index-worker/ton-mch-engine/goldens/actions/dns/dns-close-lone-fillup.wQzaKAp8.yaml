@@ -1,5 +1,5 @@
 # dns / DNS auction close, lone fill-up
-# note: bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/
+# note: The DNS auction closes with one fill up and classifies as a DNS purchase and NFT transfer
 # trace: wQzaKAp8fuCzmQ4gKUzUvVjPtkrZIL_xSzDnb3AlByk=
 actions:
   - type: call_contract

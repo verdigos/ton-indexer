@@ -1,5 +1,5 @@
 # nft / teleitem cancel aborted, bounce stays standalone (chain)
-# note: chain trace mc 91587749 from the 2026-09-19 comparator medium run; cancel anchor aborted, cancel row success=false, bounce of the anchor inbound message stays a standalone call_contract as in prod
+# note: An aborted auction cancellation keeps its bounce separate and classifies as a failed cancellation
 # trace: bD4GUDXcQ2yzmbRZ2YXEpiNlg11zY9JU1gYVFhxBh4s=
 actions:
   - type: call_contract

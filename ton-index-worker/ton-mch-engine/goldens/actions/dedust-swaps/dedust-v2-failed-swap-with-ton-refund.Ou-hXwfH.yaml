@@ -1,5 +1,5 @@
 # dedust-swaps / DeDust v2 failed swap with TON refund
-# note: dedust_v2_failed_swap matcher; refund leg is an unsuccessful ton_transfer, outgoing amount 0
+# note: The failed swap refunds TON and classifies as a failed swap and failed TON transfer
 # trace: Ou-hXwfHtNeTs97mBY3LVCmlnsoySA7hJXeoZSfOAao=
 actions:
   - type: jetton_swap

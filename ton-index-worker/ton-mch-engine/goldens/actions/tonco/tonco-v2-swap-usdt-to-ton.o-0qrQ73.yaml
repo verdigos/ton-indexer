@@ -1,5 +1,5 @@
 # tonco / tonco v2 swap USDT to TON (pool exit 200)
-# note: bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; Tonco v2 pool, TON out through the v2 TON wrapper wallet (pTON allowlist)
+# note: The USDT swap exits through the TON wrapper and classifies as a Tonco jetton swap
 # trace: o-0qrQ73jIN1uNaZwnYNQS9InHgidaWg00TKeOuo2c4=
 actions:
   - type: jetton_swap

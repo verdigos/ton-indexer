@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / single pton final
-# note: synthetic: built from test_stonfi_v2_provide.py::test_single_pton_final by pyir-w2 lane P; not a chain trace
+# note: synthetic: A single pTON contribution completes and classifies as a liquidity deposit
 # trace: AVt2vu-xrqHd8LAo88rUXwP6mJYvvLG4zw3VPXAyGhI=
 actions:
   - type: dex_deposit_liquidity

@@ -1,5 +1,5 @@
 # mutations / Tonco swap, intermediate wallet interface pruned
-# note: mutation, not replay; baseline CjtIXjqazbSFrtPqqMMFBgMG6+huwp5CfNtXpQAf8xY=
+# note: synthetic: A Tonco swap lacks an intermediate wallet and classifies as two jetton transfers
 # trace: LtfHA5H3AjxeL6cXoPP1Xt6hhsBFllWJR59agrw0GL0=
 actions:
   - type: call_contract

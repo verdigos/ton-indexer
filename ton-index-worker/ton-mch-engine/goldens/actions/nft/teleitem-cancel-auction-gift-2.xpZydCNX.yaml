@@ -1,5 +1,5 @@
 # nft / teleitem cancel auction (gift 2)
-# note: second Telegram gift item 0:46F92EC8…, mc 93200017
+# note: The second gift item cancels its auction and classifies as a teleitem auction cancellation
 # trace: xpZydCNXEgDfO9yr628mcnB1Z1k3nqlFRtx-l4_gtLs=
 actions:
   - type: call_contract

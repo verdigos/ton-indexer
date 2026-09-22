@@ -1,5 +1,5 @@
 # dns / dns auction lookup miss purchase
-# note: synthetic: built from test_dns.py::test_dns_auction_lookup_miss_rejects[dns_purchase] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A purchase with a missing auction lookup classifies only as contract calls
 # trace: RO_LxCK96NxuF2WuBdRWKE7_UzA642o8H-kyIUm4isI=
 actions:
   - type: call_contract

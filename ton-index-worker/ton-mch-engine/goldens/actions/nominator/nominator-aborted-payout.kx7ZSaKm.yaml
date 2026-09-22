@@ -1,5 +1,5 @@
 # nominator / nominator aborted payout
-# note: synthetic: built from test_nominator_withdraw.py::test_failed_flag_never_set_even_on_aborted_payout_tx by pyir-w2 lane P; not a chain trace
+# note: synthetic: An aborted payout still classifies as a successful stake withdrawal
 # trace: kx7ZSaKm1tMLQMNaR2aBSgCLirOjaPGPzg5rtC5ZF7M=
 actions:
   - type: stake_withdrawal

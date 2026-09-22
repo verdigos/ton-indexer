@@ -1,5 +1,5 @@
 # dns / delete dns
-# note: synthetic: built from test_dns.py::test_delete_dns_parity by pyir-w2 lane P; not a chain trace
+# note: synthetic: A DNS record is deleted and classifies as a DNS deletion
 # trace: HA1SeG6FGWGXK8I1MqU89Mhy57D6u-2TmElBS5h1KVA=
 actions:
   - type: delete_dns

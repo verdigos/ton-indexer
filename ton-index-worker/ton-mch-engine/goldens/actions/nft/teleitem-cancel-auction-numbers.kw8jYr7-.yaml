@@ -1,5 +1,5 @@
 # nft / teleitem cancel auction (Numbers)
-# note: Numbers item 0:C68749E1…, mc 93631678
+# note: The Numbers item cancels its auction and classifies as a teleitem auction cancellation
 # trace: kw8jYr7-6nfkQPi6v-UceOvmHFvbIX7ZR8c_NYDC2BQ=
 actions:
   - type: call_contract

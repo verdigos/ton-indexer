@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / pair jetton pton
-# note: synthetic: built from test_stonfi_v2_provide.py::test_pair_jetton_partial_pton_final by pyir-w2 lane P; not a chain trace
+# note: synthetic: A jetton and pTON pair completes and classifies as a liquidity deposit
 # trace: PWeNudzaWeKe-YXoQLnEC_BqyL4fkyQv1SeI5aPOKsY=
 actions:
   - type: dex_deposit_liquidity

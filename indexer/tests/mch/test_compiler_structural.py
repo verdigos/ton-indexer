@@ -53,9 +53,6 @@ def test_empty_out_is_a_build_program():
     assert matcher["build_program"] == [{"s": "out", "fields": []}]
 
 
-# ==========================================================================
-# Atoms and single-edge chains
-# ==========================================================================
 
 def test_single_op_node_emits_contract_root_and_opcode_set_anchor():
     src = """
@@ -364,9 +361,6 @@ def test_multi_hop_parent_chain_emits_parent_chain():
     assert "parent" not in c
 
 
-# ==========================================================================
-# XOR block: exclusive flag on the emitted `or` node
-# ==========================================================================
 
 def _or_child(src: str, **opcodes: int) -> dict:
     m, nodes = _emit_one(src, **opcodes)
@@ -519,9 +513,6 @@ def test_recursive_rule_xor_errors(strategy, continuation):
     )
 
 
-# ==========================================================================
-# T12 — mixed-direction chain lowering (spec §6.4, §6.5)
-# ==========================================================================
 
 def test_t12_shape1_anchor_headed_parent_edge():
     """`op A @a <- op B @b` — B is A's parent; nothing else."""
@@ -735,9 +726,6 @@ def test_rule_head_rejected():
     assert "head cannot be a rule reference" in diagnostic.message
 
 
-# ==========================================================================
-# T10 — opcode-set / mixed-kind group anchors (spec §8.3 M2)
-# ==========================================================================
 
 def test_t10_opcode_set_anchor_and_chain_edge():
     """`xor { op A @m ; op B @m } -> maybe op N @n`: opcode_set anchor over both heads,
@@ -783,9 +771,6 @@ def test_t10_mixed_op_and_btype_set_anchor():
     assert nodes[m["root"]]["kind"] == "any"
 
 
-# ==========================================================================
-# Legal relation-block replacements for edges after a children block
-# ==========================================================================
 
 @pytest.mark.parametrize(("edge", "field"), [("->", "child"), ("<-", "parent")])
 def test_relation_block_is_legal_replacement_for_edge_after_children_block(
@@ -805,9 +790,6 @@ def test_relation_block_is_legal_replacement_for_edge_after_children_block(
     assert [n.get("optional", False) for n in child_nodes] == [False, True]
 
 
-# ==========================================================================
-# T33 — inline `where (expr)` must be sync-evaluable (C013)
-# ==========================================================================
 
 def _c013_codes(src: str) -> list[str]:
     reg = _registries_with_opcodes(A=0x1, B=0x2)
@@ -869,9 +851,6 @@ def test_where_expr_on_group_anchor_branch_is_a_compile_error():
     assert "C013_WHERE_EXPR_NOT_SYNC" in _c013_codes(src)
 
 
-# ==========================================================================
-# `peek` subtree closure
-# ==========================================================================
 
 def _compile_error_codes(src: str, **opcodes: int) -> list[str]:
     reg = _registries_with_opcodes(**opcodes)

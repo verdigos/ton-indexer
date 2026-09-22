@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / stonfi v2 withdraw ton first
-# note: synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_parity_ton_first and test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace
+# note: synthetic: A TON first withdrawal classifies as a STON.fi v2 liquidity withdrawal
 # trace: islrGvLSRNBA_p6ymTyjJJ7lZ2-JJEKSIhsUsjLMiMc=
 actions:
   - type: dex_withdraw_liquidity

@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / pair jetton ton paired provide (chain)
-# note: chain trace mc 92929247 from the 2026-09-19 comparator medium run; prod tx_hashes = 14, trace root excluded
+# note: The paired jetton and TON provide classifies as a partial liquidity deposit
 # trace: Tp44gVJNH2FKZCQG92DmXsGArGzfEWXVaPIppL4adkE=
 actions:
   - type: contract_deploy

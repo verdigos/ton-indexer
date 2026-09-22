@@ -1,5 +1,5 @@
 # nft / teleitem start auction (gift)
-# note: Telegram gift item 0:B310745C…, mc 93200147; the teleitem gate reads the item's Telemint interface, not a collection list
+# note: The gift item starts an auction and classifies as a teleitem auction start
 # trace: cXLjN0iPaW5tGQ2BnWpheqSCTZCpT9CWIpE2-HhCdno=
 actions:
   - type: call_contract

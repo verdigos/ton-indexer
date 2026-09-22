@@ -1,5 +1,5 @@
 # dedust-swaps / DeDust hybrid swap TON to jetton with extra payout legs
-# note: TON-in via PayNative 0xa5a7cbf8; two standalone jetton transfers accompany the swap
+# note: The TON route uses PayNative and classifies as one v2 swap and two DeDust swaps
 # trace: OV5zvYSKMoiFa3iYtadO55uo3w5hdiBtXRl7Qc-7SiA=
 actions:
   - type: jetton_swap

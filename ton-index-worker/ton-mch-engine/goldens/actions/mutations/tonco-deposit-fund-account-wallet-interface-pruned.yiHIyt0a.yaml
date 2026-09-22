@@ -1,5 +1,5 @@
 # mutations / Tonco deposit, fund-account wallet interface pruned
-# note: mutation, not replay; baseline 0GW2kNF4nRhw5xA3b5E35-EhF9H25H3Nvm5MJJo2VD0=
+# note: synthetic: A Tonco deposit lacks the fund wallet interface and still classifies as a deposit
 # trace: yiHIyt0a6wWpCZ2HyjSYcN-J-bt-fekirz-ZJARQ0lc=
 actions:
   - type: call_contract

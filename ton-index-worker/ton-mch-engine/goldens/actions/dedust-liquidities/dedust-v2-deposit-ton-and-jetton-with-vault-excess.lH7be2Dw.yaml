@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 deposit TON and jetton with vault excess
-# note: target amounts exceed the credited amounts, excess returned
+# note: The deposit returns its excess and classifies as a liquidity deposit
 # trace: lH7be2DwnwVSo6D3ZZL0xAI7F-vNk4bZ7KXCDpO4Zfo=
 actions:
   - type: contract_deploy

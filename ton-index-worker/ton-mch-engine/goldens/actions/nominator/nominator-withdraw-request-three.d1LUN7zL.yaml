@@ -1,5 +1,5 @@
 # nominator / nominator withdraw request three
-# note: synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[1300, 1700, 1900]-None-0] by pyir-w2 lane P; not a chain trace
+# note: synthetic: Three unmatched payouts classify as transfers beside a stake withdrawal request
 # trace: d1LUN7zLmbtIoyfnBEFjhC5nA5BkhddtO4eQqU_gcV0=
 actions:
   - type: stake_withdrawal_request

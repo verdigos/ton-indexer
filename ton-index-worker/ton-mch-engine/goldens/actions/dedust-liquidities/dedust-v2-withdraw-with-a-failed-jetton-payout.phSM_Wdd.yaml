@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 withdraw with a failed jetton payout
-# note: withdraw action succeeds, the 0x0f8a7ea5 payout leg does not
+# note: The withdrawal succeeds despite a failed jetton payout and classifies as a liquidity withdrawal
 # trace: phSM_WddFu61r5ztnhCDAKSw81kuB6eBOrGYE0peYvc=
 actions:
   - type: call_contract

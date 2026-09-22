@@ -1,5 +1,5 @@
 # dedust-liquidities / dedust withdraw ton first
-# note: synthetic: built from test_dedust_withdraw.py::test_dedust_withdraw_ton_first_ir_canonicalizes and test_dedust_withdraw.py::test_dedust_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace
+# note: synthetic: A TON first DeDust withdrawal classifies as a liquidity withdrawal
 # trace: EEa1qZeqoJgWvlV7dOLTs_RZJJpXDHHPuXSCTBfhbpk=
 actions:
   - type: dex_withdraw_liquidity

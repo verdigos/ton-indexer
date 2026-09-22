@@ -1,5 +1,5 @@
 # multisig / Multisig order executing a pTON transfer leg
-# note: STON.fi pTON and jetton legs classify individually, no jetton_swap action is produced
+# note: The multisig order executes pTON and jetton legs as separate transfers with no swap action
 # trace: d6F6BJ2OX-urMZBlYLrKmTFtnY6Pn8FbCQZVEP8LULI=
 actions:
   - type: call_contract

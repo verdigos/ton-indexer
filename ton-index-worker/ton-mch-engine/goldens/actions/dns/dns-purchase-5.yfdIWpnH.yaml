@@ -1,5 +1,5 @@
 # dns / DNS purchase 5 (change_dns parent)
-# note: same shape, second live trace
+# note: A second winner changes the DNS record and classifies as a DNS purchase plus a DNS change
 # trace: yfdIWpnHBPwfCVOofQ4XhwxGW-3MfWR3WTxUC6qVWjE=
 actions:
   - type: call_contract

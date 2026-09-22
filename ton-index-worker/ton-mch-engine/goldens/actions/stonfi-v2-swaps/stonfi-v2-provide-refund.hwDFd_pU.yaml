@@ -1,5 +1,5 @@
 # stonfi-v2-swaps / single refund failed
-# note: synthetic: built from test_stonfi_v2_provide.py::test_single_refund_failed by pyir-w2 lane P; not a chain trace
+# note: synthetic: A failed single contribution refund classifies as a failed liquidity deposit
 # trace: hwDFd_pUjaqau3YD89reRW5KmvNlOsAgsulQJP3WwxE=
 actions:
   - type: dex_deposit_liquidity

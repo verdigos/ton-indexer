@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 withdraw with a dust TON leg
-# note: amount1 is 29268 nanoton against a large jetton leg
+# note: The withdrawal includes a dust TON leg and classifies as a liquidity withdrawal
 # trace: XoYtOPQk2eBbj66i8zjGejuCdoIcPAT1XcqSIxZ9zSE=
 actions:
   - type: dex_withdraw_liquidity

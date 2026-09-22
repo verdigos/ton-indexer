@@ -1,5 +1,5 @@
 # dns / dns purchase parent
-# note: synthetic: built from test_dns.py::test_dns_purchase_reads_but_does_not_consume_parent by pyir-w2 lane P; not a chain trace
+# note: synthetic: A DNS purchase reads its parent and classifies as one DNS purchase
 # trace: Tp-H50ZKDOBAIzhfFb0Nsg-e1exaXa-EK4Rw-2KNp68=
 actions:
   - type: call_contract

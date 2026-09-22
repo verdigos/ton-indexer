@@ -1,5 +1,5 @@
 # gasless / Gasless jetton transfer by a wallet v5
-# note: named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden
+# note: The wallet sends a jetton and classifies as a gasless request plus a jetton transfer
 # trace: tF9rJ18uKOZuwJaQ0z2ZB2ln0OcFMEa0fy6rYxMgQNY=
 actions:
   - type: call_contract

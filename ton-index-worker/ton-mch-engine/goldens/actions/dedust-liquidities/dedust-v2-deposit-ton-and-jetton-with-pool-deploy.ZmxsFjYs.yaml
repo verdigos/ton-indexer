@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 deposit TON and jetton with pool deploy
-# note: three contract_deploy rows alongside the deposit
+# note: The deposit deploys three contracts and classifies as a liquidity deposit
 # trace: ZmxsFjYsHqPDUouPjWIZHrPExhYisMFjIGBG320OY5U=
 actions:
   - type: contract_deploy

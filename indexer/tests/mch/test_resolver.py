@@ -798,7 +798,6 @@ def _error_codes(src: str, reg: Registries) -> list[str]:
     return []
 
 
-# --- F1: parse on a composed btype capture (R023) ---------------------------
 
 def _parse_registries():
     reg = _fb_registries()
@@ -828,7 +827,6 @@ def test_r023_parse_op_capture_ok():
     assert "R023_PARSE_TARGET_NOT_BASE_BLOCK" not in _error_codes(src, _parse_registries())
 
 
-# --- G-LC/G-Q comprehensions (§16.1) ---------------------------------------
 
 def test_comprehension_nested_rejected():
     # A comprehension inside another comprehension's body is R024.

@@ -290,9 +290,6 @@ def _parse_matcher_pattern(src: str) -> ast_.PatternExpr:
     return f.matchers[0].pattern
 
 
-# ==========================================================================
-# T11 — `produces` union (spec §8.1)
-# ==========================================================================
 
 def test_produces_single_name_still_works():
     src = """

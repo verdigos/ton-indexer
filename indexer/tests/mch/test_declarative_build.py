@@ -63,7 +63,6 @@ def test_r014_duplicate_out_field():
     assert "R014_DUP_OUT_FIELD" in codes
 
 
-# --- produces switch (§9.5) resolver diagnostics ---------------------------
 
 def _switch_registries() -> Registries:
     return _registries()

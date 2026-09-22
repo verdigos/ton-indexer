@@ -1,5 +1,5 @@
 # dns / dns auction guard release code-hash-only
-# note: synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_release-code-hash-only] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A code hash match releases the auction and classifies as a DNS release
 # trace: nFfypk7mEbl14sNJoN6iB_IND8XI3RCZVuu61M4fPyg=
 actions:
   - type: call_contract

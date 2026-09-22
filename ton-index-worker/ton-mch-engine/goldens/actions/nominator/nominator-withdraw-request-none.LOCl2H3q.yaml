@@ -1,5 +1,5 @@
 # nominator / nominator withdraw request none
-# note: synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[]-None-0] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A request with no payout classifies as a stake withdrawal request
 # trace: LOCl2H3qoYXxKRBg1jJEAYMd2BORctX3RxTdvuDJQyM=
 actions:
   - type: stake_withdrawal_request

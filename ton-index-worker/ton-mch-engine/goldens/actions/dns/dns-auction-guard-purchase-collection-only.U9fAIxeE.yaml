@@ -1,5 +1,5 @@
 # dns / dns auction guard purchase collection-only
-# note: synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_purchase-collection-only] by pyir-w2 lane P; not a chain trace
+# note: synthetic: A collection match buys the auction and classifies as a DNS purchase
 # trace: U9fAIxeEbrMh4d41VylrrHSdCQfAiK2EPwaFFNIcQxw=
 actions:
   - type: call_contract

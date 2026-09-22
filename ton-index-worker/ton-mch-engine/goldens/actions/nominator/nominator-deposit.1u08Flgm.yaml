@@ -1,5 +1,5 @@
 # nominator / nominator deposit
-# note: synthetic: built from test_nominator_withdraw.py::test_deposit_comment_parity by pyir-w2 lane P; not a chain trace
+# note: synthetic: A nominator deposits stake and classifies as a stake deposit
 # trace: 1u08FlgmdxuEEATPvQ-JF7g-LVDddXxhfaO_wkWgVrY=
 actions:
   - type: stake_deposit

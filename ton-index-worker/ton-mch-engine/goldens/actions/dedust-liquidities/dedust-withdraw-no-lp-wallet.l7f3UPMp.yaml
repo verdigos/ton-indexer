@@ -1,5 +1,5 @@
 # dedust-liquidities / dedust withdraw no lp wallet
-# note: synthetic: built from test_dedust_withdraw.py::test_dedust_withdraw_both_reject_without_lp_wallet by pyir-w2 lane P; not a chain trace
+# note: synthetic: A DeDust withdrawal without an LP wallet classifies only as a jetton transfer
 # trace: l7f3UPMpJtHhSSuCmMkZonKuYHBUu5c_bXqTAbJ31I8=
 actions:
   - type: call_contract
