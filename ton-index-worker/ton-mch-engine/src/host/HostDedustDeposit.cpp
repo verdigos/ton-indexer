@@ -212,7 +212,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
       return rt_ok(Value::null());
     }
-    auto r_amt = load_coins_py(cs);
+    auto r_amt = load_var_uint16(cs);
     if (r_amt.is_error()) {
       return rt_ok(Value::null());
     }

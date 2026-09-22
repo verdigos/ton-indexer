@@ -3,7 +3,7 @@
 #include "MsgParse.h"
 
 #include "AbiBridge.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "parse/PSlice.h"
 #include "parse/Parsers.h"
 

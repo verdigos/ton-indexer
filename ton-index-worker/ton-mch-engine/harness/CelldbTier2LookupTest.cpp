@@ -52,7 +52,7 @@ AllShardStates dummy_states() {
 
 // Synthetic account-data cells
 // addr_std$10 anycast:(##0) workchain:int8 address:bits256, i.e. what
-// load_address_py reads back.
+// load_address_value reads back.
 void store_addr(vm::CellBuilder &cb, const block::StdAddress &a) {
   cb.store_long(2, 2);   // addr_std$10
   cb.store_long(0, 1);   // anycast absent

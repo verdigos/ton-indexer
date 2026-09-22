@@ -1,6 +1,6 @@
 // Production trace loader: maps tondb-scanner's
 // schema::Transaction / schema::Message (IndexData.h) into the engine's own
-// TraceLoader structs (Trace / Transaction / Message / MsgContent), so that
+// TraceModel structs (Trace / Transaction / Message / MsgContent), so that
 // to_tree / init_block / ClassifyCore run UNCHANGED on production data.
 //
 // KEY: schema::Trace carries only `edges` (no transaction list), and our
@@ -11,7 +11,7 @@
 #pragma once
 
 #include "ActionBuild.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 
 #include "IndexData.h"  // schema::Transaction (tondb-scanner, PUBLIC include)
 

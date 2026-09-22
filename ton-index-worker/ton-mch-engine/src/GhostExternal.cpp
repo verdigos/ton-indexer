@@ -63,10 +63,10 @@ td::Status load_int_msg_info(vm::CellSlice &cs, bool with_extra, WalletPayload &
   cs.advance(1);  // ihr_disabled
   bool bounce = cs.fetch_ulong(1) != 0;
   bool bounced = cs.fetch_ulong(1) != 0;
-  TRY_RESULT(src, load_address_py(cs));
+  TRY_RESULT(src, load_address_value(cs));
   (void)src;
-  TRY_RESULT(dest, load_address_py(cs));
-  TRY_RESULT(grams, load_coins_py(cs));
+  TRY_RESULT(dest, load_address_value(cs));
+  TRY_RESULT(grams, load_var_uint16(cs));
   if (with_extra) {
     if (!cs.have(1)) return td::Status::Error("payload: extra dict underflow");
     if (cs.fetch_ulong(1)) {
@@ -74,9 +74,9 @@ td::Status load_int_msg_info(vm::CellSlice &cs, bool with_extra, WalletPayload &
       cs.fetch_ref();
     }
   }
-  TRY_RESULT(ihr_fee, load_coins_py(cs));
+  TRY_RESULT(ihr_fee, load_var_uint16(cs));
   (void)ihr_fee;
-  TRY_RESULT(fwd_fee, load_coins_py(cs));
+  TRY_RESULT(fwd_fee, load_var_uint16(cs));
   (void)fwd_fee;
   // created_lt/created_at are overwritten later with the external's own tx
   // lt/now, so only the cursor matters.

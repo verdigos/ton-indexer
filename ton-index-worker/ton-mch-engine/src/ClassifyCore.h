@@ -7,7 +7,7 @@
 #include "BuildRuntime.h"
 #include "IndexData.h"  // schema::Transaction
 #include "IrTables.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "Walker.h"  // WhereTable
 
 #include <cstddef>

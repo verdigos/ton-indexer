@@ -115,7 +115,7 @@ void fill_evaa_liquidate(const Value &data, Action &action);
 // Carries the only action_id in the system not derived from a hash: the
 // trace id, which on the emulated path is also the Redis trace key. The
 // lt/utime/mc_seqno_end range comes from the Trace, so every loader must
-// populate those fields; see TraceLoader.h.
+// populate those fields; see TraceModel.h.
 // Also used as the writer rescue; keeps all sorted distinct transaction hashes.
 Action create_unknown_action(const Trace &trace);
 

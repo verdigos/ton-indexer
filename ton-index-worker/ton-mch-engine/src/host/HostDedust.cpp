@@ -75,13 +75,13 @@ EvalResult dedust_seq_destination(BuildEnv &env, const std::vector<std::string> 
 static td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs) {
   std::vector<std::string> steps;
   for (;;) {
-    TRY_RESULT(addr, load_address_py(cs));
+    TRY_RESULT(addr, load_address_value(cs));
     std::string pool = (addr.t == VType::Account && !addr.addr_none) ? addr.str : "addr_none";
     if (!cs.have(1)) {
       return td::Status::Error("dedust steps: flag bit underflow");
     }
     cs.advance(1);
-    TRY_RESULT(_coins, load_coins_py(cs));
+    TRY_RESULT(_coins, load_var_uint16(cs));
     (void)_coins;
     if (!cs.have(1)) {                // maybe-ref bit
       return td::Status::Error("dedust steps: maybe-ref bit underflow");
@@ -191,7 +191,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
       return rt_fault("dedust legs: swap_request header underflow");
     }
-    auto r_amt = load_coins_py(cs);
+    auto r_amt = load_var_uint16(cs);
     if (r_amt.is_error()) {
       return rt_fault("dedust legs: swap_request amount");
     }
@@ -288,9 +288,9 @@ namespace {
 // next:(Maybe ^SwapStep), an inline struct, so no opcode prefix.
 td::Status dv2_read_step(vm::CellSlice &cs, td::RefInt256 &min_out,
                          td::Ref<vm::Cell> &next) {
-  TRY_RESULT(pool, load_address_py(cs));
+  TRY_RESULT(pool, load_address_value(cs));
   (void)pool;
-  TRY_RESULT(amount, load_coins_py(cs));
+  TRY_RESULT(amount, load_var_uint16(cs));
   min_out = std::move(amount);
   if (!cs.have(40)) {
     return td::Status::Error("swap step: deadline underflow");

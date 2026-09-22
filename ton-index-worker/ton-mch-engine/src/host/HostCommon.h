@@ -13,7 +13,7 @@
 namespace mch {
 
 struct Block;     // BlockTree.h
-struct Message;   // TraceLoader.h
+struct Message;   // TraceModel.h
 
 td::Result<td::Ref<vm::Cell>> block_body(const Block *b);
 

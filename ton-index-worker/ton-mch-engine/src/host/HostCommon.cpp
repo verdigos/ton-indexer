@@ -2,7 +2,7 @@
 
 #include "BlockTree.h"
 #include "MsgParse.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "btypes_gen.h"
 
 #include "td/utils/base64.h"

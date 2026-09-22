@@ -408,7 +408,7 @@ td::Result<Value> abi_parse_jetton_internal_transfer(const td::Ref<vm::Cell> &bo
 
 // Flatten the generated nested mint value into the classifier's flat public
 // field shape.
-td::Result<Value> abi_parse_minter_mint_legacy_shape(const td::Ref<vm::Cell> &body) {
+td::Result<Value> abi_parse_minter_mint_flat_shape(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(parsed,
              abi_parse_body<ton_abi::gen::jetton::MinterJettonMint>(body));
   const Value *query_id = parsed.field("query_id");
@@ -511,8 +511,8 @@ td::Result<Value> abi_parse_nft_transfer(const td::Ref<vm::Cell> &body) {
   }
   cs.advance(32);
   td::RefInt256 query_id = refint_u64(cs.fetch_ulong(64));
-  TRY_RESULT(new_owner, load_address_py(cs));
-  TRY_RESULT(response_destination, load_address_py(cs));
+  TRY_RESULT(new_owner, load_address_value(cs));
+  TRY_RESULT(response_destination, load_address_value(cs));
   td::Ref<vm::Cell> cp;
   if (!cs.fetch_maybe_ref(cp)) {
     return td::Status::Error("nft_transfer: bad custom_payload");
@@ -522,7 +522,7 @@ td::Result<Value> abi_parse_nft_transfer(const td::Ref<vm::Cell> &body) {
     TRY_RESULT(cp_boc, td_boc_serialize_crc(cp));
     custom_payload = Value::make_bytes(std::move(cp_boc));
   }
-  TRY_RESULT(forward_amount, load_coins_py(cs));
+  TRY_RESULT(forward_amount, load_var_uint16(cs));
   Value forward_payload = Value::null();
   if (cs.size() > 0) {
     bool is_right = cs.fetch_ulong(1) != 0;
@@ -585,7 +585,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"JettonBurn", &abi_parse_body<jetton::JettonBurn>},
       {"JettonNotify", &abi_parse_body<jetton::JettonNotify>},
       {"JettonMint", &abi_parse_body<jetton::JettonMint>},
-      {"MinterJettonMint", &abi_parse_minter_mint_legacy_shape},
+      {"MinterJettonMint", &abi_parse_minter_mint_flat_shape},
       {"MultisigNewOrder", &abi_parse_body<multisig::MultisigNewOrder>},
       {"MultisigInitOrder", &abi_parse_body<multisig::MultisigInitOrder>},
       {"MultisigApprove", &abi_parse_body<multisig::MultisigApprove>},

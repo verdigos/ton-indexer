@@ -31,7 +31,7 @@ td::RefInt256 refint_u64(unsigned long long v) {
 
 // Load an address; advances `cs`. Error fails the whole message parse, or
 // the enclosing try downgrades it. Intentional.
-td::Result<Value> load_address_py(vm::CellSlice &cs) {
+td::Result<Value> load_address_value(vm::CellSlice &cs) {
   if (!cs.have(2)) {
     return td::Status::Error("address: underflow");
   }
@@ -97,7 +97,7 @@ td::Result<Value> load_address_py(vm::CellSlice &cs) {
 }
 
 // Load coins; len nibble 0 yields 0. Advances `cs`.
-td::Result<td::RefInt256> load_coins_py(vm::CellSlice &cs) {
+td::Result<td::RefInt256> load_var_uint16(vm::CellSlice &cs) {
   if (!cs.have(4)) {
     return td::Status::Error("coins: underflow");
   }
@@ -214,7 +214,7 @@ td::Status skip_state_init_prefix(vm::CellSlice &cs) {
 
 }  // namespace
 
-td::Status skip_state_init_py(vm::CellSlice &cs) {
+td::Status skip_state_init(vm::CellSlice &cs) {
   TRY_STATUS(skip_state_init_prefix(cs));
   for (int i = 0; i < 3; i++) {  // code, data, library
     if (!cs.have(1)) return td::Status::Error("state_init: maybe-ref underflow");
@@ -259,9 +259,9 @@ td::Result<td::Ref<vm::Cell>> message_any_body(vm::CellSlice &cs) {
     if (cs.fetch_ulong(1)) {  // right: ^StateInit
       if (cs.size_refs() == 0) return td::Status::Error("message: init ref missing");
       TRY_RESULT(inner, open_ref_cell(cs.fetch_ref()));
-      TRY_STATUS(skip_state_init_py(inner));
+      TRY_STATUS(skip_state_init(inner));
     } else {  // left: inline
-      TRY_STATUS(skip_state_init_py(cs));
+      TRY_STATUS(skip_state_init(cs));
     }
   }
   if (!cs.have(1)) return td::Status::Error("message: body either underflow");

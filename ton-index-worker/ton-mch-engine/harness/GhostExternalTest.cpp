@@ -8,7 +8,7 @@
 #include "ClassifyCore.h"
 #include "GenMatchers.h"
 #include "GhostExternal.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "WalletRequest.h"
 #include "fixtures/FixtureLookupSource.h"
 

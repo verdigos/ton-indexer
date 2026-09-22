@@ -1,6 +1,6 @@
 #include "FixtureLookupSource.h"
 
-#include "parse/PSlice.h"  // load_address_py
+#include "parse/PSlice.h"  // load_address_value
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -188,12 +188,12 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     } catch (...) {
       return Value::null();
     }
-    auto r_pool = load_address_py(cs);
+    auto r_pool = load_address_value(cs);
     if (r_pool.is_error()) {
       return Value::null();
     }
     Value pool = r_pool.move_as_ok();
-    auto r_minter = load_address_py(cs);
+    auto r_minter = load_address_value(cs);
     if (r_minter.is_error()) {
       return Value::null();
     }

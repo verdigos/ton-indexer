@@ -58,7 +58,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   }
   cs.advance(32);
   out.query_id = refint_u64(cs.fetch_ulong(64));
-  TRY_RESULT_ASSIGN(out.prev_owner, load_address_py(cs));
+  TRY_RESULT_ASSIGN(out.prev_owner, load_address_value(cs));
   // Payload parse is soft: any failure leaves nft_payload unset.
   if (!cs.have(1)) {
     return out;  // no bit -> nft_payload unset
@@ -91,7 +91,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
     vm::CellSlice tmp = ps.cs;
     auto op = static_cast<std::uint32_t>(tmp.fetch_ulong(32));
     if (op == kTeleitemBidInfoOpcode) {
-      auto r_bid = load_coins_py(tmp);
+      auto r_bid = load_var_uint16(tmp);
       if (r_bid.is_ok()) {
         out.bid = r_bid.move_as_ok();
         out.is_bid = true;

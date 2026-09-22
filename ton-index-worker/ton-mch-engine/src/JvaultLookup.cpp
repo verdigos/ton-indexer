@@ -1,6 +1,6 @@
 #include "JvaultLookup.h"
 
-#include "parse/PSlice.h"  // load_address_py
+#include "parse/PSlice.h"  // load_address_value
 
 #include "vm/cells/CellSlice.h"
 
@@ -32,13 +32,13 @@ std::optional<std::string> account_canonical(const Value &v) {
 
 td::Result<JvaultStakeWallet> parse_jvault_stake_wallet(const td::Ref<vm::Cell> &data) {
   TRY_RESULT(cs, data_slice(data));
-  TRY_RESULT(pool, load_address_py(cs));
+  TRY_RESULT(pool, load_address_value(cs));
   auto pool_raw = account_canonical(pool);
   if (!pool_raw) {
     // A missing staking-pool address invalidates the complete record.
     return td::Status::Error("jvault: staking pool is not an address");
   }
-  TRY_RESULT(minter, load_address_py(cs));
+  TRY_RESULT(minter, load_address_value(cs));
   return JvaultStakeWallet{
       .staking_pool = pool,
       .staking_pool_raw = *pool_raw,
@@ -51,11 +51,11 @@ td::Result<std::string> parse_jvault_pool_lock_wallet(const td::Ref<vm::Cell> &d
   if (!cs.have(1 + 32) || !cs.advance(1 + 32)) {
     return td::Status::Error("jvault: pool data underflow");
   }
-  TRY_RESULT(admin, load_address_py(cs));
-  TRY_RESULT(creator, load_address_py(cs));
+  TRY_RESULT(admin, load_address_value(cs));
+  TRY_RESULT(creator, load_address_value(cs));
   (void)admin;
   (void)creator;
-  TRY_RESULT(lock, load_address_py(cs));
+  TRY_RESULT(lock, load_address_value(cs));
   auto lock_raw = account_canonical(lock);
   if (!lock_raw) {
     return td::Status::Error("jvault: lock wallet is not an address");

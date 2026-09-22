@@ -58,10 +58,10 @@ td::Result<SwapSource> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body
     vm::CellSlice cs = r_ctx.ok().cs;
     if (cs.have(32 + 64) && cs.advance(32 + 64) && cs.have(4)) {
       cs.fetch_ulong(4);  // source_type
-      if (load_address_py(cs).is_ok()) {  // from_user
-        if (load_address_py(cs).is_ok() && cs.have(1)) {  // owner
+      if (load_address_value(cs).is_ok()) {  // from_user
+        if (load_address_value(cs).is_ok() && cs.have(1)) {  // owner
           cs.fetch_ulong(1);  // zeroForOne
-          auto r_jw = load_address_py(cs);
+          auto r_jw = load_address_value(cs);
           if (r_jw.is_ok() && cs.size() == 0 && cs.size_refs() == 2) {
             return SwapSource{r_jw.move_as_ok(), true};
           }
@@ -87,8 +87,8 @@ td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body, bool v2) 
   if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
     return td::Status::Error("v3 pay_to: header underflow");
   }
-  TRY_RESULT(r0, load_address_py(cs));
-  TRY_RESULT(r1, load_address_py(cs));
+  TRY_RESULT(r0, load_address_value(cs));
+  TRY_RESULT(r1, load_address_value(cs));
   if (!cs.have(32 + 64)) {
     return td::Status::Error("v3 pay_to: exit/seqno underflow");
   }
@@ -106,15 +106,15 @@ td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body, bool v2) 
     }
     TRY_RESULT(ci, open_ref_cell(cs.fetch_ref()));
     if (v2) {
-      TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
-      TRY_RESULT_ASSIGN(pt.jetton1, load_address_py(ci));
-      TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
-      TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
+      TRY_RESULT_ASSIGN(pt.jetton0, load_address_value(ci));
+      TRY_RESULT_ASSIGN(pt.jetton1, load_address_value(ci));
+      TRY_RESULT_ASSIGN(pt.amount0, load_var_uint16(ci));
+      TRY_RESULT_ASSIGN(pt.amount1, load_var_uint16(ci));
     } else {
-      TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
-      TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
-      TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
-      TRY_RESULT_ASSIGN(pt.jetton1, load_address_py(ci));
+      TRY_RESULT_ASSIGN(pt.amount0, load_var_uint16(ci));
+      TRY_RESULT_ASSIGN(pt.jetton0, load_address_value(ci));
+      TRY_RESULT_ASSIGN(pt.amount1, load_var_uint16(ci));
+      TRY_RESULT_ASSIGN(pt.jetton1, load_address_value(ci));
     }
   }
   return pt;
@@ -131,7 +131,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   if (!cs.have(32) || !cs.advance(32)) {
     return;  // opcode
   }
-  auto r_addr = load_address_py(cs);
+  auto r_addr = load_address_value(cs);
   if (r_addr.is_error()) {
     return;
   }
@@ -140,7 +140,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
     return;
   }
   cs.advance(160);  // price_limit_sqrt
-  auto r_min = load_coins_py(cs);
+  auto r_min = load_var_uint16(cs);
   if (r_min.is_error()) {
     return;
   }
@@ -148,7 +148,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   if (auto ts = acc_str(target)) {
     out.emplace_back(*ts, or_zero(std::move(min_out)));
   }
-  auto r_rcpt = load_address_py(cs);  // recipient
+  auto r_rcpt = load_address_value(cs);  // recipient
   if (r_rcpt.is_error()) {
     return;
   }
@@ -240,7 +240,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     return host_reject("forward_payload is not fund_account");
   }
   pcs.advance(32);  // opcode
-  auto r_other = load_address_py(pcs);
+  auto r_other = load_address_value(pcs);
   if (r_other.is_error()) {
     return host_reject("fund_account other wallet parse");
   }
@@ -306,7 +306,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     if (!ics.have(32 + 64) || !ics.advance(32 + 64)) {
       return host_reject("nft_mint header short");
     }
-    if (load_address_py(ics).is_error()) {
+    if (load_address_value(ics).is_error()) {
       return host_reject("nft_mint user address parse");
     }
     if (!ics.have(128 + 24 + 24)) {

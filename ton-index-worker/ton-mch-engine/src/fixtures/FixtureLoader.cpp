@@ -168,7 +168,7 @@ std::unique_ptr<Message> parse_message(const msgpack::object &m) {
 }
 
 // Generic msgpack -> Value for the `interfaces` section (schema note in
-// TraceLoader.h). u64 values above int64 range widen through RefInt256.
+// TraceModel.h). u64 values above int64 range widen through RefInt256.
 Value msgpack_to_value(const msgpack::object &o) {
   switch (o.type) {
     case msgpack::type::NIL:

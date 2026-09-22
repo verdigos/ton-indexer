@@ -19,7 +19,7 @@ namespace {
 // Skip the EVAA user header (version coins + maybe upgrade-info ref + 2 exec
 // bits), leaving the cursor on the 32-bit opcode.
 bool skip_user_header(vm::CellSlice &cs) {
-  if (load_coins_py(cs).is_error()) {  // user_version
+  if (load_var_uint16(cs).is_error()) {  // user_version
     return false;
   }
   if (!cs.have(1)) {  // load_maybe_ref: the Maybe bit

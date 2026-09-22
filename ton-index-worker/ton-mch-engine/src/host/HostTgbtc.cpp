@@ -66,11 +66,11 @@ struct MintLog {
 
 MintLog parse_mint_log(vm::CellSlice &cs) {
   MintLog out;
-  auto r_amt = load_coins_py(cs);
+  auto r_amt = load_var_uint16(cs);
   if (r_amt.is_error()) {
     return out;
   }
-  auto r_rcpt = load_address_py(cs);
+  auto r_rcpt = load_address_value(cs);
   if (r_rcpt.is_error()) {
     return out;
   }
@@ -171,13 +171,13 @@ td::Result<Value> parse_tgbtc_burn_event(const td::Ref<vm::Cell> &body) {
   if (!cs.have(32) || !cs.advance(32)) {
     return td::Status::Error("tgbtc burn: opcode underflow");
   }
-  TRY_RESULT(amount, load_coins_py(cs));
+  TRY_RESULT(amount, load_var_uint16(cs));
   Value sender = Value::make_account_none();
   Value pegout = Value::make_account_none();
-  auto r_sender = load_address_py(cs);
+  auto r_sender = load_address_value(cs);
   if (r_sender.is_ok()) {
     sender = account_id_or_none(r_sender.ok());
-    auto r_pegout = load_address_py(cs);
+    auto r_pegout = load_address_value(cs);
     if (r_pegout.is_ok()) {
       pegout = account_id_or_none(r_pegout.ok());
     }
@@ -196,12 +196,12 @@ td::Result<Value> parse_tgbtc_new_key_event(const td::Ref<vm::Cell> &body) {
   if (!cs.have(32) || !cs.advance(32)) {
     return td::Status::Error("tgbtc new key: opcode underflow");
   }
-  TRY_RESULT(amount, load_coins_py(cs));
+  TRY_RESULT(amount, load_var_uint16(cs));
   auto pubkey = cs.have(256) ? cs.fetch_int256(256, false) : td::RefInt256{};
   if (pubkey.is_null()) {
     return td::Status::Error("tgbtc new key: pubkey underflow");
   }
-  TRY_RESULT(address, load_address_py(cs));
+  TRY_RESULT(address, load_address_value(cs));
   bool pegout_ok = true;
   Value pegout = account_id_of(address, pegout_ok);
   if (!pegout_ok) {

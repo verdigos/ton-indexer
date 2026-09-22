@@ -10,7 +10,7 @@
 #include "MsgParse.h"
 #include "TieredLookupSource.h"
 #include "IrTables.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "fixtures/FixtureLookupSource.h"
 #include "fixtures/FixtureLoader.h"
 

@@ -3,7 +3,7 @@
 // first-seen order.
 #pragma once
 
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "Value.h"
 
 #include "td/utils/Status.h"

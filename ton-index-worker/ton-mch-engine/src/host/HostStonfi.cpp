@@ -111,11 +111,11 @@ td::Result<SwapV2> parse_swap_v2(const td::Ref<vm::Cell> &body) {
   if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
     return td::Status::Error("swap_v2: header underflow");
   }
-  TRY_RESULT(from_user, load_address_py(cs));
+  TRY_RESULT(from_user, load_address_value(cs));
   (void)from_user;
-  TRY_RESULT(left, load_coins_py(cs));
+  TRY_RESULT(left, load_var_uint16(cs));
   (void)left;
-  TRY_RESULT(right, load_coins_py(cs));
+  TRY_RESULT(right, load_var_uint16(cs));
   (void)right;
   if (cs.size_refs() < 1) {
     return td::Status::Error("swap_v2: dex_payload ref missing");
@@ -125,10 +125,10 @@ td::Result<SwapV2> parse_swap_v2(const td::Ref<vm::Cell> &body) {
     return td::Status::Error("swap_v2: transferred_op underflow");
   }
   SwapV2 out;
-  TRY_RESULT_ASSIGN(out.token_wallet1, load_address_py(dex));
-  TRY_RESULT(refund, load_address_py(dex));
+  TRY_RESULT_ASSIGN(out.token_wallet1, load_address_value(dex));
+  TRY_RESULT(refund, load_address_value(dex));
   (void)refund;
-  TRY_RESULT(exc, load_address_py(dex));
+  TRY_RESULT(exc, load_address_value(dex));
   (void)exc;
   if (!dex.have(64) || !dex.advance(64)) {  // tx_deadline
     return td::Status::Error("swap_v2: tx_deadline underflow");
@@ -137,11 +137,11 @@ td::Result<SwapV2> parse_swap_v2(const td::Ref<vm::Cell> &body) {
     return td::Status::Error("swap_v2: swap_body ref missing");
   }
   TRY_RESULT(sb, open_ref_cell(dex.fetch_ref()));
-  TRY_RESULT(min_out, load_coins_py(sb));
+  TRY_RESULT(min_out, load_var_uint16(sb));
   (void)min_out;
-  TRY_RESULT(receiver, load_address_py(sb));
+  TRY_RESULT(receiver, load_address_value(sb));
   (void)receiver;
-  TRY_RESULT(fwd_gas, load_coins_py(sb));
+  TRY_RESULT(fwd_gas, load_var_uint16(sb));
   (void)fwd_gas;
   // custom_payload maybe-ref (first maybe-ref in swap_body).
   if (!sb.have(1)) {
@@ -173,15 +173,15 @@ td::Result<std::vector<std::string>> pool_accounts(const SwapV2 &sv) {
     if (sum_type != kV2Swap && sum_type != kV2CrossSwapB) {
       break;
     }
-    TRY_RESULT(addr, load_address_py(cur));
+    TRY_RESULT(addr, load_address_value(cur));
     accounts.push_back(acc_str(addr).value_or(std::string{}));
     if (cur.size_refs() == 0) {
       break;
     }
     TRY_RESULT(cross, open_ref_cell(cur.fetch_ref()));
-    TRY_RESULT(min_out, load_coins_py(cross));
+    TRY_RESULT(min_out, load_var_uint16(cross));
     (void)min_out;
-    TRY_RESULT(c2, load_coins_py(cross));
+    TRY_RESULT(c2, load_var_uint16(cross));
     (void)c2;
     if (cross.size_refs() == 0) {
       break;
@@ -212,7 +212,7 @@ std::optional<std::string> extract_target_wallet(const td::Ref<vm::Cell> &body) 
   if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
     return std::nullopt;
   }
-  if (load_coins_py(cs).is_error() || load_address_py(cs).is_error()) {
+  if (load_var_uint16(cs).is_error() || load_address_value(cs).is_error()) {
     return std::nullopt;
   }
   if (!cs.have(1)) {
@@ -238,7 +238,7 @@ std::optional<std::string> extract_target_wallet(const td::Ref<vm::Cell> &body) 
   if (op != kV2Swap) {
     return std::nullopt;
   }
-  auto r_addr = load_address_py(payload);
+  auto r_addr = load_address_value(payload);
   if (r_addr.is_error()) {
     return std::nullopt;
   }

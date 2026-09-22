@@ -24,11 +24,11 @@ td::Result<std::string> boc_bytes(const td::Ref<vm::Cell> &c) {
   return td_boc_serialize_crc(c);
 }
 
-td::Result<Value> legacy_address_value(const ton_abi::AbiAddress &address) {
+td::Result<Value> project_abi_address(const ton_abi::AbiAddress &address) {
   vm::CellBuilder cb;
   TRY_STATUS(ton_abi::store_address_any(cb, address));
   vm::CellSlice cs = vm::load_cell_slice(cb.finalize());
-  return load_address_py(cs);
+  return load_address_value(cs);
 }
 
 td::Result<td::Ref<vm::Cell>> remaining_slice_to_cell(
@@ -51,8 +51,8 @@ td::Result<Value> decode_comment(const td::Ref<vm::CellSlice> &comment) {
 
 td::Result<Value> adapt_stonfi_swap(
     const ton_abi::gen::jetton_payloads::StonfiSwapPayload &swap) {
-  TRY_RESULT(jetton_wallet, legacy_address_value(swap.jetton_wallet));
-  TRY_RESULT(user_address, legacy_address_value(swap.user_address));
+  TRY_RESULT(jetton_wallet, project_abi_address(swap.jetton_wallet));
+  TRY_RESULT(user_address, project_abi_address(swap.user_address));
   Value::Fields f;
   f.emplace_back("jetton_wallet", std::move(jetton_wallet));
   f.emplace_back("min_amount", Value::make_int(swap.min_amount));
@@ -66,8 +66,8 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
   auto &cs = ctx.cs;
   TRY_RESULT(rec, ton_abi::gen::jetton::JettonTransfer::from_slice(cs));
-  TRY_RESULT(destination, legacy_address_value(rec.destination));
-  TRY_RESULT(response, legacy_address_value(rec.response_destination));
+  TRY_RESULT(destination, project_abi_address(rec.destination));
+  TRY_RESULT(response, project_abi_address(rec.response_destination));
   Value custom_payload = Value::null();
   if (rec.custom_payload && rec.custom_payload->not_null()) {
     TRY_RESULT(cp_boc, boc_bytes(*rec.custom_payload));
