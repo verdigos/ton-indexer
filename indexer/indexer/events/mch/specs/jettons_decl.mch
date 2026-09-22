@@ -15,7 +15,7 @@ matcher jetton_transfer {
     let mismatch = account(wallet.owner) != account(transfer.body.destination)
     let amt      = internal.body.amount ?? transfer.body.amount
     let fwd      = internal.body.forward_ton_amount ?? transfer.body.forward_amount
-    failed when transfer.failed or internal.failed or tx_failed(transfer) or tx_failed(internal)
+    failed when any_failed(transfer) or any_failed(internal)
     out {
         has_internal_transfer:  true
         sender:                 transfer.msg.source
@@ -46,7 +46,7 @@ matcher jetton_burn {
 
     require wallet      = lookup jetton_wallet(burn.msg.destination)
     let burn_amount = burn.body.amount
-    failed when burn.failed or tx_failed(burn)
+    failed when any_failed(burn)
     out {
         owner:         account(wallet.owner)
         jetton_wallet: burn.msg.destination
@@ -67,7 +67,7 @@ matcher jetton_mint {
     let use_internal = not mint.failed and internal != null
     let rjwallet     = lookup jetton_wallet(internal.msg.destination)
     reject when use_internal and rjwallet == null
-    failed when (internal.failed or tx_failed(internal)) if use_internal else true
+    failed when any_failed(internal) if use_internal else true
     out {
         to:               account(rjwallet.owner) if use_internal else account(mint.body.to_address)
         to_jetton_wallet: account(rjwallet.address) if use_internal else null
