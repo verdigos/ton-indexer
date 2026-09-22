@@ -22,7 +22,7 @@ struct EmuClassifierStats {
   std::size_t classified{0}, failed{0}, convert_failed{0}, tx_limit_exceeded{0}, actions{0};
   // Actions produced by the basic-action fallback after classification failure.
   std::size_t fallback_actions{0};
-  std::size_t unported_btypes{0}, arena_refs_scrubbed{0};
+  std::size_t unsupported_action_rows{0}, arena_refs_scrubbed{0};
   std::size_t queue_us_max{0}, classify_us_max{0}, classify_us_total{0}, latency_samples{0};
   std::size_t serialize_us_max{0}, serialize_us_total{0}, actions_blob_bytes{0};
   // Serializer sightings of a Value shape an Action field should not carry.

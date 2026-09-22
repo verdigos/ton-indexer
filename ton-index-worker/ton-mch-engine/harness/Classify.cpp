@@ -295,7 +295,7 @@ int run_dump(const std::vector<std::string> &paths,
       }
       for (const ActionRow &r : res.action_rows) {
         Action act;
-        if (!build_action(r, act)) continue;  // btype outside ported set
+        if (!build_action(r, act)) continue;  // btype outside the supported set
         auto matcher = matcher_names.find(r.block);
         const std::string matcher_name =
             matcher != matcher_names.end() ? *matcher->second : std::string("-");

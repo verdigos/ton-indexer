@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
   td::uint32 from_seqno = 0;
   td::uint32 to_seqno = 0;
   td::uint32 prewarm_count = 50;
-  bool mch_classify = false;
+  bool enable_classifier = false;
   bool mch_task_mode = false, mch_task_once = false;
   double mch_task_poll = 5;
   std::optional<std::uint32_t> enqueue_from;
@@ -489,8 +489,8 @@ int main(int argc, char *argv[]) {
   });
   
   // in-process classification
-  p.add_option('\0', "mch-classify", "Classify completed traces in-process and write actions in the block transaction", [&]() {
-    mch_classify = true;
+  p.add_option('\0', "enable-classifier", "Classify completed traces in-process and write actions in a post-commit classification transaction", [&]() {
+    enable_classifier = true;
   });
   auto mch_uint_option = [&](td::Slice name, td::Slice help, auto setter) {
     p.add_checked_option('\0', name, help, [&, name, setter](td::Slice value) {
@@ -608,7 +608,7 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "Task mode requires --db; --from, --to and --force are unsupported";
     return 2;
   }
-  if ((mch_classify || mch_task_mode) && (!mch_policy.workers ||
+  if ((enable_classifier || mch_task_mode) && (!mch_policy.workers ||
       !mch_policy.trace_cap || !mch_policy.rss_budget_bytes)) {
     LOG(ERROR) << "Classification workers, trace cap and RSS budget must be positive";
     return 2;
@@ -641,8 +641,8 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "--from must be less than or equal to --to";
     std::_Exit(2);
   }
-  if (mch_classify && bounded_archive_range) {
-    LOG(ERROR) << "--mch-classify cannot be combined with a bounded --from/--to range";
+  if (enable_classifier && bounded_archive_range) {
+    LOG(ERROR) << "--enable-classifier cannot be combined with a bounded --from/--to range";
     std::_Exit(2);
   }
   if (no_leader && !bounded_archive_range && !mch_task_mode) {
@@ -701,7 +701,7 @@ int main(int argc, char *argv[]) {
 
   std::optional<mch::ReplayRun> mch_run;
   std::shared_ptr<const mch::MchEnginePrep> mch_prep;
-  if (mch_classify || mch_task_mode) {
+  if (enable_classifier || mch_task_mode) {
     auto r_prep = mch::make_engine_prep();
     if (r_prep.is_error()) {
       LOG(ERROR) << "MCH engine prep failed: " << r_prep.move_as_error();

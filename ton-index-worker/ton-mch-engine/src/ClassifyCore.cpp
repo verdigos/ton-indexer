@@ -873,7 +873,7 @@ SchemaClassifyResult classify_schema_trace(
     for (const ActionRow &row : core) {
       Action action;
       if (!build_action(row, action)) {
-        result.unported_btypes++;
+        result.unsupported_action_rows++;
         continue;
       }
       result.scrubbed += scrub_arena_refs(action);

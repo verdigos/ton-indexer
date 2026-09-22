@@ -76,7 +76,7 @@ struct EmuClassifyResult {
   // Serialized before the owned view leaves the classifier actor.
   EmuActionPayload payload;
   bool used_fallback{false};       // rows came from ClassifyResult::fallback_rows
-  std::size_t unported_btypes{0};  // spine blocks build_action() declined
+  std::size_t unsupported_action_rows{0};  // spine blocks build_action() declined
   bool failure{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};

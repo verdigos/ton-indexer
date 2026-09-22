@@ -160,7 +160,7 @@ struct SchemaClassifyResult {
   std::vector<Action> rows;
   std::vector<std::string> matcher_names;
   std::size_t scrubbed{0};
-  std::size_t unported_btypes{0};
+  std::size_t unsupported_action_rows{0};
   bool unknown_row{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};

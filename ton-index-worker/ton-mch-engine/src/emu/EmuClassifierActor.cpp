@@ -67,7 +67,7 @@ SchemaClassifyResult classify_txs(const EmuClassifierConfig &cfg, const EmuTrace
   res.failure_reason = std::move(classified.failure_reason);
   res.failure_category = classified.failure_category;
   res.used_fallback = classified.outcome == TraceOutcome::fallback;
-  res.unported_btypes += classified.unported_btypes;
+  res.unsupported_action_rows += classified.unsupported_action_rows;
   res.lookup_stats = src.stats();
   res.tier2_stats = tier2.stats();
   return classified;
@@ -195,7 +195,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       if (res.used_fallback) {
         stats_.fallback_actions += classified.rows.size();
       }
-      stats_.unported_btypes += res.unported_btypes;
+      stats_.unsupported_action_rows += res.unsupported_action_rows;
       stats_.lookups.tier1_hits += res.lookup_stats.tier1_hits;
       stats_.lookups.tier2_hits += res.lookup_stats.tier2_hits;
       stats_.lookups.misses += res.lookup_stats.misses;
@@ -294,7 +294,7 @@ void EmuClassifierActor::alarm() {
             << " tx_limit_exceeded=" << stats_.tx_limit_exceeded
             << " actions=" << stats_.actions << " (+" << (stats_.actions - prev_.actions) << ")"
             << " fallback_actions=" << stats_.fallback_actions
-            << " unported_btypes=" << stats_.unported_btypes
+            << " unsupported_action_rows=" << stats_.unsupported_action_rows
             << " arena_refs_scrubbed=" << stats_.arena_refs_scrubbed
             << " finality{emulated=" << stats_.by_finality[0]
             << " confirmed=" << stats_.by_finality[1]
