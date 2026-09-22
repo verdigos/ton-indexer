@@ -2,7 +2,7 @@
 // instance owns the memo for one classification.
 #pragma once
 
-#include "ParsedBlockLookupSource.h"  // Value, schema::*, AllShardStates via IndexData.h
+#include "TieredLookupSource.h"  // Value, schema::*, AllShardStates via IndexData.h
 
 #include "smc-interfaces/FetchAccountFromShard.h"  // AllShardStates, lookup_account
 
@@ -19,16 +19,16 @@ struct Tier2Stats {
   std::size_t memo_hits{0};  // repeat (kind, address) served from the memo
 };
 
-class EmuCelldbTier2 {
+class CelldbTier2Lookup {
  public:
   // Injectable account reader; production uses lookup_account.
   using AccountSource = std::function<td::Result<std::optional<schema::AccountState>>(const block::StdAddress &)>;
 
   // `shard_states` and `config` must outlive this object (they are the view's).
-  EmuCelldbTier2(const AllShardStates *shard_states, std::shared_ptr<block::ConfigInfo> config);
+  CelldbTier2Lookup(const AllShardStates *shard_states, std::shared_ptr<block::ConfigInfo> config);
 
   // Detector misses are null; account read errors also flag unavailable history.
-  ParsedBlockLookupSource::Tier2Result fetch(const std::string &kind, const std::vector<Value> &args);
+  TieredLookupSource::Tier2Result fetch(const std::string &kind, const std::vector<Value> &args);
 
   const Tier2Stats &stats() const { return stats_; }
   bool history_unavailable() const { return history_unavailable_; }

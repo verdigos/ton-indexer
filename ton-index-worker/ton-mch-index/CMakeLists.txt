@@ -11,7 +11,7 @@ target_link_libraries(ton-mch-index
     tondb-scanner
     index-engine-core
     mch-classify
-    mch-emu
+    mch-classification-runtime
 )
 target_link_options(ton-mch-index PUBLIC -rdynamic)
 

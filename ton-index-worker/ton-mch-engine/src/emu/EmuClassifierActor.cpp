@@ -51,16 +51,16 @@ void record_phase_exception(EmuClassifierStats &stats, EmuClassifyResult &res,
 SchemaClassifyResult classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
                                   const std::vector<schema::Transaction> &txs, EmuClassifyResult &res) {
   const MchEnginePrep &prep = *cfg.prep;
-  const ParsedBlockLookupSource::InterfaceMap &ifaces = *view.interfaces;
+  const TieredLookupSource::InterfaceMap &ifaces = *view.interfaces;
   // Tier-2 memoization is scoped to this classification.
-  EmuCelldbTier2 tier2(&view.shard_states, view.config);
-  ParsedBlockLookupSource::Tier2Hook hook;
+  CelldbTier2Lookup tier2(&view.shard_states, view.config);
+  TieredLookupSource::Tier2Hook hook;
   if (cfg.tier2) {
     hook = [&tier2](const std::string &kind, const std::vector<Value> &args) {
       return tier2.fetch(kind, args);
     };
   }
-  ParsedBlockLookupSource src(&ifaces, std::move(hook));
+  TieredLookupSource src(&ifaces, std::move(hook));
   SchemaClassifyResult classified = classify_schema_trace(prep, res.trace_id, txs, src);
   res.failure = classified.outcome == TraceOutcome::fallback ||
                 classified.outcome == TraceOutcome::terminal_failure_empty;

@@ -1,6 +1,6 @@
 #include "ClassifyWorker.h"
 
-#include "emu/EmuCelldbLookup.h"
+#include "CelldbTier2Lookup.h"
 #include "td/utils/Timer.h"
 #include "td/utils/base64.h"
 
@@ -22,8 +22,8 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
     for (const auto &shard : job.block->mc_block_.shard_blocks_) {
       states.push_back(shard.block_state);
     }
-    ParsedBlockLookupSource::StableAddressSet status_stable_accounts;
-    ParsedBlockLookupSource::StableAddressSet status_unstable_accounts;
+    TieredLookupSource::StableAddressSet status_stable_accounts;
+    TieredLookupSource::StableAddressSet status_unstable_accounts;
     for (const auto &tx : job.input.txs) {
       if ((tx.orig_status != schema::active || tx.end_status == schema::active) &&
           status_unstable_accounts.find(tx.account) == status_unstable_accounts.end()) {
@@ -33,8 +33,8 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
         status_unstable_accounts.insert(tx.account);
       }
     }
-    EmuCelldbTier2 tier2(&states, job.block->mc_block_.config_);
-    ParsedBlockLookupSource src(&job.input.interfaces,
+    CelldbTier2Lookup tier2(&states, job.block->mc_block_.config_);
+    TieredLookupSource src(&job.input.interfaces,
         [&tier2](const std::string &kind, const std::vector<Value> &args) {
           return tier2.fetch(kind, args);
         }, &status_stable_accounts);

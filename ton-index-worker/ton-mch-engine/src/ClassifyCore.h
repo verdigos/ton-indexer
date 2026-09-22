@@ -21,7 +21,7 @@
 namespace mch {
 
 struct MchEnginePrep;
-class ParsedBlockLookupSource;
+class TieredLookupSource;
 
 // Trace-terminal failure categories used by production-classifier telemetry:
 //   - lookup_infra_fail:  two-phase lookup did not converge (infra error).
@@ -204,6 +204,6 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
 // `src` and its Tier2Hook capture are for one classify call on one thread only.
 SchemaClassifyResult classify_schema_trace(
     const MchEnginePrep &prep, const std::string &trace_id,
-    const std::vector<schema::Transaction> &txs, ParsedBlockLookupSource &src);
+    const std::vector<schema::Transaction> &txs, TieredLookupSource &src);
 
 }  // namespace mch

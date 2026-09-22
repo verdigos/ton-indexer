@@ -1,4 +1,4 @@
-#include "ParsedBlockLookupSource.h"
+#include "TieredLookupSource.h"
 
 #include "Value.h"
 
@@ -85,7 +85,7 @@ Value dedust_asset(const std::optional<block::StdAddress> &a) {
 
 }  // namespace
 
-Value ParsedBlockLookupSource::iface_value(const std::string &kind,
+Value TieredLookupSource::iface_value(const std::string &kind,
                                            const schema::BlockchainInterfaceV2 &iface) {
   auto handler = kInterfaceHandlers.find(kind);
   if (handler == kInterfaceHandlers.end()) {
@@ -203,7 +203,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
   return Value::null();  // no matching variant for this kind
 }
 
-std::optional<Value> ParsedBlockLookupSource::tier1(const std::string &kind,
+std::optional<Value> TieredLookupSource::tier1(const std::string &kind,
                                                     const std::string &addr) const {
   // Tier-1 does not serve code_hash; tier-2 reads the code at the completing block.
   if (kind == "code_hash") return std::nullopt;
@@ -227,7 +227,7 @@ std::optional<Value> ParsedBlockLookupSource::tier1(const std::string &kind,
   return Value::null();  // account present, no matching variant
 }
 
-Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
+Value TieredLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
   // FixtureLookupSource agreement guard: every registered lookup passes exactly one
   // address, Str, or the Account a `.data` address field yields (same raw
   // uppercase text); anything else is a null result on both sources.

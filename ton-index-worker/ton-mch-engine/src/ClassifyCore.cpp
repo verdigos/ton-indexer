@@ -8,7 +8,7 @@
 #include "GenWheres.h"
 #include "GhostExternal.h"
 #include "HostRegistry.h"
-#include "ParsedBlockLookupSource.h"
+#include "TieredLookupSource.h"
 #include "SchemaTraceLoader.h"
 #include "Walker.h"
 #include "btypes_gen.h"
@@ -842,7 +842,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
 
 SchemaClassifyResult classify_schema_trace(
     const MchEnginePrep &prep, const std::string &trace_id,
-    const std::vector<schema::Transaction> &txs, ParsedBlockLookupSource &src) {
+    const std::vector<schema::Transaction> &txs, TieredLookupSource &src) {
   SchemaClassifyResult result;
   result.rescue = create_unknown_action(trace_id, txs);
   if (txs.size() == 1 &&

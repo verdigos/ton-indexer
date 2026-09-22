@@ -10,7 +10,7 @@ void free_payload(TracePayloadBuffer::Counters &counters, auto &entry) {
   counters.buffered_memo_accounts -= entry.memo.size();
   entry.txs.clear();
   entry.txs.shrink_to_fit();
-  ParsedBlockLookupSource::InterfaceMap{}.swap(entry.memo);
+  TieredLookupSource::InterfaceMap{}.swap(entry.memo);
 }
 }  // namespace
 

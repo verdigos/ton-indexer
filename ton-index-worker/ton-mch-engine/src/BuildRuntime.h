@@ -105,7 +105,7 @@ class LookupSource {
 };
 
 // Every lookup kind the artifact may reference. Both the runnability gating in
-// BuildDriver and the production ParsedBlockLookupSource key off this set; the
+// BuildDriver and the production TieredLookupSource key off this set; the
 // fixture-backed source that serves it offline lives in mch-fixtures
 // (fixtures/FixtureLookupSource.h).
 const std::set<std::string> &lookup_kinds();

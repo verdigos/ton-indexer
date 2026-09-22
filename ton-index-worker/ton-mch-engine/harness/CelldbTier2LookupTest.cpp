@@ -1,13 +1,13 @@
 // Cell-db tier-2 tests pin value-shape equality with tier 1, JVault cell parsing,
 // memoization, and argument discipline. Injected account reads cannot exercise
 // successful get-method detection or the final JVault jetton-wallet leg.
-#include "EmuCelldbLookupTest.h"
+#include "CelldbTier2LookupTest.h"
 
-#include "ParsedBlockLookupSource.h"
+#include "TieredLookupSource.h"
 #include "Value.h"
-#include "emu/EmuCelldbLookup.h"
-#include "emu/EmuInterfaces.h"
-#include "emu/EmuJvaultChain.h"
+#include "CelldbTier2Lookup.h"
+#include "DetectorInterfaceAdapter.h"
+#include "JvaultLookup.h"
 #include "fixtures/Render.h"
 
 #include "common/refint.h"
@@ -98,12 +98,12 @@ schema::AccountState account_with_data(const block::StdAddress &a, td::Ref<vm::C
 // Tier shape equality
 
 // Render `iface` the way TIER 1 does: put it in an account_interfaces_ map and
-// go through a real ParsedBlockLookupSource::fetch.
+// go through a real TieredLookupSource::fetch.
 Value via_tier1(const std::string &kind, const block::StdAddress &addr,
                 const schema::BlockchainInterfaceV2 &iface) {
-  ParsedBlockLookupSource::InterfaceMap map;
+  TieredLookupSource::InterfaceMap map;
   map.emplace(addr, std::vector<schema::BlockchainInterfaceV2>{iface});
-  ParsedBlockLookupSource src(&map);
+  TieredLookupSource src(&map);
   return src.fetch(kind, {Value::make_str(std::to_string(addr.workchain) + ":" + addr.addr.to_hex())});
 }
 
@@ -114,7 +114,7 @@ void test_tier_shapes() {
 
   auto same = [&](const std::string &kind, const schema::BlockchainInterfaceV2 &iface) {
     Value t1 = via_tier1(kind, a, iface);
-    Value t2 = ParsedBlockLookupSource::iface_value(kind, iface);
+    Value t2 = TieredLookupSource::iface_value(kind, iface);
     check("tier_shape/" + kind + "/nonnull", !t2.is_null());
     check("tier_shape/" + kind + "/equal", structural_equal(t1, t2));
   };
@@ -138,7 +138,7 @@ void test_tier_shapes() {
     // on a non-Dict and a fault drops the whole nft_transfer row.
     nft.content = std::map<std::string, std::string>{{"uri", "https://x/y.json"}};
     same("nft_item", nft);
-    Value v = ParsedBlockLookupSource::iface_value("nft_item", nft);
+    Value v = TieredLookupSource::iface_value("nft_item", nft);
     const Value *content = v.field("content");
     check("tier_shape/nft_item/content_is_dict",
           content != nullptr && content->t == VType::Dict);
@@ -178,7 +178,7 @@ void test_tier_shapes() {
     p.asset_1 = std::nullopt;  // the TON side
     p.asset_2 = b;
     same("dedust_pool", p);
-    Value v = ParsedBlockLookupSource::iface_value("dedust_pool", p);
+    Value v = TieredLookupSource::iface_value("dedust_pool", p);
     const Value *assets = v.field("assets");
     check("tier_shape/dedust_pool/two_assets",
           assets != nullptr && assets->t == VType::List && assets->items != nullptr &&
@@ -193,7 +193,7 @@ void test_tier_shapes() {
     schema::NominatorPoolData p{};
     p.address = a;
     same("nominator_pool", p);
-    Value v = ParsedBlockLookupSource::iface_value("nominator_pool", p);
+    Value v = TieredLookupSource::iface_value("nominator_pool", p);
     const Value *ad = v.field("address");
     check("tier_shape/nominator_pool/address_only",
           ad != nullptr && ad->t == VType::Str && v.fields != nullptr && v.fields->size() == 1);
@@ -202,7 +202,7 @@ void test_tier_shapes() {
     schema::TelemintData p{};
     p.address = a;
     same("telemint_item", p);
-    Value v = ParsedBlockLookupSource::iface_value("telemint_item", p);
+    Value v = TieredLookupSource::iface_value("telemint_item", p);
     const Value *ad = v.field("address");
     check("tier_shape/telemint_item/address_only",
           ad != nullptr && ad->t == VType::Str && v.fields != nullptr && v.fields->size() == 1);
@@ -213,7 +213,7 @@ void test_tier_shapes() {
     schema::JettonWalletDataV2 jw{};
     jw.address = a;
     check("tier_shape/wrong_kind_is_null",
-          ParsedBlockLookupSource::iface_value("dedust_pool", jw).is_null());
+          TieredLookupSource::iface_value("dedust_pool", jw).is_null());
   }
 }
 
@@ -230,7 +230,7 @@ void test_nft_code_hash() {
   auto rendered_hash = [](const std::string &kind, schema::BlockchainInterfaceV2 iface,
                           const schema::AccountState &state) {
     set_nft_code_hash(iface, state);
-    Value v = ParsedBlockLookupSource::iface_value(kind, iface);
+    Value v = TieredLookupSource::iface_value(kind, iface);
     const Value *h = v.field("code_hash");
     return h == nullptr ? Value::null() : *h;
   };
@@ -361,8 +361,8 @@ struct Fixture {
   std::map<std::string, schema::AccountState> accounts;
   int reads = 0;
 
-  EmuCelldbTier2 make() {
-    EmuCelldbTier2 t(&states, nullptr);
+  CelldbTier2Lookup make() {
+    CelldbTier2Lookup t(&states, nullptr);
     t.set_account_source([this](const block::StdAddress &a) -> td::Result<std::optional<schema::AccountState>> {
       reads++;
       auto it = accounts.find(std::to_string(a.workchain) + ":" + a.addr.to_hex());
@@ -490,7 +490,7 @@ void test_memo_and_guards() {
   {
     // A listener-emulated trace has no shard states: a plain miss, no read.
     AllShardStates none;
-    EmuCelldbTier2 t(&none, nullptr);
+    CelldbTier2Lookup t(&none, nullptr);
     check("guard/no_shard_states_null",
           t.fetch("nominator_pool", {Value::make_str(raw_of('A'))}).value.is_null());
     check("guard/no_shard_states_not_unavailable",
@@ -509,7 +509,7 @@ void test_account_lookup_states() {
       if (unavailable) return td::Status::Error("read failed");
       return std::optional<schema::AccountState>{};
     });
-    ParsedBlockLookupSource src(nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
+    TieredLookupSource src(nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
       return t.fetch(kind, args);
     });
     const std::string name = unavailable ? "account/unavailable/" : "account/absent/";
@@ -534,21 +534,21 @@ void test_two_tier_routing() {
   jw.owner = addr_of('B');
   jw.jetton = addr_of('C');
 
-  ParsedBlockLookupSource::InterfaceMap map;
+  TieredLookupSource::InterfaceMap map;
   map.emplace(a, std::vector<schema::BlockchainInterfaceV2>{jw});
 
   int hook_calls = 0;
-  ParsedBlockLookupSource::Tier2Hook hook = [&](const std::string &kind,
-                                                const std::vector<Value> &) -> ParsedBlockLookupSource::Tier2Result {
+  TieredLookupSource::Tier2Hook hook = [&](const std::string &kind,
+                                                const std::vector<Value> &) -> TieredLookupSource::Tier2Result {
     hook_calls++;
     if (kind != "nominator_pool") {
       return {Value::null(), false};
     }
     schema::NominatorPoolData p{};
     p.address = addr_of('D');
-    return {ParsedBlockLookupSource::iface_value(kind, p), false};
+    return {TieredLookupSource::iface_value(kind, p), false};
   };
-  ParsedBlockLookupSource src(&map, std::move(hook));
+  TieredLookupSource src(&map, std::move(hook));
 
   Value t1 = src.fetch("jetton_wallet", {Value::make_str(raw_of('A'))});
   check("routing/tier1_wins", !t1.is_null() && hook_calls == 0);
@@ -579,27 +579,27 @@ void test_tier1_authoritative_miss() {
   jw.owner = addr_of('B');
   jw.jetton = addr_of('C');
 
-  ParsedBlockLookupSource::InterfaceMap map;
+  TieredLookupSource::InterfaceMap map;
   map.emplace(a, std::vector<schema::BlockchainInterfaceV2>{jw});
-  ParsedBlockLookupSource::StableAddressSet stable{a, addr_of('F')};
-  ParsedBlockLookupSource::StableAddressSet unstable{addr_of('F')};
+  TieredLookupSource::StableAddressSet stable{a, addr_of('F')};
+  TieredLookupSource::StableAddressSet unstable{addr_of('F')};
 
   int hook_calls = 0;
-  ParsedBlockLookupSource::Tier2Hook hook =
+  TieredLookupSource::Tier2Hook hook =
       [&](const std::string &, const std::vector<Value> &)
-      -> ParsedBlockLookupSource::Tier2Result {
+      -> TieredLookupSource::Tier2Result {
     hook_calls++;
     return {Value::null(), false};
   };
-  ParsedBlockLookupSource src(&map, hook, &stable);
-  ParsedBlockLookupSource src_unstable(&map, hook, &unstable);
-  auto misses_for = [](const ParsedBlockLookupSource::LookupStats &stats,
+  TieredLookupSource src(&map, hook, &stable);
+  TieredLookupSource src_unstable(&map, hook, &unstable);
+  auto misses_for = [](const TieredLookupSource::LookupStats &stats,
                        const std::string &kind) {
     auto it = stats.misses_by_kind.find(kind);
     return it == stats.misses_by_kind.end() ? 0 : it->second;
   };
-  auto is_miss_delta = [&](const ParsedBlockLookupSource &source,
-                           const ParsedBlockLookupSource::LookupStats &before,
+  auto is_miss_delta = [&](const TieredLookupSource &source,
+                           const TieredLookupSource::LookupStats &before,
                            const std::string &kind) {
     const auto &after = source.stats();
     return after.misses == before.misses + 1 &&

@@ -10,7 +10,7 @@
 #include "ActionJsonTest.h"
 #include "Classify.h"
 #include "EmuActionSerializeTest.h"
-#include "EmuCelldbLookupTest.h"
+#include "CelldbTier2LookupTest.h"
 #include "ClassifyCoreTest.h"
 #include "GhostExternalTest.h"
 #include "MsgParse.h"

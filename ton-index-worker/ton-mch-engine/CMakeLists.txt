@@ -200,7 +200,7 @@ add_library(mch-classify STATIC
     src/GhostExternal.cpp
     src/ClassifyCore.cpp
     src/SchemaTraceLoader.cpp
-    src/ParsedBlockLookupSource.cpp
+    src/TieredLookupSource.cpp
     src/EnginePrep.cpp
     src/MsgParse.cpp
     src/AbiBridge.cpp
@@ -269,24 +269,24 @@ add_dependencies(mch-fixtures mch_generate_sources)
 # --- In-process classifier for ton-trace-emulator.
 # Split in two so the emulator-free side (converter / interfaces / actor) stays
 # linkable without emulator_static.
-add_library(mch-emu STATIC
+add_library(mch-classification-runtime STATIC
     src/emu/EmuTraceConvert.cpp
-    src/emu/EmuInterfaces.cpp
+    src/DetectorInterfaceAdapter.cpp
     src/emu/EmuClassifierActor.cpp
     src/emu/EmuActionSerialize.cpp
-    src/emu/EmuCelldbLookup.cpp
-    src/emu/EmuJvaultChain.cpp
+    src/CelldbTier2Lookup.cpp
+    src/JvaultLookup.cpp
 )
-target_include_directories(mch-emu PUBLIC src)
-target_compile_features(mch-emu PUBLIC cxx_std_20)
-target_link_libraries(mch-emu PUBLIC mch-classify)
+target_include_directories(mch-classification-runtime PUBLIC src)
+target_compile_features(mch-classification-runtime PUBLIC cxx_std_20)
+target_link_libraries(mch-classification-runtime PUBLIC mch-classify)
 
 # EmuClassifierBridge.cpp is the ONLY TU that includes TraceEmulator.h.
 # ton-trace-emulator-core is add_subdirectory'd after this one; link libraries
 # resolve at generate time, and the core lib knows nothing of mch (no cycle).
 add_library(mch-emu-bridge STATIC src/emu/EmuClassifierBridge.cpp)
 target_compile_features(mch-emu-bridge PUBLIC cxx_std_20)
-target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
+target_link_libraries(mch-emu-bridge PUBLIC mch-classification-runtime ton-trace-emulator-core)
 
 # The upstream CLI/gate executable over the product boundary.
 # Bridge self-test (--abi-bridge-test): build-time ton-abi generated fixture
@@ -316,7 +316,7 @@ add_executable(ton-mch-engine
     harness/Classify.cpp
     harness/AbiBridgeTest.cpp
     harness/EmuActionSerializeTest.cpp
-    harness/EmuCelldbLookupTest.cpp
+    harness/CelldbTier2LookupTest.cpp
     harness/ClassifyCoreTest.cpp
     harness/ActionJsonTest.cpp
     harness/GhostExternalTest.cpp
@@ -332,10 +332,10 @@ target_compile_definitions(ton-mch-engine PRIVATE
     MCH_ACTION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/goldens/fixtures.json"
     MCH_ACTION_TRACES="${CMAKE_CURRENT_SOURCE_DIR}/../../indexer/tests/traces"
 )
-# mch-emu (not just mch-classify): --actions-msgpack-test gates the write-back
+# mch-classification-runtime (not just mch-classify): --actions-msgpack-test gates the write-back
 # writer, which lives there. Still no emulator dependency — mch-emu-bridge is
 # the only target that knows ::Trace. mch-fixtures is linked HERE and only here.
-target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-emu)
+target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-classification-runtime)
 add_dependencies(ton-mch-engine mch_generate_sources)
 
 add_executable(mch-smc-pruned-cells-test harness/SmcPrunedCellsTest.cpp)

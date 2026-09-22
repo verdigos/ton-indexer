@@ -1,4 +1,4 @@
-#include "EmuInterfaces.h"
+#include "DetectorInterfaceAdapter.h"
 
 #include <variant>
 

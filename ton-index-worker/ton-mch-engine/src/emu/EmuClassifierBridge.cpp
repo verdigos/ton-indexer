@@ -1,6 +1,6 @@
 #include "EmuClassifierBridge.h"
 
-#include "EmuInterfaces.h"
+#include "DetectorInterfaceAdapter.h"
 
 #include "TraceEmulator.h"
 
@@ -12,8 +12,8 @@
 
 namespace mch {
 
-ParsedBlockLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
-  ParsedBlockLookupSource::InterfaceMap result;
+TieredLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
+  TieredLookupSource::InterfaceMap result;
 
   // Derive NFT code hashes from the detector's account state, preferring the
   // latest emulated state over committed state. Zero means unknown.

@@ -1,7 +1,7 @@
-#include "EmuCelldbLookup.h"
+#include "CelldbTier2Lookup.h"
 
-#include "EmuInterfaces.h"
-#include "EmuJvaultChain.h"
+#include "DetectorInterfaceAdapter.h"
+#include "JvaultLookup.h"
 
 #include "smc-interfaces/Multisig.h"
 #include "smc-interfaces/NominatorPool.h"
@@ -25,7 +25,7 @@ std::string memo_key(const std::string &kind, const block::StdAddress &addr) {
 
 }  // namespace
 
-EmuCelldbTier2::EmuCelldbTier2(const AllShardStates *shard_states,
+CelldbTier2Lookup::CelldbTier2Lookup(const AllShardStates *shard_states,
                                std::shared_ptr<block::ConfigInfo> config)
     : shard_states_(shard_states)
     , config_(std::move(config))
@@ -35,7 +35,7 @@ EmuCelldbTier2::EmuCelldbTier2(const AllShardStates *shard_states,
     }) {
 }
 
-const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &addr) {
+const schema::AccountState *CelldbTier2Lookup::account(const block::StdAddress &addr) {
   auto it = account_memo_.find(addr);
   if (it != account_memo_.end()) {
     return it->second ? &*it->second : nullptr;
@@ -53,7 +53,7 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
   return pos->second ? &*pos->second : nullptr;
 }
 
-Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &addr) {
+Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddress &addr) {
   enum class Handler {
     JvaultAssets,
     JettonWallet,
@@ -176,10 +176,10 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   // Tier 1 fills the NFT code hash from the trace's account state; here it comes
   // from the cell-db state the detector just ran on.
   set_nft_code_hash(*iface, *st);
-  return ParsedBlockLookupSource::iface_value(kind, *iface);
+  return TieredLookupSource::iface_value(kind, *iface);
 }
 
-Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
+Value CelldbTier2Lookup::jvault_assets(const block::StdAddress &stake_wallet) {
   const schema::AccountState *wallet = account(stake_wallet);
   if (wallet == nullptr) {
     return Value::null();
@@ -215,7 +215,7 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
                        std::move(jvault_asset));
 }
 
-ParsedBlockLookupSource::Tier2Result EmuCelldbTier2::fetch(
+TieredLookupSource::Tier2Result CelldbTier2Lookup::fetch(
     const std::string &kind, const std::vector<Value> &args) {
   // No states at all (listener-emulated view) is a plain miss, not a read fault.
   if (shard_states_ == nullptr || shard_states_->empty()) {

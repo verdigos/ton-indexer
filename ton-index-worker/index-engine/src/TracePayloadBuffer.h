@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ClassifyCore.h"
-#include "ParsedBlockLookupSource.h"
+#include "TieredLookupSource.h"
 #include "ReplayRun.h"
 
 #include <cstddef>
@@ -15,7 +15,7 @@ namespace mch {
 struct ClassifyInput {
   schema::Trace trace;
   std::vector<schema::Transaction> txs;
-  ParsedBlockLookupSource::InterfaceMap interfaces;
+  TieredLookupSource::InterfaceMap interfaces;
   std::optional<TraceOutcome> skipped;
 };
 
@@ -49,7 +49,7 @@ class TracePayloadBuffer {
  private:
   struct Entry {
     std::vector<schema::Transaction> txs;
-    ParsedBlockLookupSource::InterfaceMap memo;
+    TieredLookupSource::InterfaceMap memo;
     std::optional<TraceOutcome> sticky;
   };
 

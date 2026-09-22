@@ -4,7 +4,7 @@
 // data-cell chain over synthetic cells, and the memo / fetch budget / wall-clock
 // budget. Same flag-driven pattern as --shape-test / --actions-msgpack-test.
 //
-// The account reads are injected (EmuCelldbTier2::set_account_source), so no
+// The account reads are injected (CelldbTier2Lookup::set_account_source), so no
 // celldb, no shard state and no node are needed. What that CANNOT cover is any
 // path through a real get-method, see the header comment in the .cpp for the
 // exact list of legs that still need a live run.

@@ -4,9 +4,9 @@
 
 #include "ActionBuild.h"             // Action (the rows the classifier hands back)
 #include "EmuActionPayload.h"        // EmuActionPayload (the write-back bytes)
-#include "EmuCelldbLookup.h"         // Tier2Stats, AllShardStates
+#include "CelldbTier2Lookup.h"       // Tier2Stats, AllShardStates
 #include "EnginePrep.h"             // MchEnginePrep
-#include "ParsedBlockLookupSource.h" // InterfaceMap, LookupStats
+#include "TieredLookupSource.h"      // InterfaceMap, LookupStats
 
 #include "crypto/block/block.h"  // block::StdAddress
 #include "td/utils/port/Clocks.h"
@@ -41,8 +41,8 @@ struct EmuTraceView {
   bool tx_limit_exceeded{false};
   // Pre-order nodes; to_tree reconstructs edges by message hash.
   std::vector<EmuTxRef> nodes;
-  std::shared_ptr<const ParsedBlockLookupSource::InterfaceMap> interfaces =
-      std::make_shared<const ParsedBlockLookupSource::InterfaceMap>();  // already V2-adapted
+  std::shared_ptr<const TieredLookupSource::InterfaceMap> interfaces =
+      std::make_shared<const TieredLookupSource::InterfaceMap>();  // already V2-adapted
   // Shared shard-state and config handles for tier-2 lookups. Listener traces
   // leave them empty and receive no tier-2 results.
   AllShardStates shard_states;
@@ -80,7 +80,7 @@ struct EmuClassifyResult {
   bool failure{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
-  ParsedBlockLookupSource::LookupStats lookup_stats;
+  TieredLookupSource::LookupStats lookup_stats;
   Tier2Stats tier2_stats;
   // Serialization and classification have separate latency measurements.
   std::int64_t queue_us{0}, classify_us{0}, serialize_us{0};

@@ -16,4 +16,4 @@ target_link_libraries(index-engine-core
         tondb-scanner
         ton-observability
         mch-classify
-        mch-emu)
+        mch-classification-runtime)

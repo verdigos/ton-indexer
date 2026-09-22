@@ -6,7 +6,7 @@
 
 #include "BlockInterfacesDetector.h"
 #include "emu/EmuActionSerialize.h"
-#include "emu/EmuCelldbLookup.h"
+#include "CelldbTier2Lookup.h"
 #include "emu/EmuTypes.h"
 
 #include "td/utils/JsonBuilder.h"
@@ -224,15 +224,15 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   for (const auto &sb : parsed_block->mc_block_.shard_blocks_) {
     shard_states.push_back(sb.block_state);
   }
-  mch::EmuCelldbTier2 tier2(&shard_states, parsed_block->mc_block_.config_);
-  mch::ParsedBlockLookupSource::Tier2Hook hook;
+  mch::CelldbTier2Lookup tier2(&shard_states, parsed_block->mc_block_.config_);
+  mch::TieredLookupSource::Tier2Hook hook;
   if (tier2_enabled_) {
     hook = [&tier2](const std::string &kind, const std::vector<mch::Value> &args) {
       return tier2.fetch(kind, args);
     };
   }
   auto &tier1_map = tier1_completion_only_ ? parsed_block->account_interfaces_ : account_interfaces_;
-  mch::ParsedBlockLookupSource src(&tier1_map, std::move(hook));
+  mch::TieredLookupSource src(&tier1_map, std::move(hook));
   auto classified = mch::classify_schema_trace(*prep_, trace_key, txs, src);
   const auto &stats = src.stats();
   lookup_stats_.tier1_hits += stats.tier1_hits;

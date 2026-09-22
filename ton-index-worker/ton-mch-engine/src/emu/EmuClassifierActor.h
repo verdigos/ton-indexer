@@ -30,7 +30,7 @@ struct EmuClassifierStats {
   std::array<std::size_t, 3> by_finality{};  // root-node EmuFinality of the emission
   std::map<FailureCategory, std::size_t> by_category;
   std::size_t history_unavailable{0};
-  ParsedBlockLookupSource::LookupStats lookups;  // tier1 / tier2 / miss
+  TieredLookupSource::LookupStats lookups;  // tier1 / tier2 / miss
   Tier2Stats tier2;  // celldb reads / memo hits
 };
 

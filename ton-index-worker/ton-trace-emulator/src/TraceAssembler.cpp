@@ -222,7 +222,7 @@ std::optional<std::string> trace_metadata_value(const ActiveTrace& trace, const 
 
 namespace {
 
-using ClassifierInterfaces = mch::ParsedBlockLookupSource::InterfaceMap;
+using ClassifierInterfaces = mch::TieredLookupSource::InterfaceMap;
 
 td::Status apply_fragment(TraceTransition& transition, const Trace& patch, const std::string& trace_key,
                           std::shared_ptr<ClassifierInterfaces>& mutable_interfaces) {

@@ -17,7 +17,7 @@
 
 namespace mch {
 
-class ParsedBlockLookupSource : public LookupSource {
+class TieredLookupSource : public LookupSource {
  public:
   struct Tier2Result {
     Value value;
@@ -30,7 +30,7 @@ class ParsedBlockLookupSource : public LookupSource {
       std::unordered_map<block::StdAddress, std::vector<schema::BlockchainInterfaceV2>>;
   using StableAddressSet = std::unordered_set<block::StdAddress>;
 
-  explicit ParsedBlockLookupSource(const InterfaceMap *account_interfaces, Tier2Hook tier2 = {},
+  explicit TieredLookupSource(const InterfaceMap *account_interfaces, Tier2Hook tier2 = {},
                                    const StableAddressSet *status_stable_accounts = nullptr)
       : account_interfaces_(account_interfaces),
         tier2_(std::move(tier2)),

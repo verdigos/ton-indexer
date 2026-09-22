@@ -171,7 +171,7 @@ TEST(TraceAssembler, grouped_fragments_keep_one_snapshot_delta_and_version) {
   root->children.push_back(trace_test::node(c, {}, FinalityState::Emulated, 300));
   ActiveTrace current;
   trace_test::apply(current, trace(std::move(root), a));
-  auto interfaces = std::make_shared<mch::ParsedBlockLookupSource::InterfaceMap>();
+  auto interfaces = std::make_shared<mch::TieredLookupSource::InterfaceMap>();
   const block::StdAddress first{0, hash('1')}, second{0, hash('2')}, untouched{0, hash('3')};
   (*interfaces)[first] = {};
   (*interfaces)[second] = {};
@@ -222,7 +222,7 @@ TEST(TraceAssembler, invalid_later_fragment_keeps_original_nodes_metadata_and_in
   const auto root_hash = root->transaction_root->get_hash().bits();
   ActiveTrace current;
   trace_test::apply(current, trace(std::move(root), a));
-  auto interfaces = std::make_shared<mch::ParsedBlockLookupSource::InterfaceMap>();
+  auto interfaces = std::make_shared<mch::TieredLookupSource::InterfaceMap>();
   const block::StdAddress account{0, hash('1')};
   (*interfaces)[account] = {};
   current.classifier_interfaces = interfaces;

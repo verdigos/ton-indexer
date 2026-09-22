@@ -8,7 +8,7 @@
 #include "GenMatchers.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
-#include "ParsedBlockLookupSource.h"
+#include "TieredLookupSource.h"
 #include "IrTables.h"
 #include "TraceLoader.h"
 #include "fixtures/FixtureLookupSource.h"
@@ -610,7 +610,7 @@ void test_childless_root_failure_serializes_root() {
 void test_schema_tick_tock() {
   const std::vector<CompiledMatcher> matchers;
   MchEnginePrep prep{&matchers, {}};
-  ParsedBlockLookupSource src(nullptr);
+  TieredLookupSource src(nullptr);
   schema::Transaction root{};
   root.hash.set_zero();
   root.account = block::StdAddress(0, root.hash);
@@ -695,13 +695,13 @@ void test_schema_history_precedence() {
   check("schema/history/prepared", prepared.is_ok());
   if (prepared.is_error()) return;
   auto prep = prepared.move_as_ok();
-  ParsedBlockLookupSource available(nullptr);
+  TieredLookupSource available(nullptr);
   auto normal = classify_schema_trace(*prep, trace.trace_id, txs, available);
   check("schema/history/classified", normal.outcome == TraceOutcome::classified);
   check("schema/history/normal_rows", !normal.rows.empty());
-  ParsedBlockLookupSource unavailable(nullptr,
+  TieredLookupSource unavailable(nullptr,
       [](const std::string &, const std::vector<Value> &) {
-        return ParsedBlockLookupSource::Tier2Result{Value::null(), true};
+        return TieredLookupSource::Tier2Result{Value::null(), true};
       });
   unavailable.fetch("nominator_pool", {Value::make_str(trace.transactions.front()->account)});
   auto result = classify_schema_trace(*prep, trace.trace_id, txs, unavailable);
