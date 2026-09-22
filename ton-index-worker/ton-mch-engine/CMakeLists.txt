@@ -273,7 +273,7 @@ add_library(mch-classification-runtime STATIC
     src/emu/EmuTraceConvert.cpp
     src/DetectorInterfaceAdapter.cpp
     src/emu/EmuClassifierActor.cpp
-    src/emu/EmuActionSerialize.cpp
+    src/RedisActionSerialize.cpp
     src/CelldbTier2Lookup.cpp
     src/JvaultLookup.cpp
 )
@@ -315,7 +315,7 @@ add_executable(ton-mch-engine
     src/main.cpp
     harness/Classify.cpp
     harness/AbiBridgeTest.cpp
-    harness/EmuActionSerializeTest.cpp
+    harness/RedisActionSerializeTest.cpp
     harness/CelldbTier2LookupTest.cpp
     harness/ClassifyCoreTest.cpp
     harness/ActionJsonTest.cpp

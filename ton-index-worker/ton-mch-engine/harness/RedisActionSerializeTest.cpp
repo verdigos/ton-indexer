@@ -2,14 +2,14 @@
 // Assertions run on the DECODED map, never on the bytes: a Go-decoder
 // contract gate. Field TYPES matter; map order does not. A type slip
 // silently drops whole traces.
-#include "EmuActionSerializeTest.h"
+#include "RedisActionSerializeTest.h"
 
 #include "ActionBuild.h"
 #include "BlockTree.h"
 #include "Classify.h"
 #include "SchemaTraceLoader.h"
 #include "Value.h"
-#include "emu/EmuActionSerialize.h"
+#include "RedisActionSerialize.h"
 #include "emu/EmuTypes.h"  // view_finality
 
 #include "td/utils/base64.h"
@@ -164,7 +164,7 @@ const msgpack::object *first_row(const Decoded &d) {
 // EmuActionPayload::actions_blob uses empty to mean "no `actions` field written
 // at all", which is a different state for ton-index-go (Classified=false).
 void test_empty_actions() {
-  Decoded d(serialize_actions({}, make_view({EmuFinality::finalized})));
+  Decoded d(serialize_redis_actions({}, make_view({EmuFinality::finalized})));
   check("empty/one_byte", d.size() == 1);
   check("empty/decodes_to_empty_array", d.ok() && d.root().type == msgpack::type::ARRAY &&
                                             d.root().via.array.size == 0);
@@ -173,7 +173,7 @@ void test_empty_actions() {
 // The always-written key set, bounded integers, and deliberate omissions.
 void test_fixed_keys() {
   Action a = base_action();
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::finalized})));
   const msgpack::object *row = first_row(d);
   check("fixed/one_row", d.ok() && d.root().via.array.size == 1 && row != nullptr);
   if (row == nullptr) {
@@ -230,7 +230,7 @@ void test_child_row_fields() {
   Action a = base_action();
   a.parent_action_id = "QIoX0flkEEHBMhk2Z6QlnxrXlWXACZBCee6T8YKYSKE=";
   a.ancestor_type = {"jvault_stake", "teleitem_start_auction"};
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::finalized})));
   const msgpack::object *row = first_row(d);
   check("child/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -263,7 +263,7 @@ void test_null_and_stringify() {
   a.source_secondary = Value::null();
   a.opcode = Value::make_int64(0x0f8a7ea5);
 
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::confirmed})));
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::confirmed})));
   const msgpack::object *row = first_row(d);
   check("null/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -332,7 +332,7 @@ void test_natural_types() {
   dd.emplace_back("vault_excesses", Value::make_list({Value::make_dict(std::move(ve))}));
   a.dex_deposit_liquidity_data = Value::make_dict(std::move(dd));
 
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::finalized})));
   const msgpack::object *row = first_row(d);
   check("natural/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -391,7 +391,7 @@ void test_string_list_fields() {
                             std::string("340282366920938463463374607431768211456")))}));
   a.jvault_claim_data = Value::make_dict(std::move(jc));
 
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::finalized})));
   const msgpack::object *row = first_row(d);
   check("strlist/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -427,8 +427,8 @@ void test_out_of_range_bounded_int() {
                                std::string("9223372036854775808"))));  // 2^63
   a.jvault_stake_data = Value::make_dict(std::move(f));
 
-  ActionSerializeStats st;
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized}), &st));
+  RedisActionSerializeStats st;
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::finalized}), &st));
   const msgpack::object *row = first_row(d);
   check("range/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -451,8 +451,8 @@ void test_determinism() {
   a.opcode = Value::make_int64(0x7362d09c);
 
   const EmuTraceView view = make_view({EmuFinality::confirmed, EmuFinality::finalized});
-  const std::string first = serialize_actions({a}, view);
-  const std::string second = serialize_actions({a}, view);
+  const std::string first = serialize_redis_actions({a}, view);
+  const std::string second = serialize_redis_actions({a}, view);
   check("determinism/byte_identical", !first.empty() && first == second);
 }
 
@@ -666,8 +666,8 @@ Action wire_fixture_action() {
 }
 
 std::string wire_fixture_bytes() {
-  return serialize_actions({wire_fixture_action()},
-                           make_view({EmuFinality::confirmed, EmuFinality::finalized}));
+  return serialize_redis_actions({wire_fixture_action()},
+                                 make_view({EmuFinality::confirmed, EmuFinality::finalized}));
 }
 
 namespace {
@@ -759,7 +759,7 @@ void test_value_table() {
   f.emplace_back("nested", Value::make_dict(std::move(inner)));
   a.ton_transfer_data = Value::make_dict(std::move(f));
 
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::emulated})));
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::emulated})));
   const msgpack::object *row = first_row(d);
   check("table/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -797,8 +797,8 @@ void test_counters() {
   f.emplace_back("boc", Value::make_cell(vm::CellBuilder().finalize()));
   a.extra = Value::make_dict(std::move(f));
 
-  ActionSerializeStats st;
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized}), &st));
+  RedisActionSerializeStats st;
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::finalized}), &st));
   const msgpack::object *row = first_row(d);
   check("counters/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -822,8 +822,8 @@ void test_multiple_actions() {
   b.type = "call_contract";
   b.success = false;
 
-  Decoded d(serialize_actions({a, b}, make_view({EmuFinality::confirmed, EmuFinality::emulated,
-                                                 EmuFinality::finalized})));
+  Decoded d(serialize_redis_actions({a, b}, make_view({EmuFinality::confirmed, EmuFinality::emulated,
+                                                       EmuFinality::finalized})));
   check("multi/array_of_two",
         d.ok() && d.root().type == msgpack::type::ARRAY && d.root().via.array.size == 2);
   const msgpack::object *r0 = elem(&d.root(), 0);
@@ -868,8 +868,8 @@ void test_unknown_action() {
   // exactly this, gated here alongside the row that consumes it.
   fill_trace_aggregates(trace);
 
-  Decoded d(serialize_actions({create_unknown_action(trace)},
-                              make_view({EmuFinality::emulated})));
+  Decoded d(serialize_redis_actions({create_unknown_action(trace)},
+                                    make_view({EmuFinality::emulated})));
   const msgpack::object *row = first_row(d);
   check("unknown/decodes", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -1241,7 +1241,7 @@ void test_evaa_liquidate_surface() {
   check("evaa_liquidate/render_column",
         render_action(a).find("evaa_liquidate_data:") != std::string::npos);
 
-  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
+  Decoded d(serialize_redis_actions({a}, make_view({EmuFinality::finalized})));
   const msgpack::object *row = first_row(d);
   check("evaa_liquidate/msgpack_row", d.ok() && row != nullptr);
   if (row == nullptr) {
@@ -1261,7 +1261,7 @@ void test_evaa_liquidate_surface() {
 // A view with no nodes degrades to `emulated`, the conservative end, and what
 // ton-index-go reads as FinalityStatePending.
 void test_empty_view_finality() {
-  Decoded d(serialize_actions({base_action()}, make_view({})));
+  Decoded d(serialize_redis_actions({base_action()}, make_view({})));
   const msgpack::object *row = first_row(d);
   check("view/empty_nodes_decodes", d.ok() && row != nullptr);
   if (row != nullptr) {

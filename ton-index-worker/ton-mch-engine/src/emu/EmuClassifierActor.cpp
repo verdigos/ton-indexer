@@ -1,7 +1,7 @@
 #include "EmuClassifierActor.h"
 
 #include "ClassifyCore.h"
-#include "EmuActionSerialize.h"
+#include "RedisActionSerialize.h"
 #include "EmuTraceConvert.h"
 
 #include "vm/excno.hpp"  // vm::VmError is not a std::exception.
@@ -75,11 +75,11 @@ SchemaClassifyResult classify_txs(const EmuClassifierConfig &cfg, const EmuTrace
 
 // Build the Redis writeback payload while the view remains alive.
 EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Action> &rows,
-                               std::int64_t aai_score, ActionSerializeStats &st) {
+                               std::int64_t aai_score, RedisActionSerializeStats &st) {
   EmuActionPayload payload;
   payload.action_count = rows.size();
   payload.aai_score = aai_score;
-  payload.actions_blob = serialize_actions(rows, view, &st);
+  payload.actions_blob = serialize_redis_actions(rows, view, &st);
 
   for (const Action &a : rows) {
     payload.routes.push_back(EmuActionRoute{
@@ -171,7 +171,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       }
       // Serialize within the anchor lifetime and measure it separately.
       const std::int64_t ser_started_us = emu_now_us();
-      ActionSerializeStats ser;
+      RedisActionSerializeStats ser;
       const std::uint8_t finality = res.payload.finality;
       const std::uint64_t update_seq = res.payload.update_seq;
       res.payload = build_payload(view, classified.rows, aai_score, ser);

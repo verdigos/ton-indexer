@@ -1,4 +1,4 @@
-#include "EmuActionSerialize.h"
+#include "RedisActionSerialize.h"
 
 #include "Value.h"
 
@@ -93,7 +93,7 @@ bool decimal_string_key(const std::string &k) {
 
 // Native integer fields must fit signed int64. Encode an unexpected wider value
 // as nil rather than truncating it or invalidating the complete Go decode.
-void pack_int(Packer &pk, const Value &v, ActionSerializeStats &st) {
+void pack_int(Packer &pk, const Value &v, RedisActionSerializeStats &st) {
   if (v.num.is_null() || !v.num->fits_bits(64)) {
     st.unrenderable++;
     pk.pack_nil();
@@ -102,10 +102,10 @@ void pack_int(Packer &pk, const Value &v, ActionSerializeStats &st) {
   pk.pack(static_cast<std::int64_t>(v.num->to_long()));
 }
 
-void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerializeStats &st);
+void pack_value(Packer &pk, const Value &v, bool as_decimal_string, RedisActionSerializeStats &st);
 
 // Encode composite maps in insertion order and retain unfilled keys as nil.
-void pack_fields(Packer &pk, const Value::Fields &fs, ActionSerializeStats &st) {
+void pack_fields(Packer &pk, const Value::Fields &fs, RedisActionSerializeStats &st) {
   pk.pack_map(static_cast<std::uint32_t>(fs.size()));
   for (const auto &[key, val] : fs) {
     pack_text(pk, key);
@@ -113,7 +113,7 @@ void pack_fields(Packer &pk, const Value::Fields &fs, ActionSerializeStats &st) 
   }
 }
 
-void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerializeStats &st) {
+void pack_value(Packer &pk, const Value &v, bool as_decimal_string, RedisActionSerializeStats &st) {
   switch (v.t) {
     case VType::Null:
       // omitted() gates every top-level call site; reachable from a composite
@@ -222,7 +222,7 @@ const std::vector<ActionField> &optional_fields() {
 constexpr std::uint32_t kFixedKeys = 12;
 
 void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std::int64_t finality,
-                 ActionSerializeStats &st) {
+                 RedisActionSerializeStats &st) {
   const std::vector<ActionField> &opt = optional_fields();
   std::uint32_t n = kFixedKeys + (a.ancestor_type.empty() ? 0 : 1);
   for (const ActionField &f : opt) {
@@ -293,10 +293,10 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
 
 }  // namespace
 
-std::string serialize_actions(const std::vector<Action> &actions, const EmuTraceView &view,
-                              ActionSerializeStats *stats) {
-  ActionSerializeStats discarded;
-  ActionSerializeStats &st = stats != nullptr ? *stats : discarded;
+std::string serialize_redis_actions(const std::vector<Action> &actions, const EmuTraceView &view,
+                                   RedisActionSerializeStats *stats) {
+  RedisActionSerializeStats discarded;
+  RedisActionSerializeStats &st = stats != nullptr ? *stats : discarded;
   // The payload and insert guard share the minimum node finality.
   const auto finality = static_cast<std::int64_t>(view_finality(view));
 

@@ -5,7 +5,7 @@
 #include <cstdio>
 
 #include "BlockInterfacesDetector.h"
-#include "emu/EmuActionSerialize.h"
+#include "RedisActionSerialize.h"
 #include "CelldbTier2Lookup.h"
 #include "emu/EmuTypes.h"
 
@@ -262,8 +262,8 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   mch::EmuTraceView view;
   view.trace_id = trace_key;
   view.nodes.push_back(mch::EmuTxRef{.finality = mch::EmuFinality::finalized});
-  mch::ActionSerializeStats ser_stats;
-  const std::string actions_blob = mch::serialize_actions(classified.rows, view, &ser_stats);
+  mch::RedisActionSerializeStats ser_stats;
+  const std::string actions_blob = mch::serialize_redis_actions(classified.rows, view, &ser_stats);
 
   std::vector<std::string> tx_hash_b64;
   tx_hash_b64.reserve(txs.size());
