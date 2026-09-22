@@ -2,6 +2,7 @@ package crud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -246,6 +247,8 @@ func queryRawActionsImpl(query string, conn *pgxpool.Conn, settings models.Reque
 	for rows.Next() {
 		if loc, err := parse.ScanRawAction(rows); err == nil {
 			res = append(res, *loc)
+		} else if !errors.Is(err, parse.ErrPayloadDecode) {
+			return nil, models.IndexError{Code: 500, Message: err.Error()}
 		} else {
 			values, valuesErr := rows.Values()
 			if valuesErr != nil || len(values) < 2 {

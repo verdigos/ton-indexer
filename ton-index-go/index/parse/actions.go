@@ -1,6 +1,7 @@
 package parse
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -8,6 +9,8 @@ import (
 )
 
 var IsTestnet bool
+
+var ErrPayloadDecode = errors.New("failed to decode action payload")
 
 var EVAA_TON_ASSET_ID string = "0x1a4219fe5e60d63af2a3cc7dce6fec69b45c6b5718497a6148e7c232ac87bd8a"
 
@@ -1183,7 +1186,7 @@ func ScanRawAction(row pgx.Row) (*models.RawAction, error) {
 		return nil, err
 	}
 	if err := DecodeActionPayload(payload, &act); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrPayloadDecode, err)
 	}
 	return &act, nil
 }
