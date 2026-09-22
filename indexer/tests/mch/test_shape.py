@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import pytest
 
-from indexer.events.blocks.core import EmptyBlock
 from indexer.events.mch.compile import compile_text
 from indexer.events.mch.ir_emit import emit_ir
 from indexer.events.mch.lexer import tokenize
@@ -35,10 +34,7 @@ def _registries() -> Registries:
 
     @reg.register_shaper("insert_proxy")
     def insert_proxy(produced, match):  # pragma: no cover - registration fixture
-        proxy = EmptyBlock()
-        match.a.insert_between([match.b], proxy)
-        produced.children_blocks.append(proxy)
-        proxy.parent = produced
+        pass
 
     return reg
 

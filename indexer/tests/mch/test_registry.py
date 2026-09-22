@@ -6,7 +6,6 @@ from indexer.events import context
 from indexer.events.mch.registry import (
     Registries,
     default_lookups,
-    default_message_types,
 )
 from tests.utils.repository import TestInterfaceRepository
 
@@ -67,34 +66,6 @@ def test_double_lookup_registration_raises():
         @reg.register_lookup("jetton_wallet")
         async def second(addr):  # noqa: ARG001
             return None
-
-
-JETTON_FAMILY = {
-    "JettonTransfer",
-    "JettonInternalTransfer",
-    "JettonNotify",
-    "JettonBurn",
-    "JettonBurnNotification",
-    "JettonMint",
-    "MinterJettonMint",
-}
-
-
-def test_default_message_types_covers_jetton_family():
-    types = default_message_types()
-    assert JETTON_FAMILY <= set(types), (
-        f"missing: {JETTON_FAMILY - set(types)}"
-    )
-    # Keys are class names, values are those classes.
-    for name, cls in types.items():
-        assert cls.__name__ == name
-
-
-def test_default_message_types_covers_referenced_swap_messages():
-    types = default_message_types()
-    # Swap opcodes referenced by dedust_swap.mch / stonfi_v2_swap.mch.
-    assert {"DedustSwapExternal", "DedustPayoutFromPool", "PTonTransfer",
-            "StonfiV2PayTo"} <= set(types)
 
 
 def test_default_lookups_names():

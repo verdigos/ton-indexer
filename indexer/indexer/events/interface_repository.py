@@ -11,7 +11,6 @@ import redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from indexer.core import kvrocks
 from indexer.core.database import JettonWallet, NFTItem, NftSale, NftAuction, LatestAccountState, MultisigOrder
 
 NOMINATOR_POOL_CODE_HASH = "mj7BS8CY9rRAZMMFIiyuooAPF92oXuaoGYpwle3hDc8="
@@ -225,107 +224,6 @@ class InterfaceRepository(abc.ABC):
         pass
 
 
-class KvRocksRepository(InterfaceRepository):
-    def __init__(self, interfaces: Dict[str, Dict[str, Dict]] = None):
-        self.interfaces = interfaces or {}
-
-    async def _get_prefetched_interface(self, address: str, interface_type: str) -> Optional[dict]:
-        address = kvrocks.normalize_address_id(address)
-        if address is None:
-            return None
-        return self.interfaces.get(address, {}).get(interface_type)
-
-    async def _get_payload_interface(self, table: str, address: str, converter: Callable[[dict], dict]) -> Optional[dict]:
-        address = kvrocks.normalize_address_id(address)
-        if address is None or not kvrocks.is_enabled():
-            return None
-        payloads = await kvrocks.get_payloads(table, [address], normalize=kvrocks.normalize_address_id)
-        payload = payloads.get(address)
-        if payload is None or _is_destroyed(payload):
-            return None
-        return converter(payload)
-
-    async def get_jetton_wallet(self, address: str) -> JettonWallet | None:
-        data = await self._get_prefetched_interface(address, "JettonWallet")
-        if data is None:
-            data = await self._get_payload_interface("jetton_wallets", address, _jetton_wallet_interface)
-        return _jetton_wallet_from_interface(data) if data is not None else None
-
-    async def get_nft_item(self, address: str) -> NFTItem | None:
-        data = await self._get_prefetched_interface(address, "NftItem")
-        if data is None:
-            data = await self._get_payload_interface("nft_items", address, _nft_item_interface)
-        return _nft_item_from_interface(data) if data is not None else None
-
-    async def get_nft_sale(self, address: str) -> NftSale | None:
-        data = await self._get_prefetched_interface(address, "NftSale")
-        if data is None:
-            data = await self._get_payload_interface("getgems_nft_sales", address, _nft_sale_interface)
-        return _nft_sale_from_interface(data) if data is not None else None
-
-    async def get_nft_auction(self, address: str) -> NftAuction | None:
-        data = await self._get_prefetched_interface(address, "NftAuction")
-        if data is None:
-            data = await self._get_payload_interface("getgems_nft_auctions", address, _nft_auction_interface)
-        return _nft_auction_from_interface(data) if data is not None else None
-
-    async def get_multisig_order(self, address: str) -> MultisigOrder | None:
-        data = await self._get_prefetched_interface(address, "MultisigOrder")
-        if data is None:
-            data = await self._get_payload_interface("multisig_orders", address, _multisig_order_interface)
-        return _multisig_order_from_interface(data) if data is not None else None
-
-    async def get_interfaces(self, address: str) -> dict[str, dict]:
-        address = kvrocks.normalize_address_id(address)
-        if address is None:
-            return {}
-        result = {**self.interfaces.get(address, {})}
-        if kvrocks.is_enabled() and address not in self.interfaces:
-            missing_result = await gather_interfaces_from_kvrocks({address})
-            result.update(missing_result.get(address, {}))
-            for item_address, item_interfaces in missing_result.items():
-                self.interfaces[item_address] = {**self.interfaces.get(item_address, {}), **item_interfaces}
-        ctx = _context()
-        if address in ctx.dedust_pools.get():
-            result['dedust_pool'] = ctx.dedust_pools.get()[address]
-        return result
-
-    async def get_dedust_pool(self, address: str) -> DedustPool | None:
-        address = kvrocks.normalize_address_id(address)
-        if address is None:
-            return None
-        ctx = _context()
-        if address in ctx.dedust_pools.get():
-            return DedustPool(address=address, assets=ctx.dedust_pools.get()[address]['assets'])
-        if not kvrocks.is_enabled():
-            return None
-        payloads = await kvrocks.get_payloads("dex_pools", [address], normalize=kvrocks.normalize_address_id)
-        payload = payloads.get(address)
-        if payload is None or _is_destroyed(payload):
-            return None
-        return _dedust_pool_from_payload(payload)
-
-    async def get_extra_data(self, address: str, request: str) -> Any:
-        address = kvrocks.normalize_address_id(address)
-        if address is None:
-            return None
-        if address in self.interfaces and request in self.interfaces[address]:
-            return self.interfaces[address][request]
-        if request != "data_boc" or not kvrocks.is_enabled():
-            return None
-        payloads = await kvrocks.get_payloads("latest_account_states", [address], normalize=kvrocks.normalize_address_id)
-        payload = payloads.get(address)
-        if payload is None:
-            return None
-        result = {
-            "account": address,
-            "request": request,
-            "data_boc": payload.get("data_boc"),
-        }
-        self.interfaces.setdefault(address, {})[request] = result
-        return result
-
-
 class RedisInterfaceRepository(InterfaceRepository):
     prefix = "I_"  # Prefix for keys in Redis
 
@@ -496,7 +394,6 @@ class EmulatedTransactionsInterfaceRepository(InterfaceRepository):
 
     def __init__(self, redis_hash: dict[str, bytes]):
         self.data = redis_hash
-        self.kvrocks_fallback = KvRocksRepository() if kvrocks.is_enabled() else None
 
     async def get_jetton_wallet(self, address: str) -> JettonWallet | None:
         raw_data = self.data.get(address)
@@ -603,8 +500,6 @@ class EmulatedTransactionsInterfaceRepository(InterfaceRepository):
         ctx = _context()
         if address in ctx.dedust_pools.get():
             return DedustPool(address=address, assets=ctx.dedust_pools.get()[address]['assets'])
-        if self.kvrocks_fallback is not None:
-            return await self.kvrocks_fallback.get_dedust_pool(address)
         return None
 
 
@@ -740,138 +635,6 @@ class EmulatedRepositoryWithDbFallback(InterfaceRepository):
             return data
         return None
 
-
-async def _process_kvrocks_extra_requests(
-        accounts: set[str],
-        extra_requests: set['ExtraAccountRequest'] = None,
-) -> list[dict]:
-    extra = []
-    queue = deque(extra_requests or [])
-    processed = set()
-
-    queue_iterations = 0
-    while queue:
-        queue_iterations += 1
-        if queue_iterations > 10:
-            break
-
-        batch = defaultdict(list)
-        batch_processors = {}
-        while queue:
-            extra_request = queue.popleft()
-            account = kvrocks.normalize_address_id(extra_request.account)
-            if account is None:
-                continue
-            request_key = (account, extra_request.request_type)
-            if request_key in processed:
-                continue
-            batch[extra_request.request_type].append(account)
-            batch_processors[request_key] = extra_request.callback
-            processed.add(request_key)
-
-        for req_type, accounts_batch in batch.items():
-            if req_type != "data_boc":
-                continue
-            payloads = await kvrocks.get_payloads(
-                "latest_account_states",
-                accounts_batch,
-                normalize=kvrocks.normalize_address_id,
-            )
-            for account in accounts_batch:
-                payload = payloads.get(account)
-                if payload is None:
-                    continue
-                processor = batch_processors.get((account, req_type))
-                n_extra = {
-                    "account": account,
-                    "request": req_type,
-                    "data_boc": payload.get("data_boc"),
-                }
-                if processor:
-                    new_requests, new_accounts = processor(n_extra)
-                    queue.extend(new_requests)
-                    accounts.update(
-                        normalized for normalized in
-                        (kvrocks.normalize_address_id(item) for item in new_accounts)
-                        if normalized is not None
-                    )
-                extra.append(n_extra)
-    return extra
-
-
-async def gather_interfaces_from_kvrocks(
-        accounts: set[str],
-        extra_requests: set['ExtraAccountRequest'] = None,
-) -> dict[str, dict[str, dict]]:
-    result = defaultdict(dict)
-    normalized_accounts = {
-        normalized for normalized in
-        (kvrocks.normalize_address_id(account) for account in accounts)
-        if normalized is not None
-    }
-    for account in normalized_accounts:
-        result[account] = {}
-
-    if not kvrocks.is_enabled():
-        return result
-
-    extra = await _process_kvrocks_extra_requests(normalized_accounts, extra_requests)
-    account_list = list(normalized_accounts)
-    for i in range(0, len(account_list), 5000):
-        batch = account_list[i:i + 5000]
-        auctions = await kvrocks.get_payloads("getgems_nft_auctions", batch, normalize=kvrocks.normalize_address_id)
-
-        nft_batch = batch.copy()
-        for payload in auctions.values():
-            if _is_destroyed(payload):
-                continue
-            nft_addr = kvrocks.normalize_address_id(payload.get("nft_addr"))
-            if nft_addr is not None:
-                nft_batch.append(nft_addr)
-
-        wallets = await kvrocks.get_payloads("jetton_wallets", batch, normalize=kvrocks.normalize_address_id)
-        nft_items = await kvrocks.get_payloads("nft_items", nft_batch, normalize=kvrocks.normalize_address_id)
-        sales = await kvrocks.get_payloads("getgems_nft_sales", batch, normalize=kvrocks.normalize_address_id)
-        orders = await kvrocks.get_payloads("multisig_orders", batch, normalize=kvrocks.normalize_address_id)
-        states = await kvrocks.get_payloads("latest_account_states", batch, normalize=kvrocks.normalize_address_id)
-
-        for payload in wallets.values():
-            if _is_destroyed(payload):
-                continue
-            address = kvrocks.normalize_address_id(payload.get("address"))
-            if address is not None:
-                result[address]["JettonWallet"] = _jetton_wallet_interface(payload)
-        for payload in nft_items.values():
-            if _is_destroyed(payload):
-                continue
-            address = kvrocks.normalize_address_id(payload.get("address"))
-            if address is not None:
-                result[address]["NftItem"] = _nft_item_interface(payload)
-        for payload in sales.values():
-            if _is_destroyed(payload):
-                continue
-            address = kvrocks.normalize_address_id(payload.get("address"))
-            if address is not None:
-                result[address]["NftSale"] = _nft_sale_interface(payload)
-        for payload in auctions.values():
-            if _is_destroyed(payload):
-                continue
-            address = kvrocks.normalize_address_id(payload.get("address"))
-            if address is not None:
-                result[address]["NftAuction"] = _nft_auction_interface(payload)
-        for payload in orders.values():
-            if _is_destroyed(payload):
-                continue
-            address = kvrocks.normalize_address_id(payload.get("address"))
-            if address is not None:
-                result[address]["MultisigOrder"] = _multisig_order_interface(payload)
-        for account, payload in states.items():
-            if payload.get("code_hash") == NOMINATOR_POOL_CODE_HASH:
-                result[account]["NominatorPool"] = {"address": account}
-
-    for item in extra:
-        result[item["account"]][item["request"]] = item
-    return result
 
 async def _gather_data_from_db(
         accounts: set[str],

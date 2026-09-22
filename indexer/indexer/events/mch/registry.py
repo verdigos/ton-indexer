@@ -14,7 +14,7 @@ class Registries:
     predicates:    dict[str, Callable[[Any], bool]]                  = field(default_factory=dict)
     # message_types: message parser class by name; constructed from a pytoniq_core Slice.
     # lookups: async interface resolvers, e.g. await lookups["jetton_wallet"](addr).
-    # Both empty by default; populate via default_message_types()/default_lookups().
+    # Both empty by default; populate lookups via default_lookups().
     message_types: dict[str, type]                                   = field(default_factory=dict)
     lookups:       dict[str, Callable[..., Awaitable[Any]]]          = field(default_factory=dict)
     # fns: host-function escape hatch for build expressions — async callables
@@ -60,40 +60,9 @@ class Registries:
         return deco
 
 
-def default_message_types() -> dict[str, type]:
-    """Message parser classes keyed by class name (jetton family + swap messages
-    referenced by the spec files in mch/specs/).
-
-    Lazy import: pulling blocks.messages at module-import time would drag the full
-    protocol/DB/context stack into the otherwise lightweight mch package.
-    """
-    from indexer.events.blocks.messages import jettons, swaps
-
-    classes = (
-        jettons.JettonTransfer,
-        jettons.JettonInternalTransfer,
-        jettons.JettonNotify,
-        jettons.JettonBurn,
-        jettons.JettonBurnNotification,
-        jettons.JettonMint,
-        jettons.MinterJettonMint,
-        swaps.DedustSwap,
-        swaps.DedustSwapExternal,
-        swaps.DedustSwapPeer,
-        swaps.DedustSwapNotification,
-        swaps.DedustPayoutFromPool,
-        swaps.DedustPayout,
-        swaps.StonfiV2PayTo,
-        swaps.PTonTransfer,
-    )
-    return {cls.__name__: cls for cls in classes}
-
-
 def account_key(address: Any) -> str | None:
     """Normalize an AccountId or raw string to an interface-repository key."""
-    from indexer.events.blocks.utils import AccountId
-
-    return address.as_str() if isinstance(address, AccountId) else address.upper()
+    return address.as_str() if hasattr(address, "as_str") else address.upper()
 
 
 def default_lookups() -> dict[str, Callable[..., Awaitable[Any]]]:
