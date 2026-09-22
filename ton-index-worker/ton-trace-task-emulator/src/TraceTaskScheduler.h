@@ -35,13 +35,15 @@ class TraceTaskScheduler : public td::actor::Actor {
 
   public:
     TraceTaskScheduler(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<ITaskResultInserter> insert_manager,
-                           std::string redis_dsn, std::string input_redis_queue, std::string working_dir) :
+                           std::string redis_dsn, std::string input_redis_queue, std::string working_dir,
+                           mch::EmuClassifierConfig classifier_config) :
         db_scanner_(db_scanner), insert_manager_(insert_manager), redis_dsn_(redis_dsn), input_redis_queue_(input_redis_queue),
         working_dir_(std::move(working_dir)) {
       insert_trace_ = [insert_manager = insert_manager_.get()](TraceEmulationResult result, td::Promise<td::Unit> promise) {
         td::actor::send_closure(insert_manager, &ITaskResultInserter::insert, std::move(result), std::move(promise));
       };
-      redis_listener_ = td::actor::create_actor<RedisListener>("RedisListener", redis_dsn_, input_redis_queue_, db_scanner, insert_trace_);
+      redis_listener_ = td::actor::create_actor<RedisListener>("RedisListener", redis_dsn_, input_redis_queue_, db_scanner, insert_trace_,
+                                                                std::move(classifier_config));
     };
 
     virtual void start_up() override;

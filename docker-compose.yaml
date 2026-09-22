@@ -224,7 +224,7 @@ services:
       TON_INDEXER_EMULATE_REDIS_DSN: redis://emulate-redis:6379
       TON_WORKER_BINARY: ton-trace-task-emulator
       TON_INDEXER_IS_TESTNET: ${TON_INDEXER_IS_TESTNET:-0}
-    command: --redis tcp://emulate-redis:6379 --db /tondb --working-dir /ton_emulate_workdir ${TON_EMULATE_ADDITIONAL_ARGS:-}
+    command: --redis tcp://emulate-redis:6379 --db /tondb --working-dir /ton_emulate_workdir --mch-workers 1 ${TON_EMULATE_ADDITIONAL_ARGS:-}
     secrets:
       - postgres_password
     volumes:

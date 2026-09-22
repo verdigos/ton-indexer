@@ -1,8 +1,15 @@
 #include "RedisListener.h"
 #include "Statistics.h"
+#include "EmuTraceViewBuilder.h"
 
 
 void RedisListener::start_up() {
+  if (classifier_config_.prep) {
+    for (int idx = 0; idx < classifier_config_.workers; ++idx) {
+      classifiers_.push_back(td::actor::create_actor<mch::EmuClassifierActor>(
+          "MchEmuClassifier-w" + std::to_string(idx), classifier_config_, static_cast<std::size_t>(idx)));
+    }
+  }
   alarm_timestamp() = td::Timestamp::now() ;
 }
 
@@ -62,24 +69,26 @@ void RedisListener::trace_error(std::string task_id, std::optional<ton::BlockId>
 
 void RedisListener::trace_received(TraceTask task, schema::MasterchainBlockDataState mc_data_state, Trace trace) {
   LOG(INFO) << "Emulated trace " << task.id << ": " << trace.transactions_count() << " transactions, " << trace.depth() << " depth";
+  std::vector<td::Ref<vm::Cell>> shard_states;
+  for (const auto& shard_state : mc_data_state.shard_blocks_) {
+    shard_states.push_back(shard_state.block_state);
+  }
+  // Tier-2 lookups read the states the trace was emulated on.
+  trace.shard_states = shard_states;
+  trace.config = mc_data_state.config_;
   if (task.detect_interfaces) {
-    std::vector<td::Ref<vm::Cell>> shard_states;
-    for (const auto& shard_state : mc_data_state.shard_blocks_) {
-      shard_states.push_back(shard_state.block_state);
-    }
-
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), task = std::move(task), mc_block_id = mc_data_state.config_->block_id.id](td::Result<Trace> R) {
       if (R.is_error()) {
         td::actor::send_closure(SelfId, &RedisListener::trace_interfaces_error, task.id, std::move(mc_block_id), R.move_as_error());
         return;
       }
-      td::actor::send_closure(SelfId, &RedisListener::finish_processing, task.id, std::move(mc_block_id), R.move_as_ok());
+      td::actor::send_closure(SelfId, &RedisListener::finish_processing, task.id, std::move(mc_block_id), R.move_as_ok(), task.with_actions);
     });
 
     auto measurement = std::make_shared<Measurement>();
     td::actor::create_actor<TraceInterfaceDetector>("TraceInterfaceDetector", std::move(shard_states), mc_data_state_.config_, std::move(trace), std::move(P), measurement).release();
   } else {
-    finish_processing(task.id, mc_data_state.config_->block_id.id, std::move(trace));
+    finish_processing(task.id, mc_data_state.config_->block_id.id, std::move(trace), task.with_actions);
   }
 }
 
@@ -89,8 +98,41 @@ void RedisListener::trace_interfaces_error(std::string task_id, ton::BlockId mc_
     trace_processor_(std::move(res), td::PromiseCreator::lambda([](td::Result<td::Unit> R) {}));
 }
 
-void RedisListener::finish_processing(std::string task_id, ton::BlockId mc_block_id, Trace trace) {
+void RedisListener::finish_processing(std::string task_id, ton::BlockId mc_block_id, Trace trace, bool with_actions) {
     LOG(INFO) << "Finished emulating trace " << task_id;
+    if (!with_actions || classifiers_.empty()) {
+      insert_result(std::move(task_id), mc_block_id, std::move(trace), std::nullopt);
+      return;
+    }
+    auto view_r = build_emu_trace_view(trace);
+    if (view_r.is_error()) {
+      insert_result(std::move(task_id), mc_block_id, std::move(trace), td::Result<std::string>(view_r.move_as_error()));
+      return;
+    }
+    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), task_id, mc_block_id, trace = std::move(trace)](td::Result<mch::EmuClassifyResult> R) mutable {
+      td::actor::send_closure(SelfId, &RedisListener::classification_finished, std::move(task_id), mc_block_id, std::move(trace), std::move(R));
+    });
+    auto& classifier = classifiers_[next_classifier_++ % classifiers_.size()];
+    td::actor::send_closure(classifier, &mch::EmuClassifierActor::classify, view_r.move_as_ok(), mch::emu_now_us(), std::move(P));
+}
+
+void RedisListener::classification_finished(std::string task_id, ton::BlockId mc_block_id, Trace trace, td::Result<mch::EmuClassifyResult> R) {
+    if (R.is_error()) {
+      insert_result(std::move(task_id), mc_block_id, std::move(trace), td::Result<std::string>(R.move_as_error()));
+      return;
+    }
+    auto result = R.move_as_ok();
+    // A classify_failed outcome still carries the basic-action fallback rows.
+    if (result.outcome == mch::EmuClassifyOutcome::convert_failed || result.payload.actions_blob.empty()) {
+      LOG(ERROR) << "Failed to classify trace task " << task_id << ": " << result.failure_reason;
+      insert_result(std::move(task_id), mc_block_id, std::move(trace),
+                    td::Result<std::string>(td::Status::Error(PSLICE() << "classification failed: " << result.failure_reason)));
+      return;
+    }
+    insert_result(std::move(task_id), mc_block_id, std::move(trace), td::Result<std::string>(std::move(result.payload.actions_blob)));
+}
+
+void RedisListener::insert_result(std::string task_id, ton::BlockId mc_block_id, Trace trace, std::optional<td::Result<std::string>> actions) {
     auto P = td::PromiseCreator::lambda([task_id](td::Result<td::Unit> R) {
       if (R.is_error()) {
         LOG(ERROR) << "Failed to insert trace task " << task_id << ": " << R.move_as_error();
@@ -98,7 +140,7 @@ void RedisListener::finish_processing(std::string task_id, ton::BlockId mc_block
       }
       LOG(DEBUG) << "Successfully inserted trace task" << task_id;
     });
-    TraceEmulationResult res{std::move(task_id), std::move(trace), mc_block_id};
+    TraceEmulationResult res{std::move(task_id), std::move(trace), mc_block_id, std::move(actions)};
     trace_processor_(std::move(res), std::move(P));
 }
 
