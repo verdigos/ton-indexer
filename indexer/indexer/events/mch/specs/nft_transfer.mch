@@ -1,6 +1,7 @@
 # Matches NFT ownership transfers, including GetGems sale and auction purchases.
 
 import "lib/common.mch"
+import "lib/getgems.mch"
 import "lib/opcodes.mch"
 opcode NftTransfer          = 0x5FCC3D14
 matcher nft_transfer {
@@ -25,8 +26,8 @@ matcher nft_transfer {
     let rd = account(transfer.body.response_destination)
     let parent_acct = funding_parent.msg.transaction.account
     let owner_match = funding_parent.btype == "ton_transfer" and account(funding_parent.msg.source) == new_owner
-    let sale = lookup nft_sale(parent_acct)
-    let auction = lookup nft_auction(parent_acct)
+    let sale = getgems_sale(parent_acct)
+    let auction = getgems_auction(parent_acct)
     let have_sale = owner_match and sale != null
     let have_auc = not have_sale and auction != null
     let pd_nft = account(sale.nft_address) if have_sale else account(auction.nft_addr)

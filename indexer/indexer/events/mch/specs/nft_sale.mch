@@ -2,6 +2,7 @@
 # A sale update can change live state without changing the deployment message.
 
 import "lib/common.mch"
+import "lib/getgems.mch"
 
 opcode SaleUpdate          = 0x6C6C2080
 opcode NftDiscovery        = 0x2FCB26A2
@@ -25,17 +26,14 @@ fn sale_result(d, v4r1) = null if d == null else {
     royalty_amount:          null if v4r1 else d.fees.ref.royalty_amount
 }
 
-fn sale_data(init, h) = (
+fn sale_data(init, version) = (
     sale_result(parse? init as SaleV1, false)
-        if h == "2pufziLofEllctIDZSWVebzO+RpyA1fMvowFLvyb4I8=" else
+        if version == 1 else
     sale_result(parse? init as SaleLegacy, false)
-        if h in [
-            "gnj0xSM95vvtyWmvUZNEp6m//FRIVtuphqlcC8+Fcck=",
-            "MgUN+sRPZIZrzIbyzZ4TBf6dyts5WcACI3z7CQLUQyM=",
-            "3rU7bFdlwebNI4v0e8XoO6WWvcwEsLhM1Qqx5HSgjzE=",
-            "JCIfpXHlQuBVx3vt/b9SfHr0YM/cfzRMRQeHtM+h600=",
-        ] else
+        if version == 2 else
     sale_result(parse? init as SaleV4r1, true)
+        if version == 4 else
+    null
 )
 
 fn auction_result(d, inline_fees) = null if d == null else {
@@ -48,17 +46,16 @@ fn auction_result(d, inline_fees) = null if d == null else {
     min_bid:          d.constant.ref.min_bid
 }
 
-fn auction_data(init, h) = (
+fn auction_data(init, version) = (
     auction_result(parse? init as AuctionV4r1, false)
-        if h == "zlp4U06qps7tja/UhtB262CpsNbb+1Nnb2YmScBomVY=" else
+        if version == 4 else
     auction_result(parse? init as AuctionV3r2, false)
-        if h in [
-            "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ=",
-            "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8=",
-        ] else
+        if version == 2 else
     auction_result(parse? init as AuctionV1, false)
-        if h == "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA=" else
+        if version == 1 else
     auction_result(parse? init as AuctionV3r3, true)
+        if version == 3 else
+    null
 )
 
 matcher nft_update_sale {
@@ -67,7 +64,7 @@ matcher nft_update_sale {
 
     op SaleUpdate @upd as SaleUpdateMessage
 
-    require sale = lookup nft_sale(upd.msg.destination)
+    require sale = getgems_sale(upd.msg.destination)
     failed when tx_failed(upd)
     out {
         sender:              upd.msg.source ?? addr_none()
@@ -94,8 +91,8 @@ matcher nft_put_on_sale {
     reject when account(to_sale.data.nft.address) != account(listing.data.nft.address)
     reject when account(to_sale.data.new_owner) != sale_init.msg.destination
 
-    let sale    = lookup nft_sale(sale_init.msg.destination)
-    let auction = lookup nft_auction(sale_init.msg.destination)
+    let sale    = getgems_sale(sale_init.msg.destination)
+    let auction = getgems_auction(sale_init.msg.destination)
     reject when sale == null and auction == null
 
     reject when sale != null and account(to_sale.data.nft.address) != account(sale.nft_address)
@@ -104,8 +101,8 @@ matcher nft_put_on_sale {
     reject when sale == null and account(listing.data.prev_owner) != account(auction.nft_owner)
 
     let init = state_init(sale_init)
-    let sd = sale_data(init, sale.code_hash)
-    let ad = auction_data(init, auction.code_hash)
+    let sd = sale_data(init, getgems_sale_version(sale.code_hash))
+    let ad = auction_data(init, getgems_auction_version(auction.code_hash))
     reject when sale != null and sd == null
     reject when sale == null and ad == null
 
@@ -178,18 +175,13 @@ matcher getgems_auction_bid {
     let body_op = ((raw_op + 4294967296) if raw_op < 0 else raw_op) if raw_op != null else null
     let comment = bid.data.comment if bid.btype == "ton_transfer" else null
     let cancel_text = comment in ["cancel", "finish", "stop"]
-    let h = auction.code_hash
-    let v1 = h == "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA="
-    let v2 = h == "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ="
-    let v3r2 = h == "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8="
-    let v3r3 = h == "u29ireD+stefqzuK6/CTCvmFU99gCTsgJ/Covxab/Ow="
-    let v4r1 = h == "zlp4U06qps7tja/UhtB262CpsNbb+1Nnb2YmScBomVY="
+    let version = getgems_auction_version(auction.code_hash)
     let v1_bidder = source != account(auction.nft_owner) and source != account(auction.mp_addr)
     reject when not (
         source != account(auction.nft_addr) and
-        ((v1 and v1_bidder) or ((v2 or v3r2) and not cancel_text) or
-         (v3r3 and not cancel_text and not (body_op in [1, 2, 555])) or
-         (v4r1 and (body_op == null or body_op == 0 or body_op == 0x344EF025 or body_op == 0x9AF07447)))
+        ((version == 1 and v1_bidder) or (version == 2 and not cancel_text) or
+         (version == 3 and not cancel_text and not (body_op in [1, 2, 555])) or
+         (version == 4 and (body_op == null or body_op == 0 or body_op == 0x344EF025 or body_op == 0x9AF07447)))
     )
 
     let nft_addr = auction.nft_addr
@@ -270,7 +262,7 @@ matcher nft_cancel_sale {
     op NftSaleCancel @cancel
       -> peek btype nft_transfer @ret
 
-    require sale = lookup nft_sale(cancel.msg.destination)
+    require sale = getgems_sale(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(sale.nft_address)
     failed when tx_failed(cancel)
     out {
@@ -293,7 +285,7 @@ matcher nft_finish_auction {
       -> peek btype nft_purchase @ret
 
     reject when cancel.btype == "ton_transfer" and not (cancel.data.comment in ["finish", "stop"])
-    require auction = lookup nft_auction(cancel.msg.destination)
+    require auction = getgems_auction(cancel.msg.destination)
     reject when account(ret.data.nft_address) != account(auction.nft_addr)
     failed when tx_failed(cancel)
     out {
@@ -317,7 +309,7 @@ matcher nft_cancel_auction {
       -> peek btype nft_transfer @ret
 
     reject when cancel.btype == "ton_transfer" and not (cancel.data.comment in ["cancel", "finish", "stop"])
-    require auction = lookup nft_auction(cancel.msg.destination)
+    require auction = getgems_auction(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(auction.nft_addr)
     failed when tx_failed(cancel)
 
