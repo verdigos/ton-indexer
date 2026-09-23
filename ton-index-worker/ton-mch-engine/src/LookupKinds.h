@@ -33,7 +33,7 @@ inline constexpr std::array kLookupKindTable{
     LookupKind{"dedust_pool", LookupHandler::DedustPool, true, true},
     LookupKind{"nominator_pool", LookupHandler::NominatorPool, true, true},
     LookupKind{"multisig_order", LookupHandler::MultisigOrder, true, true},
-    LookupKind{"telemint_item", LookupHandler::TelemintItem, true, false},
+    LookupKind{"telemint_item", LookupHandler::TelemintItem, true, true},
     LookupKind{"jvault_assets", LookupHandler::JvaultAssets, false, true},
     LookupKind{"code_hash", LookupHandler::CodeHash, false, true},
 };

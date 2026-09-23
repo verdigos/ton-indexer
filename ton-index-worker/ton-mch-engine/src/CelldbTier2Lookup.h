@@ -6,6 +6,7 @@
 
 #include "smc-interfaces/FetchAccountFromShard.h"  // AllShardStates, lookup_account
 #include "smc-interfaces/NftSaleV4.h"
+#include "smc-interfaces/Telemint.h"
 
 #include <cstddef>
 #include <functional>
@@ -27,9 +28,13 @@ class CelldbTier2Lookup {
   using NftSaleV4Detector = std::function<td::Result<GetGemsNftFixPriceSaleV4::Result>(
       const block::StdAddress &, const td::Ref<vm::Cell> &, const td::Ref<vm::Cell> &,
       const std::shared_ptr<block::ConfigInfo> &)>;
+  using TelemintDetector = std::function<td::Result<TelemintContract::Result>(
+      const block::StdAddress &, const td::Ref<vm::Cell> &, const td::Ref<vm::Cell> &,
+      const std::shared_ptr<block::ConfigInfo> &)>;
 
   // `shard_states` and `config` must outlive this object (they are the view's).
-  CelldbTier2Lookup(const AllShardStates *shard_states, std::shared_ptr<block::ConfigInfo> config);
+  CelldbTier2Lookup(const AllShardStates *shard_states, std::shared_ptr<block::ConfigInfo> config,
+                    TelemintDetector telemint_detector = {});
 
   // Detector misses and account read errors are null.
   Value fetch(const std::string &kind, const std::vector<Value> &args);
@@ -50,6 +55,7 @@ class CelldbTier2Lookup {
   std::shared_ptr<block::ConfigInfo> config_;
   AccountSource account_source_;
   NftSaleV4Detector nft_sale_v4_detector_;
+  TelemintDetector telemint_detector_;
 
   std::unordered_map<block::StdAddress, std::optional<schema::AccountState>> account_memo_;
   std::unordered_map<std::string, Value> value_memo_;

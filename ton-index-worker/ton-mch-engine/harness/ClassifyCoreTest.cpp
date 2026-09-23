@@ -139,6 +139,16 @@ BuildOutcome uncovered_workchain_lookup_build(BuildEnv &env) {
                                 : BuildOutcome::accepted();
 }
 
+const std::string kTelemintLookupAddress = "0:" + std::string(64, 'A');
+
+BuildOutcome telemint_lookup_build(BuildEnv &env) {
+  EvalResult lookup = rt_lookup_build(
+      env, "telemint_item", {Value::make_str(kTelemintLookupAddress)});
+  if (lookup.faulted) return BuildOutcome::rejected(lookup.message);
+  return lookup.value.is_null() ? BuildOutcome::rejected("telemint item lookup missed")
+                                : BuildOutcome::accepted();
+}
+
 BuildOutcome serious_host_build(BuildEnv &env) {
   EvalResult result = call_throwing_host(env, g_serious_kind);
   return result.faulted ? BuildOutcome::rejected(result.message) : BuildOutcome::accepted();
@@ -713,6 +723,75 @@ void test_tier2_uncovered_workchain_miss_preserves_trace() {
         outcomes_allow_replacement(block));
 }
 
+void test_tier2_telemint_lookup_for_trace_reference_without_transaction() {
+  std::vector<CompiledMatcher> matchers{test_matcher("telemint-tier2", 0)};
+  matchers.front().ref_lookups.insert("telemint_item");
+  ClassifySetup setup;
+  setup.included = {0};
+  setup.build_fns.emplace(0, telemint_lookup_build);
+  setup.kinds.insert("telemint_item");
+  MchEnginePrep prep{&matchers, std::move(setup)};
+
+  schema::Transaction tx{};
+  tx.hash.set_zero();
+  tx.hash.data()[31] = 1;
+  tx.account = block::StdAddress(0, tx.hash);
+  tx.lt = 100;
+  tx.now = 200;
+  tx.mc_seqno = 300;
+  tx.orig_status = schema::AccountStatus::active;
+  tx.end_status = schema::AccountStatus::active;
+  tx.description = schema::TransactionDescr_ord{};
+  schema::Message out{};
+  out.hash.set_zero();
+  out.hash.data()[31] = 2;
+  out.source = "0:" + tx.hash.to_hex();
+  out.destination = kTelemintLookupAddress;
+  out.opcode = 0x11223344;
+  out.value = schema::CurrencyCollection{td::make_refint(1000), {}};
+  tx.out_msgs.push_back(std::move(out));
+
+  AllShardStates states{vm::CellBuilder().finalize()};
+  CelldbTier2Lookup tier2(
+      &states, nullptr,
+      [](const block::StdAddress &address, const td::Ref<vm::Cell> &,
+         const td::Ref<vm::Cell> &, const std::shared_ptr<block::ConfigInfo> &)
+          -> td::Result<TelemintContract::Result> {
+        TelemintContract::Result result{};
+        result.address = address;
+        return result;
+      });
+  int reads = 0;
+  tier2.set_account_source([&](const block::StdAddress &address)
+                               -> td::Result<std::optional<schema::AccountState>> {
+    reads++;
+    if (address.workchain != 0 || address.addr.to_hex() != std::string(64, 'A')) {
+      return std::optional<schema::AccountState>{};
+    }
+    schema::AccountState state{};
+    state.account = address;
+    state.code = vm::CellBuilder().finalize();
+    state.data = vm::CellBuilder().finalize();
+    return std::optional<schema::AccountState>{std::move(state)};
+  });
+  TieredLookupSource::InterfaceMap tier1_interfaces;
+  TieredLookupSource source(
+      &tier1_interfaces, [&](const std::string &kind, const std::vector<Value> &args) {
+        return tier2.fetch(kind, args);
+      });
+
+  auto result = classify_schema_trace(
+      prep, "tier2-telemint-trace-reference-no-transaction", {tx}, source);
+  check("schema/tier2_telemint/reference_is_message_destination",
+        (tx.account.workchain != 0 || tx.account.addr.to_hex() != std::string(64, 'A')) &&
+            tx.out_msgs.front().destination == kTelemintLookupAddress);
+  const auto telemint_hits = source.stats().tier2_hits_by_kind.find("telemint_item");
+  check("schema/tier2_telemint/detected_from_cell_db",
+        reads == 1 && source.stats().tier2_hits == 1 &&
+            telemint_hits != source.stats().tier2_hits_by_kind.end() && telemint_hits->second == 1);
+  check("schema/tier2_telemint/matcher_accepted", result.matcher_names.size() == 1);
+}
+
 // Startup is fatal on a skipped matcher, so the compiled-in table must have none:
 // a skip means a host name the engine does not provide.
 void test_engine_prep_has_no_skips() {
@@ -740,6 +819,7 @@ int run_classify_core_test() {
   test_childless_root_failure_serializes_root();
   test_schema_tick_tock();
   test_tier2_uncovered_workchain_miss_preserves_trace();
+  test_tier2_telemint_lookup_for_trace_reference_without_transaction();
   test_engine_prep_has_no_skips();
   std::printf("CLASSIFY-CORE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;

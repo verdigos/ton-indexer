@@ -8,6 +8,7 @@
 #include "smc-interfaces/NominatorPool.h"
 #include "smc-interfaces/NftSale.h"
 #include "smc-interfaces/NftSaleV4.h"
+#include "smc-interfaces/Telemint.h"
 #include "smc-interfaces/Tokens.h"
 
 #include "td/utils/base64.h"
@@ -35,13 +36,15 @@ std::string raw_address(const block::StdAddress &addr) {
 }  // namespace
 
 CelldbTier2Lookup::CelldbTier2Lookup(const AllShardStates *shard_states,
-                               std::shared_ptr<block::ConfigInfo> config)
+                               std::shared_ptr<block::ConfigInfo> config,
+                               TelemintDetector telemint_detector)
     : shard_states_(shard_states)
     , config_(std::move(config))
     // Capture the states pointer so the source survives moving this object.
     , account_source_([states = shard_states](const block::StdAddress &a) {
       return lookup_account(*states, a);
-    }) {
+    })
+    , telemint_detector_(std::move(telemint_detector)) {
 }
 
 const schema::AccountState *CelldbTier2Lookup::account(const block::StdAddress &addr) {
@@ -170,6 +173,20 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
+    case LookupHandler::TelemintItem: {
+      if (config_ == nullptr && !telemint_detector_) {
+        return Value::null();
+      }
+      auto r = telemint_detector_
+                   ? telemint_detector_(addr, st->code, st->data, config_)
+                   : TelemintContract::detect(addr, st->code, st->data, config_);
+      if (r.is_ok()) {
+        iface = schema::TelemintData{.address = r.move_as_ok().address};
+      } else {
+        log_detector_error(r.error());
+      }
+      break;
+    }
     case LookupHandler::CodeHash:
       return st->code.is_null() ? Value::null()
                                 : Value::make_str(td::base64_encode(st->code->get_hash().as_slice()));
@@ -205,7 +222,6 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       break;
     }
     case LookupHandler::JvaultAssets:
-    case LookupHandler::TelemintItem:
       break;
   }
   if (!iface) {

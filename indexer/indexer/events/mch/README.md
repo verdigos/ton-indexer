@@ -463,7 +463,7 @@ A miss in both tiers is `null`; a tier-2 read that fails logs one WARNING and re
 | `dedust_pool` | yes | yes | `assets`, each `{is_ton, address}` |
 | `nominator_pool` | yes | yes | `address` |
 | `multisig_order` | yes | yes | `signers` |
-| `telemint_item` | yes | no | `address` |
+| `telemint_item` | yes | yes | `address` |
 | `jvault_assets` | no | yes | the chained stake wallet, pool and lock wallet record |
 | `code_hash` | no | yes | the account's code hash as a padded base64 string |
 

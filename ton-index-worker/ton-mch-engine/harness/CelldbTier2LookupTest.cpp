@@ -383,8 +383,8 @@ struct Fixture {
   std::map<std::string, schema::AccountState> accounts;
   int reads = 0;
 
-  CelldbTier2Lookup make() {
-    CelldbTier2Lookup t(&states, nullptr);
+  CelldbTier2Lookup make(CelldbTier2Lookup::TelemintDetector telemint_detector = {}) {
+    CelldbTier2Lookup t(&states, nullptr, std::move(telemint_detector));
     t.set_account_source([this](const block::StdAddress &a) -> td::Result<std::optional<schema::AccountState>> {
       reads++;
       auto it = accounts.find(std::to_string(a.workchain) + ":" + a.addr.to_hex());
@@ -530,12 +530,32 @@ void test_lookup_kind_registry() {
   }
   check("registry/expected_kinds_registered", all_kinds_registered);
   const auto *telemint = lookup_kind("telemint_item");
-  check("registry/telemint_item_tier1_only",
-        telemint != nullptr && telemint->tier1 && !telemint->tier2);
+  check("registry/telemint_item_tier1_tier2",
+        telemint != nullptr && telemint->tier1 && telemint->tier2);
   Fixture f;
   auto t = f.make();
-  check("registry/telemint_item_tier2_miss",
-        t.fetch("telemint_item", {Value::make_str(raw_of('A'))}).is_null() && f.reads == 0);
+  check("registry/telemint_item_absent_state_miss",
+        t.fetch("telemint_item", {Value::make_str(raw_of('A'))}).is_null() && f.reads == 1);
+}
+
+void test_telemint_detector() {
+  Fixture f;
+  f.put('A', stake_wallet_data(addr_of('A'), addr_of('B')));
+  bool saw_account_state = false;
+  auto tier2 = f.make(
+      [&](const block::StdAddress &address, const td::Ref<vm::Cell> &code,
+          const td::Ref<vm::Cell> &data,
+          const std::shared_ptr<block::ConfigInfo> &) -> td::Result<TelemintContract::Result> {
+        saw_account_state = address == addr_of('A') && code.not_null() && data.not_null();
+        TelemintContract::Result result{};
+        result.address = address;
+        return result;
+      });
+  Value result = tier2.fetch("telemint_item", {Value::make_str(raw_of('A'))});
+  const Value *address = result.field("address");
+  check("telemint/detects_from_account_state",
+        saw_account_state && f.reads == 1 && address != nullptr &&
+            address->t == VType::Str && address->str == raw_of('A'));
 }
 
 void test_account_lookup_states() {
@@ -747,6 +767,7 @@ int run_celldb_tier2_test() {
   test_jvault_hook();
   test_memo_and_guards();
   test_lookup_kind_registry();
+  test_telemint_detector();
   test_two_tier_routing();
   test_tier1_authoritative_miss();
   test_account_lookup_states();
