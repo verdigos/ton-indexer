@@ -78,6 +78,14 @@ const schema::AccountState *CelldbTier2Lookup::account(const block::StdAddress &
 }
 
 Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddress &addr) {
+  bool fault_logged = false;
+  auto log_detector_error = [&](const auto &error) {
+    if (!fault_logged) {
+      LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                   << " address=" << raw_address(addr) << " status=" << error;
+      fault_logged = true;
+    }
+  };
   enum class Handler {
     JvaultAssets,
     JettonWallet,
@@ -123,6 +131,8 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       auto r = NftItemDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
+      } else {
+        log_detector_error(r.error());
       }
       break;
     }
@@ -133,6 +143,8 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       auto r = GetGemsNftAuction::detect(addr, st->code, st->data, config_);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
+      } else {
+        log_detector_error(r.error());
       }
       break;
     }
@@ -143,6 +155,8 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       auto r = JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
+      } else {
+        log_detector_error(r.error());
       }
       break;
     }
@@ -153,6 +167,8 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       auto r = DedustPoolDetector::detect(addr, st->code, st->data, *shard_states_, config_);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
+      } else {
+        log_detector_error(r.error());
       }
       break;
     }
@@ -160,6 +176,8 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       auto r = NominatorPoolContract::detect(addr, st->code, st->data);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
+      } else {
+        log_detector_error(r.error());
       }
       break;
     }
@@ -167,7 +185,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       return st->code.is_null() ? Value::null()
                                 : Value::make_str(td::base64_encode(st->code->get_hash().as_slice()));
     case Handler::NftSale: {
-      if (config_ == nullptr) {
+      if (config_ == nullptr && !nft_sale_v4_detector_) {
         return Value::null();
       }
       auto r = GetGemsNftFixPriceSale::detect(addr, st->code, st->data, config_);
@@ -175,9 +193,13 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
         iface = to_v2(r.move_as_ok());
         break;
       }
-      auto r4 = GetGemsNftFixPriceSaleV4::detect(addr, st->code, st->data, config_);
+      auto r4 = nft_sale_v4_detector_
+                    ? nft_sale_v4_detector_(addr, st->code, st->data, config_)
+                    : GetGemsNftFixPriceSaleV4::detect(addr, st->code, st->data, config_);
       if (r4.is_ok()) {
         iface = to_v2(r4.move_as_ok());
+      } else {
+        log_detector_error(r4.error());
       }
       break;
     }
@@ -188,6 +210,8 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       auto r = MultisigOrder::detect(addr, st->code, st->data, *shard_states_, config_);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
+      } else {
+        log_detector_error(r.error());
       }
       break;
     }
@@ -264,7 +288,25 @@ Value CelldbTier2Lookup::fetch(const std::string &kind, const std::vector<Value>
   Value v;
   try {
     v = resolve(kind, addr);
+  } catch (const vm::VmError &e) {
+    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                 << " address=" << raw_address(addr) << " status=exception: " << e.get_msg();
+    v = Value::null();
+  } catch (const vm::VmNoGas &e) {
+    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                 << " address=" << raw_address(addr) << " status=exception: " << e.get_msg();
+    v = Value::null();
+  } catch (const vm::VmVirtError &e) {
+    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                 << " address=" << raw_address(addr) << " status=exception: " << e.get_msg();
+    v = Value::null();
+  } catch (const std::exception &e) {
+    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                 << " address=" << raw_address(addr) << " status=exception: " << e.what();
+    v = Value::null();
   } catch (...) {
+    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                 << " address=" << raw_address(addr) << " status=unknown exception";
     v = Value::null();
   }
   value_memo_.emplace(key, v);

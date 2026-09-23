@@ -85,6 +85,12 @@ struct TraceClassificationResult {
   // The unknown action for the whole trace; ClassifierWriter writes it instead of
   // `rows` when empty, rejected by PostgreSQL or unrenderable.
   Action rescue;
+  std::size_t tier1_hits{0};
+  std::size_t tier2_hits{0};
+  std::size_t lookup_misses{0};
+  std::map<std::string, std::size_t> lookup_misses_by_kind;
+  std::size_t tier2_fetched{0};
+  std::size_t tier2_memo_hits{0};
 };
 
 struct BlockClassification {

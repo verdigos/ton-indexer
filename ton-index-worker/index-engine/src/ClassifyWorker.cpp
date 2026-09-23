@@ -41,6 +41,12 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
     const auto key = td::base64_encode(job.input.trace.trace_id.as_slice());
     auto r = classify_schema_trace(*prep_, key, job.input.txs, src);
     TraceClassificationResult result{std::move(job.input.trace), r.outcome, std::move(r.rows), std::move(r.failure_reason), false, std::move(r.rescue)};
+    result.tier1_hits = src.stats().tier1_hits;
+    result.tier2_hits = src.stats().tier2_hits;
+    result.lookup_misses = src.stats().misses;
+    result.lookup_misses_by_kind = src.stats().misses_by_kind;
+    result.tier2_fetched = tier2.stats().fetched;
+    result.tier2_memo_hits = tier2.stats().memo_hits;
     const double seconds = timer.elapsed();
     result.slow = seconds > policy_.slow_job_threshold_s;
     if (result.slow) {

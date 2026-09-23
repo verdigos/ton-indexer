@@ -732,6 +732,14 @@ void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, schema::Trac
     auto trace = result.move_as_ok();
     ++jobs_done_;
     slow_jobs_ += trace.slow;
+    lookup_tier1_hits_ += trace.tier1_hits;
+    lookup_tier2_hits_ += trace.tier2_hits;
+    lookup_misses_ += trace.lookup_misses;
+    for (const auto &[kind, count] : trace.lookup_misses_by_kind) {
+        lookup_misses_by_kind_[kind] += count;
+    }
+    tier2_fetched_ += trace.tier2_fetched;
+    tier2_memo_hits_ += trace.tier2_memo_hits;
     ++classify_outcomes_[trace.outcome];
     block_results_[mc_seqno].traces.push_back(std::move(trace));
     promise.set_value(td::Unit());
@@ -955,6 +963,17 @@ void IndexScheduler::print_stats() {
             sb << " " << mch::trace_outcome_name(outcome) << "=" << count;
         }
         sb << "]";
+    }
+    if (payload_buffer_) {
+        std::string misses_by_kind;
+        for (const auto &[kind, count] : lookup_misses_by_kind_) {
+            if (!misses_by_kind.empty()) misses_by_kind += ",";
+            misses_by_kind += kind + "=" + std::to_string(count);
+        }
+        sb << "\tlookups{tier1=" << lookup_tier1_hits_
+           << " tier2=" << lookup_tier2_hits_ << " miss=" << lookup_misses_
+           << " miss_by_kind={" << misses_by_kind << "}}"
+           << " tier2{fetched=" << tier2_fetched_ << " memo_hits=" << tier2_memo_hits_ << "}";
     }
     if (run_) {
         sb << "\trun[scan=" << run_->scan_from << ".." << run_->scan_to

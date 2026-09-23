@@ -5,6 +5,7 @@
 #include "TieredLookupSource.h"  // Value, schema::*, AllShardStates via IndexData.h
 
 #include "smc-interfaces/FetchAccountFromShard.h"  // AllShardStates, lookup_account
+#include "smc-interfaces/NftSaleV4.h"
 
 #include <cstddef>
 #include <functional>
@@ -23,6 +24,9 @@ class CelldbTier2Lookup {
  public:
   // Injectable account reader; production uses lookup_account.
   using AccountSource = std::function<td::Result<std::optional<schema::AccountState>>(const block::StdAddress &)>;
+  using NftSaleV4Detector = std::function<td::Result<GetGemsNftFixPriceSaleV4::Result>(
+      const block::StdAddress &, const td::Ref<vm::Cell> &, const td::Ref<vm::Cell> &,
+      const std::shared_ptr<block::ConfigInfo> &)>;
 
   // `shard_states` and `config` must outlive this object (they are the view's).
   CelldbTier2Lookup(const AllShardStates *shard_states, std::shared_ptr<block::ConfigInfo> config);
@@ -32,6 +36,7 @@ class CelldbTier2Lookup {
 
   const Tier2Stats &stats() const { return stats_; }
   void set_account_source(AccountSource src) { account_source_ = std::move(src); }
+  void set_nft_sale_v4_detector(NftSaleV4Detector detector) { nft_sale_v4_detector_ = std::move(detector); }
 
  private:
   // Memoized account state. nullptr covers absence or read failure.
@@ -44,6 +49,7 @@ class CelldbTier2Lookup {
   const AllShardStates *shard_states_;
   std::shared_ptr<block::ConfigInfo> config_;
   AccountSource account_source_;
+  NftSaleV4Detector nft_sale_v4_detector_;
 
   std::unordered_map<block::StdAddress, std::optional<schema::AccountState>> account_memo_;
   std::unordered_map<std::string, Value> value_memo_;

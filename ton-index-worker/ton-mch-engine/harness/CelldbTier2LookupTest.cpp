@@ -12,6 +12,7 @@
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
+#include "td/utils/logging.h"
 
 #include <cstdio>
 #include <map>
@@ -34,6 +35,23 @@ void check(const std::string &name, bool ok) {
     g_fail++;
   }
 }
+
+class CaptureLog final : public td::LogInterface {
+ public:
+  void append(td::CSlice slice, int) override { text += slice.str(); }
+  std::string text;
+};
+
+class ScopedLog final {
+ public:
+  explicit ScopedLog(td::LogInterface *replacement) : saved_(td::log_interface) {
+    td::log_interface = replacement;
+  }
+  ~ScopedLog() { td::log_interface = saved_; }
+
+ private:
+  td::LogInterface *saved_;
+};
 
 block::StdAddress addr_of(char fill) {
   return block::StdAddress::parse(td::Slice("0:" + std::string(64, fill))).move_as_ok();
@@ -523,6 +541,49 @@ void test_account_lookup_states() {
   }
 }
 
+void test_detector_error_is_fault_miss() {
+  Fixture f;
+  f.put('A', stake_wallet_data(addr_of('1'), addr_of('2')));
+  auto tier2 = f.make();
+  TieredLookupSource src(nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
+    return tier2.fetch(kind, args);
+  });
+  Value result = src.fetch("nominator_pool", {Value::make_str(raw_of('A'))});
+  check("detector_error/counts_as_fault_and_misses",
+        result.is_null() && src.stats().misses == 1 &&
+            src.stats().misses_by_kind.at("nominator_pool") == 1 &&
+            f.reads == 1 && tier2.stats().fetched == 1);
+}
+
+void test_nft_sale_v4_fallback_is_not_fault() {
+  Fixture f;
+  schema::AccountState state{};
+  state.account = addr_of('A');
+  state.data = stake_wallet_data(addr_of('1'), addr_of('2'));
+  f.accounts.emplace(raw_of('A'), std::move(state));  // Null code makes the V1 detector fail.
+  auto tier2 = f.make();
+  tier2.set_nft_sale_v4_detector([](const block::StdAddress &addr, const td::Ref<vm::Cell> &,
+                                   const td::Ref<vm::Cell> &,
+                                   const std::shared_ptr<block::ConfigInfo> &)
+                                     -> td::Result<GetGemsNftFixPriceSaleV4::Result> {
+    GetGemsNftFixPriceSaleV4::Result result{};
+    result.address = addr;
+    return result;
+  });
+  TieredLookupSource src(nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
+    return tier2.fetch(kind, args);
+  });
+  CaptureLog log;
+  Value result;
+  {
+    ScopedLog scoped(&log);
+    result = src.fetch("nft_sale", {Value::make_str(raw_of('A'))});
+  }
+  check("nft_sale/v4_fallback_success_has_no_fault",
+        !result.is_null() && src.stats().misses == 0 && tier2.stats().fetched == 1 &&
+            log.text.find("Tier-2 detector lookup failed") == std::string::npos);
+}
+
 // Two tiers behind one source
 
 void test_two_tier_routing() {
@@ -666,6 +727,8 @@ int run_celldb_tier2_test() {
   test_two_tier_routing();
   test_tier1_authoritative_miss();
   test_account_lookup_states();
+  test_detector_error_is_fault_miss();
+  test_nft_sale_v4_fallback_is_not_fault();
   std::printf("CELLDB-TIER2-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }
