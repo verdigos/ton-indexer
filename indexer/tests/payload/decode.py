@@ -1,4 +1,9 @@
-"""Decode action payload v2 rows for development tools."""
+"""Decode action payload v2 rows for development tools.
+
+`mapping.json` in this directory is the only copy of the payload mapping. The devtools overlay
+(`ton-index-worker/ton-mch-engine/devtools/payload`) loads this module for `transform`, `convert`
+and `decode_payload` and reads that file instead of keeping copies of its own.
+"""
 
 import base64
 import json
@@ -9,21 +14,24 @@ from typing import Any
 import msgpack
 
 
-_MAPPING = json.loads((Path(__file__).with_name("mapping.json")).read_text())
+MAPPING = json.loads((Path(__file__).with_name("mapping.json")).read_text())
 _KEY_KINDS = {
     key: {entry["kind"] for entry in value["uses"]}.pop()
-    for key, value in _MAPPING["key_dictionary"].items()
+    for key, value in MAPPING["key_dictionary"].items()
 }
 
 
-def _transform(value, spec, producer=False, path=""):
+def transform(value, spec, reverse=False, producer=False, path=""):
     if value is None:
         return None
     kind = spec["kind"]
     if kind == "object":
         assert isinstance(value, dict), (path, "expected object")
         fields = spec["fields"]
-        lookup = {child.get("legacy_name", key): (key, child) for key, child in fields.items()}
+        lookup = {
+            key if reverse else child.get("legacy_name", key): (key, child)
+            for key, child in fields.items()
+        }
         normalized = dict(value)
         if producer and path == "ton_transfer_data" and "comment" in normalized and "content" in lookup:
             if "content" in normalized and normalized["content"] != normalized["comment"]:
@@ -37,12 +45,13 @@ def _transform(value, spec, producer=False, path=""):
         out = {}
         for key, child_value in normalized.items():
             name, child = lookup[key]
-            assert name not in out, (path, name, "target collision")
-            out[name] = _transform(child_value, child, producer, path + "." + key)
+            target = child.get("legacy_name", name) if reverse else name
+            assert target not in out, (path, target, "target collision")
+            out[target] = transform(child_value, child, reverse, producer, path + "." + key)
         return out
     if kind == "array":
         assert isinstance(value, list), (path, "expected array")
-        return [_transform(child, spec["items"], producer, path + "[]") for child in value]
+        return [transform(child, spec["items"], reverse, producer, path + "[]") for child in value]
     if kind == "integer_string":
         assert isinstance(value, (int, str)) and not isinstance(value, bool), (
             path,
@@ -60,16 +69,16 @@ def _transform(value, spec, producer=False, path=""):
 
 
 def convert(action, legacy, producer=False):
-    groups = _MAPPING["actions"][action]["groups"]
+    groups = MAPPING["actions"][action]["groups"]
     allowed = {group["legacy_column"] for group in groups.values()}
     unexpected = {
         key
         for key in set(legacy) - allowed
-        if key not in _MAPPING["legacy_detail_columns"] or legacy[key] is not None
+        if key not in MAPPING["legacy_detail_columns"] or legacy[key] is not None
     }
     assert not unexpected, (action, "unexpected populated column", unexpected)
     return {
-        name: _transform(
+        name: transform(
             legacy[group["legacy_column"]],
             group["schema"],
             producer=producer and action == "auction_outbid",
