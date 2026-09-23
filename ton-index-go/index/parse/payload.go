@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
@@ -207,6 +208,18 @@ func setPayloadValue(target reflect.Value, value interface{}) error {
 			return err
 		}
 		target.Set(v)
+		return nil
+	}
+	if target.Type() == reflect.TypeOf(big.Int{}) {
+		value, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("expected integer string, got %T", value)
+		}
+		n, ok := new(big.Int).SetString(value, 10)
+		if !ok {
+			return fmt.Errorf("invalid base-10 integer")
+		}
+		target.Set(reflect.ValueOf(*n))
 		return nil
 	}
 

@@ -1,6 +1,7 @@
 package emulated
 
 import (
+	"math/big"
 	"os"
 	"strings"
 	"testing"
@@ -104,10 +105,10 @@ func TestActionsWireFixture(t *testing.T) {
 		*a.LayerzeroSendData.SendRequestId != 18446744073709551614 {
 		t.Errorf("send_request_id = %v, want 18446744073709551614", a.LayerzeroSendData.SendRequestId)
 	}
-	if a.LayerzeroSendData.NativeFee == nil || *a.LayerzeroSendData.NativeFee != 14835102020 {
+	if a.LayerzeroSendData.NativeFee == nil || a.LayerzeroSendData.NativeFee.Cmp(big.NewInt(14835102020)) != 0 {
 		t.Errorf("native_fee = %v, want 14835102020", a.LayerzeroSendData.NativeFee)
 	}
-	if a.LayerzeroSendData.ZroFee == nil || *a.LayerzeroSendData.ZroFee != 0 {
+	if a.LayerzeroSendData.ZroFee == nil || a.LayerzeroSendData.ZroFee.Sign() != 0 {
 		t.Errorf("zro_fee = %v, want 0", a.LayerzeroSendData.ZroFee)
 	}
 	str("layerzero_send_data.msglib", a.LayerzeroSendData.Msglib, "0x63bdfbf347f883dd")

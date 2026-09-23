@@ -3,6 +3,7 @@ package emulated
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 	"strconv"
 
@@ -11,8 +12,7 @@ import (
 )
 
 // Accept both decimal strings and native msgpack numbers in emulated trace
-// payloads. Registration covers scalar integer and string fields and must run
-// before msgpack memoizes its per-type decoders.
+// payloads. Register decoders before msgpack memoizes their types.
 func init() {
 	for _, v := range []interface{}{int(0), int8(0), int16(0), int32(0), int64(0)} {
 		msgpack.Register(v, nil, decodeFlexInt)
@@ -20,7 +20,42 @@ func init() {
 	for _, v := range []interface{}{uint(0), uint8(0), uint16(0), uint32(0), uint64(0)} {
 		msgpack.Register(v, nil, decodeFlexUint)
 	}
+	msgpack.Register(big.Int{}, nil, decodeFlexBigInt)
 	msgpack.Register("", nil, decodeFlexString)
+}
+
+func decodeFlexBigInt(d *msgpack.Decoder, v reflect.Value) error {
+	c, err := d.PeekCode()
+	if err != nil {
+		return err
+	}
+	var n big.Int
+	switch {
+	case msgpcode.IsString(c) || msgpcode.IsBin(c):
+		value, err := d.DecodeString()
+		if err != nil {
+			return err
+		}
+		if _, ok := n.SetString(value, 10); !ok {
+			return fmt.Errorf("msgpack: %q is not a base-10 integer", value)
+		}
+	case msgpcode.IsFixedNum(c), c == msgpcode.Int8, c == msgpcode.Int16, c == msgpcode.Int32, c == msgpcode.Int64:
+		value, err := d.DecodeInt64()
+		if err != nil {
+			return err
+		}
+		n.SetInt64(value)
+	case c == msgpcode.Uint8, c == msgpcode.Uint16, c == msgpcode.Uint32, c == msgpcode.Uint64:
+		value, err := d.DecodeUint64()
+		if err != nil {
+			return err
+		}
+		n.SetUint64(value)
+	default:
+		return fmt.Errorf("msgpack: cannot decode code %#x as big.Int", c)
+	}
+	v.Set(reflect.ValueOf(n))
+	return nil
 }
 
 func decodeFlexInt(d *msgpack.Decoder, v reflect.Value) error {

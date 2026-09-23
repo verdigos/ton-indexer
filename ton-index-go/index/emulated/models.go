@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"strings"
 
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
@@ -360,8 +361,8 @@ type actionMultisigCreateOrderDetails struct {
 }
 
 type actionMultisigApproveDetails struct {
-	SignerIndex *int64 `msgpack:"signer_index"`
-	ExitCode    *int32 `msgpack:"exit_code"`
+	SignerIndex *int64  `msgpack:"signer_index"`
+	ExitCode    *uint32 `msgpack:"exit_code"`
 }
 
 type actionMultisigExecuteDetails struct {
@@ -439,28 +440,28 @@ type actionCoffeeStakingWithdrawDetails struct {
 }
 
 type actionLayerzeroSendDetails struct {
-	SendRequestId *uint64 `msgpack:"send_request_id"`
-	MsglibManager *string `msgpack:"msglib_manager"`
-	Msglib        *string `msgpack:"msglib"`
-	Uln           *string `msgpack:"uln"`
-	NativeFee     *uint64 `msgpack:"native_fee"`
-	ZroFee        *uint64 `msgpack:"zro_fee"`
-	Endpoint      *string `msgpack:"endpoint"`
-	Channel       *string `msgpack:"channel"`
+	SendRequestId *uint64  `msgpack:"send_request_id"`
+	MsglibManager *string  `msgpack:"msglib_manager"`
+	Msglib        *string  `msgpack:"msglib"`
+	Uln           *string  `msgpack:"uln"`
+	NativeFee     *big.Int `msgpack:"native_fee"`
+	ZroFee        *big.Int `msgpack:"zro_fee"`
+	Endpoint      *string  `msgpack:"endpoint"`
+	Channel       *string  `msgpack:"channel"`
 }
 
 type actionLayerzeroPacketDetails struct {
 	SrcOapp *string `msgpack:"src_oapp"`
 	DstOapp *string `msgpack:"dst_oapp"`
-	SrcEid  *int32  `msgpack:"src_eid"`
-	DstEid  *int32  `msgpack:"dst_eid"`
-	Nonce   *int64  `msgpack:"nonce"`
+	SrcEid  *uint32 `msgpack:"src_eid"`
+	DstEid  *uint32 `msgpack:"dst_eid"`
+	Nonce   *uint64 `msgpack:"nonce"`
 	Guid    *string `msgpack:"guid"`
 	Message *string `msgpack:"message"`
 }
 
 type actionLayerzeroDvnVerifyDetails struct {
-	Nonce         *int64  `msgpack:"nonce"`
+	Nonce         *uint64 `msgpack:"nonce"`
 	Status        *string `msgpack:"status"` // "succeeded" | "nonce_out_of_range" | "dvn_not_configured" | "unknown_<code>"
 	Dvn           *string `msgpack:"dvn"`
 	Proxy         *string `msgpack:"proxy"`

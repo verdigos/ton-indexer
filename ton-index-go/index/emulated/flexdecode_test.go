@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 	"testing"
 
@@ -207,7 +208,7 @@ func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
 	if d := old.MultisigExecuteData; d == nil || *d.ExpirationDate != 1753900001 || *d.ApprovalsNum != 2 {
 		t.Errorf("multisig_execute_data = %+v", d)
 	}
-	if d := old.LayerzeroSendData; d == nil || *d.SendRequestId != 99 || *d.NativeFee != 120000000 || *d.ZroFee != 0 {
+	if d := old.LayerzeroSendData; d == nil || *d.SendRequestId != 99 || d.NativeFee.Cmp(big.NewInt(120000000)) != 0 || d.ZroFee.Sign() != 0 {
 		t.Errorf("layerzero_send_data = %+v", d)
 	}
 	if d := old.LayerzeroDvnVerifyData; d == nil || *d.Nonce != 8 {
@@ -325,7 +326,7 @@ func TestFlexDecodeRejectsNonNumbers(t *testing.T) {
 		"value": nil,
 		"multisig_approve_data": map[string]interface{}{
 			"signer_index": nil,
-			"exit_code":    int32(-7),
+			"exit_code":    uint32(4294967295),
 		},
 	})
 	if a.Value != nil {
@@ -334,8 +335,8 @@ func TestFlexDecodeRejectsNonNumbers(t *testing.T) {
 	if a.MultisigApproveData.SignerIndex != nil {
 		t.Errorf("signer_index = %v, want nil", *a.MultisigApproveData.SignerIndex)
 	}
-	if *a.MultisigApproveData.ExitCode != -7 {
-		t.Errorf("exit_code = %v", *a.MultisigApproveData.ExitCode)
+	if *a.MultisigApproveData.ExitCode != 4294967295 {
+		t.Errorf("exit_code = %v, want 4294967295", *a.MultisigApproveData.ExitCode)
 	}
 }
 
