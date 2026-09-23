@@ -125,8 +125,6 @@
     - name: Install requirements
       ansible.builtin.apt:
         name:
-          - python3-pip
-          - python3-venv
           - dnsutils
           - libpq-dev
           - libsecp256k1-dev
@@ -157,18 +155,6 @@
       ansible.builtin.command: ldconfig
       changed_when: false
 
-    - name: Copy python module
-      ansible.builtin.copy:
-        src: indexer
-        dest: "{{ deploy_path }}"
-
-    - name: Setup venv
-      ansible.builtin.pip:
-        requirements: "{{ deploy_path }}/indexer/requirements.txt"
-        virtualenv: "{{ deploy_path }}/venv"
-        virtualenv_command: "python3 -m venv"
-        extra_args: "--no-cache-dir"
-    
     - name: Setup emulate_api and trace_task_emulator services 
       ansible.builtin.template:
         src: "ansible/systemd.service.j2"
@@ -181,19 +167,6 @@
       with_items:
         - emulate_api
         - trace_task_emulator
-    
-    - name: Setup action classifier service
-      ansible.builtin.template:
-        src: "ansible/systemd.service.j2"
-        dest: "{{ systemd_service_path }}/{{ service_name }}.service"
-        mode: "0644"
-      vars:
-        service: "{{ services[item] }}"
-        service_name: "{{ stack_name }}__{{ item }}"
-        start_cmd: "{{ deploy_path }}/venv/bin/python3 {{ deploy_path }}/indexer/event_classifier.py {{ service.additional_args }}"
-      with_items:
-        - action_classifier
-      no_log: true
     
     - name: Start and enable service redis-server
       ansible.builtin.systemd:
@@ -217,4 +190,3 @@
       with_items:
        - emulate_api
        - trace_task_emulator
-       - action_classifier

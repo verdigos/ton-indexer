@@ -16,14 +16,12 @@ TON nodes store data in a RocksDB key-value store optimized for performance in s
 TON Indexer stack consists of following services:
 1. `postgres` - PostgreSQL server for primary storage for indexed blockchain data.
 2. `index-api` - [Fiber](https://github.com/gofiber/fiber)-based server with convenient endpoints to access the database with REST API.
-3. `event-classifier` - Actions classification service.
-4. `index-worker` - TON Index worker to read and parse data from TON node database. Must run on the same machine as a functioning TON full node.
-5. `run-migrations` -  Initializes the database schema and runs all required migrations.
-6. `metadata-fetcher` - Indexes offchain metadata for Jettons and NFTs, optional service.
-7. `imgproxy` - Proxies images from Jetton and NFT metadata, optional service.
-8. `emulate-task-emulator` - emulates trace for given external message.
-9. `emulate-event-classifier` - actions for emulated traces.
-10. `emulate-api` - API for emulation services.
+3. `index-worker` - TON Index worker to read and parse data from TON node database. Must run on the same machine as a functioning TON full node. With `--enable-classifier` it classifies completed traces into Actions in process, and writes the resulting rows itself.
+4. `run-migrations` -  Initializes the database schema and runs all required migrations.
+5. `metadata-fetcher` - Indexes offchain metadata for Jettons and NFTs, optional service.
+6. `imgproxy` - Proxies images from Jetton and NFT metadata, optional service.
+7. `emulate-task-emulator` - emulates trace for given external message and classifies it into Actions in process.
+8. `emulate-api` - API for emulation services.
 
 > [!IMPORTANT]
 > Metadata fetcher and imgproxy services perform requests to external links, such requests may expose your IP, strongly recommended to run this services on a separate machine and set up `IMGPROXY_KEY` and `IMGPROXY_SALT` variables.
@@ -88,7 +86,7 @@ Once the stack is running, the REST API and interactive Swagger are available at
 4. Start relevant services: 
 
    ```bash
-   docker compose up -d run-migrations index-worker index-api event-classifier event-cache
+   docker compose up -d run-migrations index-worker index-api event-cache
    ```
 
 ## How to run TON Index worker independently
