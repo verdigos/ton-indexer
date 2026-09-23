@@ -63,6 +63,29 @@ Block *wrap_root(BlockArena &arena, Block *root) {
   return wrapper;
 }
 
+std::pair<std::string, FailureCategory> exception_failure(std::exception_ptr error,
+                                                          bool lookup_infra,
+                                                          bool prefix_exception) {
+  try {
+    std::rethrow_exception(error);
+  } catch (const vm::VmError &e) {
+    return {std::string("vm exception: ") + e.get_msg(), FailureCategory::engine_fault};
+  } catch (const vm::VmNoGas &e) {
+    return {std::string("vm exception: ") + e.get_msg(), FailureCategory::engine_fault};
+  } catch (const vm::VmVirtError &e) {
+    return {std::string("vm exception: ") + e.get_msg(), FailureCategory::engine_fault};
+  } catch (const std::exception &e) {
+    std::string reason = prefix_exception ? std::string("exception: ") + e.what() : e.what();
+    const auto category = lookup_infra &&
+                                  reason.find("two-phase lookup did not converge") != std::string::npos
+                              ? FailureCategory::lookup_infra_fail
+                              : FailureCategory::engine_fault;
+    return {std::move(reason), category};
+  } catch (...) {
+    return {"unknown exception", FailureCategory::engine_fault};
+  }
+}
+
 // The flat spine list in canonical BFS order: `root` plus everything reachable
 // through next_blocks. Every consumer of "the spine" (prefilter inventory,
 // post-process input, basic-actions fallback) wants exactly this.
@@ -802,31 +825,11 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // outside v1_ops, in which case recursion brings it back as a child row;
     // a leaf no matcher consumed emits a basic row.
     result.action_rows = serialize_rows(spine, "");
-  } catch (const vm::VmError &e) {
-    result.failure = true;
-    result.failure_reason = std::string("vm exception: ") + e.get_msg();
-    result.failure_category = FailureCategory::engine_fault;
-  } catch (const vm::VmNoGas &e) {
-    result.failure = true;
-    result.failure_reason = std::string("vm exception: ") + e.get_msg();
-    result.failure_category = FailureCategory::engine_fault;
-  } catch (const vm::VmVirtError &e) {
-    result.failure = true;
-    result.failure_reason = std::string("vm exception: ") + e.get_msg();
-    result.failure_category = FailureCategory::engine_fault;
-  } catch (const std::exception &e) {
-    result.failure = true;
-    result.failure_reason = e.what();
-    // The two-phase driver throws this exact message on non-convergence, an
-    // infra fault, distinct from a spec/parse engine fault.
-    result.failure_category =
-        result.failure_reason.find("two-phase lookup did not converge") != std::string::npos
-            ? FailureCategory::lookup_infra_fail
-            : FailureCategory::engine_fault;
   } catch (...) {
+    auto [reason, category] = exception_failure(std::current_exception(), true, false);
     result.failure = true;
-    result.failure_reason = "unknown exception";
-    result.failure_category = FailureCategory::engine_fault;
+    result.failure_reason = std::move(reason);
+    result.failure_category = category;
   }
   if (result.failure) {
     result.actions.clear();
@@ -894,26 +897,11 @@ SchemaClassifyResult classify_schema_trace(
       result.outcome = TraceOutcome::terminal_failure_empty;
     }
     completed = true;
-  } catch (const vm::VmError &e) {
-    result.outcome = TraceOutcome::terminal_failure_empty;
-    result.failure_reason = std::string("vm exception: ") + e.get_msg();
-    result.failure_category = FailureCategory::engine_fault;
-  } catch (const vm::VmNoGas &e) {
-    result.outcome = TraceOutcome::terminal_failure_empty;
-    result.failure_reason = std::string("vm exception: ") + e.get_msg();
-    result.failure_category = FailureCategory::engine_fault;
-  } catch (const vm::VmVirtError &e) {
-    result.outcome = TraceOutcome::terminal_failure_empty;
-    result.failure_reason = std::string("vm exception: ") + e.get_msg();
-    result.failure_category = FailureCategory::engine_fault;
-  } catch (const std::exception &e) {
-    result.outcome = TraceOutcome::terminal_failure_empty;
-    result.failure_reason = std::string("exception: ") + e.what();
-    result.failure_category = FailureCategory::engine_fault;
   } catch (...) {
     result.outcome = TraceOutcome::terminal_failure_empty;
-    result.failure_reason = "unknown exception";
-    result.failure_category = FailureCategory::engine_fault;
+    auto [reason, category] = exception_failure(std::current_exception(), false, true);
+    result.failure_reason = std::move(reason);
+    result.failure_category = category;
   }
   if (!completed) {
     result.rows.clear();

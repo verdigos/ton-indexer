@@ -484,14 +484,13 @@ Chaining a lookup off another lookup's result works, and each level costs one ex
 ## 9. Writing action rows
 
 A matcher's `out` block fills the produced block's `data` map.
-`ton-index-worker/ton-mch-engine/src/ActionBuild.cpp` then maps each supported btype to a fill function that turns that map into one `Action` row.
-`fill_action` dispatches on btype; an unsupported btype is skipped along with its children.
+`ton-index-worker/ton-mch-engine/src/ActionBuild.cpp` maps each supported btype to a fill function that builds an `Action` row.
+Unsupported btypes are skipped along with their children.
 
-Every row carries the same ten directional and scalar columns: `source`, `source_secondary`, `destination`, `destination_secondary`, `asset`, `asset_secondary`, `asset2`, `asset2_secondary`, `amount`, `value`, plus `opcode`.
-Protocol detail goes into a composite column such as `nft_transfer_data`, `jetton_transfer_data`, `jetton_swap_data` or `extra`.
+Payload v2 stores protocol-specific action data as a keyed payload map.
+It has no per-protocol composite columns; shared fields such as `source`, `destination`, `asset`, `amount` and `opcode` remain ordinary action fields.
 
-`fill_nft_transfer` shows both halves for the worked example.
-The spec writes these names:
+`fill_nft_transfer` is a worked example. The spec writes names such as:
 
 ```mch
     out {
@@ -502,23 +501,8 @@ The spec writes these names:
         forward_amount:       amount(transfer.body.forward_amount)
 ```
 
-The fill function lifts a few of them into columns and reads the others into the composite; a name the spec never wrote stays null:
-
-| `out` field | Where it lands |
-|---|---|
-| `prev_owner` | `source` |
-| `new_owner` | `destination` |
-| `nft.address` | `asset_secondary` |
-| `nft.collection.address` | `asset` |
-| `query_id`, `is_purchase`, `price`, `forward_amount`, `custom_payload`, `forward_payload`, `response_destination`, `marketplace`, `marketplace_address`, `real_prev_owner`, `payout_amount`, `payout_comment*`, `royalty_amount` | `nft_transfer_data` |
-| `nft.index` | `nft_transfer_data.nft_item_index` |
-
-Two consequences for an author.
-A field name in `out` is not automatically a column: a new name needs a branch in the fill function, so prefer a name an existing fill function already reads.
-Prefer reusing an existing composite type when the fields fit, because a new composite type means a DDL migration.
-
-The composite key names are registered in `ton-index-worker/ton-mch-engine/docs/KEYS.md` with append-only stable ids.
-A new key gets the next id; an existing key is never renumbered, reused or removed.
+Payload key names are listed in `ton-index-worker/ton-mch-engine/docs/KEYS.md`.
+When adding an action field to payload v2, register its key there; this changes the payload contract and does not require a DDL migration.
 
 The emulator path encodes the same rows as msgpack.
 Integers that may exceed signed 64 bits are decimal strings, keyed by field name at every map depth, while bounded fields such as opcodes, flags and times stay native integers.

@@ -52,7 +52,6 @@ actions:
       forward_amount: 810000000
       forward_payload: cellhash:7D73F9FA423ABA4FA76E22FA5C328B5FDFE758BDFCFD5E5D60C648E57E3672DD
       is_purchase: false
-      marketplace: null
       marketplace_address: null
       nft_item_index: 205532
       payout_amount: null

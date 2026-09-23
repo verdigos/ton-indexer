@@ -77,7 +77,6 @@ actions:
       forward_amount: null
       forward_payload: null
       is_purchase: null
-      marketplace: null
       marketplace_address: null
       nft_item_index: 76359553714204298836367978451999958273959253463034392790126697222337078493184
       payout_amount: null

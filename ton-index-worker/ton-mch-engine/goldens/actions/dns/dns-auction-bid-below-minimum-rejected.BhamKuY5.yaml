@@ -19,7 +19,6 @@ actions:
     value: 97558962636
     opcode: null
     nft_transfer_data:
-      marketplace: null
       nft_item_index: "100532641036537411337247504849111886140954611252500529322913304934098269421586"
     tx_hashes:
       - 3SifZfzN7y71bbUgvwiIxTamyNQESRmfZpfo1hY+wF4=

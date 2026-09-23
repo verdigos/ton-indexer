@@ -80,7 +80,6 @@ actions:
       forward_amount: null
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace: null
       marketplace_address: null
       nft_item_index: 49
       payout_amount: null

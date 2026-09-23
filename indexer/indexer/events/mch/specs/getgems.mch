@@ -28,7 +28,6 @@ matcher getgems_nft_purchase {
         payout_comment:           seller_payout.data.comment
         price:                    nft.data.price
         real_prev_owner:          nft.data.real_prev_owner
-        marketplace:              null
         marketplace_address:      nft.data.marketplace_address
     }
 }

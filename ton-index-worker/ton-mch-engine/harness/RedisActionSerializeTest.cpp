@@ -1111,7 +1111,6 @@ void test_bucket_b_fills() {
                     {"custom_payload", Value::null()},
                     {"forward_payload", Value::null()},
                     {"response_destination", Value::make_account_none()},
-                    {"marketplace", Value::make_str("getgems")},
                     {"marketplace_address", Value::make_account_raw(kAddrB)},
                     {"real_prev_owner", Value::make_account_raw(kAddrA)},
                     {"payout_amount", Value::make_amount(td::make_refint(1425000000LL))},
@@ -1128,7 +1127,7 @@ void test_bucket_b_fills() {
           fld(c, "is_purchase").t == VType::Bool && fld(c, "is_purchase").boolean);
     check("bucketB/nft_purchase/price", fld(c, "price").t == VType::Int);
     check("bucketB/nft_purchase/nft_item_index", fld(c, "nft_item_index").t == VType::Int);
-    check("bucketB/nft_purchase/marketplace", is_str_v(fld(c, "marketplace"), "getgems"));
+    check("bucketB/nft_purchase/marketplace_absent", c.field("marketplace") == nullptr);
     check("bucketB/nft_purchase/payout_amount", fld(c, "payout_amount").t == VType::Int);
     // Unlike fill_nft_transfer, this fill writes NO listing data.
     check("bucketB/nft_purchase/no_listing_data", a.nft_listing_data.is_null());

@@ -1,6 +1,7 @@
 #include "ClassifierWriter.h"
 
 #include "ActionJson.h"
+#include "ClassifierFailure.h"
 #include "td/utils/logging.h"
 
 #include <algorithm>
@@ -107,17 +108,9 @@ bool insert_trace(pqxx::dbtransaction &txn, const TraceClassificationResult &tra
     st.account_rows += accounts;
     st.failed_traces += failed;
     return true;
-  } catch (const pqxx::broken_connection &) {
-    throw;
-  } catch (const pqxx::in_doubt_error &) {
-    throw;
-  } catch (const std::bad_alloc &) {
-    throw;
-  } catch (const pqxx::sql_error &e) {
-    if (!insert_rejected(e.sqlstate())) throw;
-    reason = "insert_rejected: " + e.sqlstate() + " " + e.what();
-  } catch (const std::exception &e) {
-    reason = std::string("insert_failed: ") + e.what();
+  } catch (...) {
+    reason = classifier_failure_reason(std::current_exception(), "insert_rejected: ",
+                                       "insert_failed: ", true);
   }
   reason = reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
   LOG(WARNING) << "Classification insert failed: " << reason;
@@ -136,17 +129,10 @@ bool insert_trace(pqxx::dbtransaction &txn, const TraceClassificationResult &tra
       st.account_rows += accounts;
       st.failed_traces += failed;
       return true;
-    } catch (const pqxx::broken_connection &) {
-      throw;
-    } catch (const pqxx::in_doubt_error &) {
-      throw;
-    } catch (const std::bad_alloc &) {
-      throw;
-    } catch (const pqxx::sql_error &e) {
-      if (!insert_rejected(e.sqlstate())) throw;
-      reason = "insert_rejected_unknown: " + e.sqlstate() + " " + e.what();
-    } catch (const std::exception &e) {
-      reason = std::string("insert_failed_unknown: ") + e.what();
+    } catch (...) {
+      reason = classifier_failure_reason(std::current_exception(),
+                                         "insert_rejected_unknown: ",
+                                         "insert_failed_unknown: ", true);
     }
   }
   ++st.rescue_rejected;

@@ -1,4 +1,5 @@
 #include "BuildRuntime.h"
+#include "LookupKinds.h"
 
 #include "BlockTree.h"
 #include "MsgParse.h"
@@ -222,14 +223,16 @@ Value CollectingLookupTable::get(const std::string &kind, const std::vector<Valu
 
 namespace {
 
-const std::set<std::string> kLookupKinds = {"jetton_wallet", "nft_item", "nominator_pool",
-                                            "jvault_assets", "dedust_pool", "nft_sale",
-                                            "nft_auction", "multisig_order", "code_hash",
-                                            "telemint_item"};
-
 }  // namespace
 
-const std::set<std::string> &lookup_kinds() { return kLookupKinds; }
+const std::set<std::string> &lookup_kinds() {
+  static const std::set<std::string> kinds = [] {
+    std::set<std::string> result;
+    for (const auto &kind : kLookupKindTable) result.emplace(kind.name);
+    return result;
+  }();
+  return kinds;
+}
 
 EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
                            const std::vector<Value> &args) {

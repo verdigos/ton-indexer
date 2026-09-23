@@ -29,7 +29,6 @@ matcher dns_purchase {
         payout_comment:           null
         price:                    amount(anchor.msg.value)
         real_prev_owner:          null
-        marketplace:              null
         marketplace_address:      null
     }
 }

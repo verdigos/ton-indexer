@@ -23,7 +23,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5109
       payout_amount: 4250000000
@@ -73,7 +72,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5153
       payout_amount: 4675000000
@@ -123,7 +121,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5108
       payout_amount: 4250000000
@@ -173,7 +170,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5157
       payout_amount: 4675000000
@@ -226,7 +222,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5109
       payout_amount: null
@@ -280,7 +275,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5153
       payout_amount: null
@@ -334,7 +328,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5108
       payout_amount: null
@@ -388,7 +381,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 5157
       payout_amount: null

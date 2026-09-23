@@ -45,7 +45,6 @@ actions:
     opcode: null
     nft_listing_data:
       full_price: null
-      marketplace: null
       marketplace_fee: null
       marketplace_fee_address: 0:BEE7A3D7B8C06F9552032C3880A56A74B702AD8B224F42BFB1AC1C33BD719080
       max_bid: 0
@@ -100,7 +99,6 @@ actions:
       forward_amount: 200000000
       forward_payload: cellhash:D31F5F3D199B31C755B1E3586DB1497C7167F125D5581C3D248D541BF0989D18
       is_purchase: false
-      marketplace: null
       marketplace_address: null
       nft_item_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
       payout_amount: null
@@ -153,7 +151,6 @@ actions:
       forward_amount: 0
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace: null
       marketplace_address: null
       nft_item_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
       payout_amount: null

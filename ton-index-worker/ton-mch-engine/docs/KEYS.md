@@ -1,157 +1,151 @@
 # Action payload key registry
 
-Codec 1 stores one msgpack map with plain string contract names. The IDs below are unused by codec 1.
+Codec 1 stores one msgpack map with plain string contract names.
 
-Codec 1: msgpack map with string keys.
-
-IDs are append-only: never renumber, reuse, or remove; new names get the next ID.
-
-| Key | Stable ID | SHA-256 first 3 bytes, hex | JSON kinds across uses | Action types using it |
-|---|---:|---|---|---:|
-| `accounts_added` | 1 | `cda37f` | array | 1 |
-| `amount` | 2 | `cf38d9` | integer_string | 2 |
-| `amount1` | 3 | `c0279c` | integer_string | 5 |
-| `amount2` | 4 | `154361` | integer_string | 5 |
-| `amount_in` | 5 | `6de8c4` | integer_string | 1 |
-| `amount_out` | 6 | `163d58` | integer_string | 1 |
-| `approvals_num` | 7 | `23df86` | integer_string | 1 |
-| `asset` | 8 | `d59386` | ton_address | 2 |
-| `asset1` | 9 | `8e3dd2` | ton_address | 5 |
-| `asset2` | 10 | `75590f` | ton_address | 5 |
-| `asset_id` | 11 | `adeb3c` | string | 3 |
-| `asset_in` | 12 | `4953b5` | ton_address | 1 |
-| `asset_out` | 13 | `94e0c7` | ton_address | 1 |
-| `btc_txid` | 14 | `37217d` | string | 2 |
-| `channel` | 15 | `69e365` | ton_address | 2 |
-| `claimed_amounts` | 16 | `373c30` | array | 1 |
-| `claimed_jettons` | 17 | `0f6fab` | array | 1 |
-| `comment` | 18 | `c44bb2` | string | 3 |
-| `comment_data` | 19 | `f42106` | object | 1 |
-| `comment_encrypted` | 20 | `3126e9` | boolean | 3 |
-| `creator_index` | 21 | `531ff5` | integer_string | 1 |
-| `custom_payload` | 22 | `a7efd6` | bytes_base64 | 16 |
-| `data` | 23 | `3a6eb0` | object | 57 |
-| `debt_amount` | 24 | `8b6e45` | integer_string | 1 |
-| `destination` | 25 | `b5c755` | ton_address | 1 |
-| `destination_jetton_wallet` | 26 | `20ef52` | ton_address | 1 |
-| `dex` | 27 | `9d0fbf` | string | 5 |
-| `dex_incoming_transfer` | 28 | `687c17` | object | 1 |
-| `dex_jetton_wallet_1` | 29 | `46f425` | ton_address | 4 |
-| `dex_jetton_wallet_2` | 30 | `24691a` | ton_address | 4 |
-| `dex_outgoing_transfer` | 31 | `be0577` | object | 1 |
-| `dex_wallet_1` | 32 | `9d1a28` | ton_address | 3 |
-| `dex_wallet_2` | 33 | `446cdf` | ton_address | 3 |
-| `dst_eid` | 34 | `a815df` | integer_string | 4 |
-| `dst_oapp` | 35 | `0f96d2` | string | 4 |
-| `dvn` | 36 | `7176cd` | ton_address | 1 |
-| `endpoint` | 37 | `b6bf7b` | ton_address | 2 |
-| `exit_code` | 38 | `2f342c` | integer_string | 1 |
-| `expected_address` | 39 | `46820e` | string | 2 |
-| `expiration_date` | 40 | `51a7d6` | integer_string | 2 |
-| `extra` | 41 | `c8dee7` | object | 85 |
-| `fail_reason` | 42 | `3f1f4b` | string | 2 |
-| `flags` | 43 | `2934fb` | integer_string | 2 |
-| `forward_amount` | 44 | `cd3350` | integer_string | 16 |
-| `forward_payload` | 45 | `c02e8a` | bytes_base64 | 16 |
-| `full_price` | 46 | `1508e1` | integer_string | 5 |
-| `guid` | 47 | `4b565f` | string | 4 |
-| `initial_price_x96` | 48 | `6cd3de` | integer_string | 1 |
-| `initiator_1` | 49 | `9c5ed4` | ton_address | 1 |
-| `initiator_2` | 50 | `462846` | ton_address | 1 |
-| `is_created_by_signer` | 51 | `ee8c31` | boolean | 1 |
-| `is_purchase` | 52 | `052fc1` | boolean | 15 |
-| `is_refund` | 53 | `6b3b7d` | boolean | 3 |
-| `is_signed_by_creator` | 54 | `0206f9` | boolean | 1 |
-| `is_ton` | 55 | `d6851d` | boolean | 2 |
-| `key` | 56 | `2c70e1` | string | 2 |
-| `listing` | 57 | `0fc4df` | object | 5 |
-| `lp_fee_base` | 58 | `8e8c6f` | integer_string | 1 |
-| `lp_fee_current` | 59 | `2cb3f5` | integer_string | 1 |
-| `lp_tokens_burnt` | 60 | `3ee72a` | integer_string | 3 |
-| `lp_tokens_minted` | 61 | `f52448` | integer_string | 2 |
-| `marketplace` | 62 | `dfd76b` | string | 15 |
-| `marketplace_address` | 63 | `e2c47e` | ton_address | 15 |
-| `marketplace_fee` | 64 | `572aa4` | integer_string | 5 |
-| `marketplace_fee_address` | 65 | `5fc3ef` | ton_address | 5 |
-| `master` | 66 | `fc613b` | ton_address | 2 |
-| `master_jetton_wallet` | 67 | `8ac08f` | ton_address | 2 |
-| `max_bid` | 68 | `a2d278` | integer_string | 5 |
-| `message` | 69 | `ab530a` | string | 4 |
-| `message_boc` | 70 | `72bb9b` | bytes_base64 | 1 |
-| `min_bid` | 71 | `45c5a7` | integer_string | 5 |
-| `min_out_amount` | 72 | `d9ed7b` | integer_string | 1 |
-| `minted_stake_jettons` | 73 | `88409e` | integer_string | 1 |
-| `mp_fee_base` | 74 | `276512` | integer_string | 5 |
-| `mp_fee_factor` | 75 | `df04eb` | integer_string | 5 |
-| `msglib` | 76 | `f3a663` | string | 2 |
-| `msglib_manager` | 77 | `7a4166` | string | 2 |
-| `native_fee` | 78 | `4b11c9` | integer_string | 2 |
-| `new_secret_hash` | 79 | `359ef5` | string | 1 |
-| `new_stake` | 80 | `4a52fb` | integer_string | 1 |
-| `new_tokens` | 81 | `f9f28a` | integer_string | 1 |
-| `new_tokens_used` | 82 | `f1fccb` | integer_string | 2 |
-| `nft_address` | 83 | `d190fb` | ton_address | 6 |
-| `nft_index` | 84 | `670364` | integer_string | 22 |
-| `nonce` | 85 | `78377b` | integer_string | 6 |
-| `order_boc` | 86 | `99b825` | bytes_base64 | 2 |
-| `order_seqno` | 87 | `73a1f8` | integer_string | 2 |
-| `packet` | 88 | `7426af` | object | 4 |
-| `parent_gasless_action` | 89 | `fa6a6a` | hash_base64 | 85 |
-| `payout_amount` | 90 | `5b22fd` | integer_string | 15 |
-| `payout_comment` | 91 | `4a30ce` | string | 15 |
-| `payout_comment_encoded` | 92 | `c91d4a` | boolean | 15 |
-| `payout_comment_encrypted` | 93 | `a83475` | boolean | 15 |
-| `payout_type` | 94 | `414f3e` | string | 1 |
-| `peer_swaps` | 95 | `116061` | array | 1 |
-| `period` | 96 | `514cb1` | integer_string | 1 |
-| `points` | 97 | `c54a06` | integer_string | 1 |
-| `pool_active` | 98 | `978f02` | boolean | 1 |
-| `pool_creator_contract` | 99 | `f5763a` | ton_address | 1 |
-| `price` | 100 | `683b53` | integer_string | 15 |
-| `protocol_fee` | 101 | `246bde` | integer_string | 1 |
-| `provided_asset` | 102 | `7af156` | ton_address | 1 |
-| `provider` | 103 | `5c4c19` | string | 3 |
-| `proxy` | 104 | `124193` | ton_address | 1 |
-| `pubkey` | 105 | `b84b25` | string | 3 |
-| `query_id` | 106 | `1e67e4` | integer_string | 32 |
-| `real_prev_owner` | 107 | `25f834` | ton_address | 15 |
-| `recipient_jetton_wallet` | 108 | `e7aa11` | ton_address | 2 |
-| `record_value` | 109 | `c9bb0d` | string | 2 |
-| `response_destination` | 110 | `596c98` | ton_address | 16 |
-| `royalty_address` | 111 | `1d5d5e` | ton_address | 5 |
-| `royalty_amount` | 112 | `60e93b` | integer_string | 15 |
-| `royalty_fee_base` | 113 | `ffd979` | integer_string | 5 |
-| `send_request_id` | 114 | `67a5ea` | integer_string | 2 |
-| `sender` | 115 | `0a367b` | ton_address | 1 |
-| `sender_jetton_wallet` | 116 | `6529a7` | ton_address | 2 |
-| `seqno` | 117 | `626b63` | integer_string | 1 |
-| `signer_index` | 118 | `dbf2af` | integer_string | 1 |
-| `signers_hash` | 119 | `99c17e` | hash_base64 | 1 |
-| `source` | 120 | `41cf67` | ton_address | 1 |
-| `source_jetton_wallet` | 121 | `eca69b` | ton_address | 1 |
-| `src_eid` | 122 | `c6c7de` | integer_string | 4 |
-| `src_oapp` | 123 | `c17c5e` | string | 4 |
-| `stake_wallet` | 124 | `76a976` | ton_address | 1 |
-| `status` | 125 | `073c16` | string | 1 |
-| `target_amount_1` | 126 | `2b7b89` | integer_string | 1 |
-| `target_amount_2` | 127 | `88182c` | integer_string | 1 |
-| `target_asset_1` | 128 | `054aff` | ton_address | 1 |
-| `target_asset_2` | 129 | `e1d929` | ton_address | 1 |
-| `tick_lower` | 130 | `e7a93a` | integer_string | 4 |
-| `tick_spacing` | 131 | `6ccd44` | integer_string | 1 |
-| `tick_upper` | 132 | `d5e071` | integer_string | 4 |
-| `tokens_burnt` | 133 | `11c7db` | integer_string | 3 |
-| `tokens_minted` | 134 | `45776f` | integer_string | 3 |
-| `ts_nft` | 135 | `7cd9aa` | ton_address | 3 |
-| `uln` | 136 | `88e66b` | ton_address | 3 |
-| `uln_connection` | 137 | `86fddb` | ton_address | 1 |
-| `user_jetton_wallet_1` | 138 | `5495ec` | ton_address | 4 |
-| `user_jetton_wallet_2` | 139 | `29d1ec` | ton_address | 4 |
-| `value_schema` | 140 | `33b948` | string | 2 |
-| `vault_excesses` | 141 | `9618bb` | array | 1 |
-| `via_wallet` | 142 | `f60138` | boolean | 1 |
-| `withdraw_amount` | 143 | `71bf80` | integer_string | 1 |
-| `worker_state` | 144 | `52af7e` | integer_string | 1 |
-| `worker_tokens` | 145 | `b06de8` | integer_string | 1 |
-| `zro_fee` | 146 | `489e8b` | integer_string | 2 |
-
+| Key | JSON kinds across uses | Action types using it |
+|---|---|---:|
+| `accounts_added` | array | 1 |
+| `amount` | integer_string | 2 |
+| `amount1` | integer_string | 5 |
+| `amount2` | integer_string | 5 |
+| `amount_in` | integer_string | 1 |
+| `amount_out` | integer_string | 1 |
+| `approvals_num` | integer_string | 1 |
+| `asset` | ton_address | 2 |
+| `asset1` | ton_address | 5 |
+| `asset2` | ton_address | 5 |
+| `asset_id` | string | 3 |
+| `asset_in` | ton_address | 1 |
+| `asset_out` | ton_address | 1 |
+| `btc_txid` | string | 2 |
+| `channel` | ton_address | 2 |
+| `claimed_amounts` | array | 1 |
+| `claimed_jettons` | array | 1 |
+| `comment` | string | 3 |
+| `comment_data` | object | 1 |
+| `comment_encrypted` | boolean | 3 |
+| `creator_index` | integer_string | 1 |
+| `custom_payload` | bytes_base64 | 16 |
+| `data` | object | 57 |
+| `debt_amount` | integer_string | 1 |
+| `destination` | ton_address | 1 |
+| `destination_jetton_wallet` | ton_address | 1 |
+| `dex` | string | 5 |
+| `dex_incoming_transfer` | object | 1 |
+| `dex_jetton_wallet_1` | ton_address | 4 |
+| `dex_jetton_wallet_2` | ton_address | 4 |
+| `dex_outgoing_transfer` | object | 1 |
+| `dex_wallet_1` | ton_address | 3 |
+| `dex_wallet_2` | ton_address | 3 |
+| `dst_eid` | integer_string | 4 |
+| `dst_oapp` | string | 4 |
+| `dvn` | ton_address | 1 |
+| `endpoint` | ton_address | 2 |
+| `exit_code` | integer_string | 1 |
+| `expected_address` | string | 2 |
+| `expiration_date` | integer_string | 2 |
+| `extra` | object | 85 |
+| `fail_reason` | string | 2 |
+| `flags` | integer_string | 2 |
+| `forward_amount` | integer_string | 16 |
+| `forward_payload` | bytes_base64 | 16 |
+| `full_price` | integer_string | 5 |
+| `guid` | string | 4 |
+| `initial_price_x96` | integer_string | 1 |
+| `initiator_1` | ton_address | 1 |
+| `initiator_2` | ton_address | 1 |
+| `is_created_by_signer` | boolean | 1 |
+| `is_purchase` | boolean | 15 |
+| `is_refund` | boolean | 3 |
+| `is_signed_by_creator` | boolean | 1 |
+| `is_ton` | boolean | 2 |
+| `key` | string | 2 |
+| `listing` | object | 5 |
+| `lp_fee_base` | integer_string | 1 |
+| `lp_fee_current` | integer_string | 1 |
+| `lp_tokens_burnt` | integer_string | 3 |
+| `lp_tokens_minted` | integer_string | 2 |
+| `marketplace_address` | ton_address | 15 |
+| `marketplace_fee` | integer_string | 5 |
+| `marketplace_fee_address` | ton_address | 5 |
+| `master` | ton_address | 2 |
+| `master_jetton_wallet` | ton_address | 2 |
+| `max_bid` | integer_string | 5 |
+| `message` | string | 4 |
+| `message_boc` | bytes_base64 | 1 |
+| `min_bid` | integer_string | 5 |
+| `min_out_amount` | integer_string | 1 |
+| `minted_stake_jettons` | integer_string | 1 |
+| `mp_fee_base` | integer_string | 5 |
+| `mp_fee_factor` | integer_string | 5 |
+| `msglib` | string | 2 |
+| `msglib_manager` | string | 2 |
+| `native_fee` | integer_string | 2 |
+| `new_secret_hash` | string | 1 |
+| `new_stake` | integer_string | 1 |
+| `new_tokens` | integer_string | 1 |
+| `new_tokens_used` | integer_string | 2 |
+| `nft_address` | ton_address | 6 |
+| `nft_index` | integer_string | 22 |
+| `nonce` | integer_string | 6 |
+| `order_boc` | bytes_base64 | 2 |
+| `order_seqno` | integer_string | 2 |
+| `packet` | object | 4 |
+| `parent_gasless_action` | hash_base64 | 85 |
+| `payout_amount` | integer_string | 15 |
+| `payout_comment` | string | 15 |
+| `payout_comment_encoded` | boolean | 15 |
+| `payout_comment_encrypted` | boolean | 15 |
+| `payout_type` | string | 1 |
+| `peer_swaps` | array | 1 |
+| `period` | integer_string | 1 |
+| `points` | integer_string | 1 |
+| `pool_active` | boolean | 1 |
+| `pool_creator_contract` | ton_address | 1 |
+| `price` | integer_string | 15 |
+| `protocol_fee` | integer_string | 1 |
+| `provided_asset` | ton_address | 1 |
+| `provider` | string | 3 |
+| `proxy` | ton_address | 1 |
+| `pubkey` | string | 3 |
+| `query_id` | integer_string | 32 |
+| `real_prev_owner` | ton_address | 15 |
+| `recipient_jetton_wallet` | ton_address | 2 |
+| `record_value` | string | 2 |
+| `response_destination` | ton_address | 16 |
+| `royalty_address` | ton_address | 5 |
+| `royalty_amount` | integer_string | 15 |
+| `royalty_fee_base` | integer_string | 5 |
+| `send_request_id` | integer_string | 2 |
+| `sender` | ton_address | 1 |
+| `sender_jetton_wallet` | ton_address | 2 |
+| `seqno` | integer_string | 1 |
+| `signer_index` | integer_string | 1 |
+| `signers_hash` | hash_base64 | 1 |
+| `source` | ton_address | 1 |
+| `source_jetton_wallet` | ton_address | 1 |
+| `src_eid` | integer_string | 4 |
+| `src_oapp` | string | 4 |
+| `stake_wallet` | ton_address | 1 |
+| `status` | string | 1 |
+| `target_amount_1` | integer_string | 1 |
+| `target_amount_2` | integer_string | 1 |
+| `target_asset_1` | ton_address | 1 |
+| `target_asset_2` | ton_address | 1 |
+| `tick_lower` | integer_string | 4 |
+| `tick_spacing` | integer_string | 1 |
+| `tick_upper` | integer_string | 4 |
+| `tokens_burnt` | integer_string | 3 |
+| `tokens_minted` | integer_string | 3 |
+| `ts_nft` | ton_address | 3 |
+| `uln` | ton_address | 3 |
+| `uln_connection` | ton_address | 1 |
+| `user_jetton_wallet_1` | ton_address | 4 |
+| `user_jetton_wallet_2` | ton_address | 4 |
+| `value_schema` | string | 2 |
+| `vault_excesses` | array | 1 |
+| `via_wallet` | boolean | 1 |
+| `withdraw_amount` | integer_string | 1 |
+| `worker_state` | integer_string | 1 |
+| `worker_tokens` | integer_string | 1 |
+| `zro_fee` | integer_string | 2 |

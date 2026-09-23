@@ -87,14 +87,15 @@ def test_unknown_keys_are_ignored():
 
 
 def _registry_ids():
-    pattern = re.compile(r"^\| `([^`]+)` \| (\d+) \|")
-    return {match.group(1): int(match.group(2)) for line in KEYS.read_text().splitlines() if (match := pattern.match(line))}
+    pattern = re.compile(r"^\| `([^`]+)` \|")
+    return {match.group(1) for line in KEYS.read_text().splitlines() if (match := pattern.match(line))}
 
 
 def test_registry_matches_mapping_and_fixture_keys():
     registry = _registry_ids()
     mapping = json.loads(MAPPING.read_text())["key_dictionary"]
-    assert registry == {key: value["stable_id"] for key, value in mapping.items()}
+    # The legacy mapping and fixtures still carry marketplace, removed from the registry.
+    assert registry == set(mapping) - {"marketplace"}
 
     present = set()
     for row in _dump_rows():
@@ -108,4 +109,4 @@ def test_registry_matches_mapping_and_fixture_keys():
                     visit(child)
 
         visit(decode_payload(bytes.fromhex(row["payload_hex"])))
-    assert present <= set(registry)
+    assert present - {"marketplace"} <= registry

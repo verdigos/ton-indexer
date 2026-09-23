@@ -4,6 +4,7 @@
 #include "CelldbTier2LookupTest.h"
 
 #include "TieredLookupSource.h"
+#include "LookupKinds.h"
 #include "Value.h"
 #include "CelldbTier2Lookup.h"
 #include "DetectorInterfaceAdapter.h"
@@ -14,11 +15,13 @@
 #include "vm/cells/CellBuilder.h"
 #include "td/utils/logging.h"
 
+#include <array>
 #include <cstdio>
 #include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <variant>
 #include <vector>
@@ -516,6 +519,25 @@ void test_memo_and_guards() {
   }
 }
 
+void test_lookup_kind_registry() {
+  check("registry/table_valid", lookup_kind_table_valid());
+  constexpr std::array<std::string_view, 10> expected_kinds{
+      "jetton_wallet", "nft_item", "nft_sale", "nft_auction", "dedust_pool",
+      "nominator_pool", "multisig_order", "telemint_item", "jvault_assets", "code_hash"};
+  bool all_kinds_registered = lookup_kinds().size() == expected_kinds.size();
+  for (const auto kind : expected_kinds) {
+    all_kinds_registered = all_kinds_registered && lookup_kind(kind) != nullptr;
+  }
+  check("registry/expected_kinds_registered", all_kinds_registered);
+  const auto *telemint = lookup_kind("telemint_item");
+  check("registry/telemint_item_tier1_only",
+        telemint != nullptr && telemint->tier1 && !telemint->tier2);
+  Fixture f;
+  auto t = f.make();
+  check("registry/telemint_item_tier2_miss",
+        t.fetch("telemint_item", {Value::make_str(raw_of('A'))}).is_null() && f.reads == 0);
+}
+
 void test_account_lookup_states() {
   const std::vector<Value> arg{Value::make_str(raw_of('A'))};
   for (int behavior = 0; behavior < 3; behavior++) {
@@ -724,6 +746,7 @@ int run_celldb_tier2_test() {
   test_jvault_parsers();
   test_jvault_hook();
   test_memo_and_guards();
+  test_lookup_kind_registry();
   test_two_tier_routing();
   test_tier1_authoritative_miss();
   test_account_lookup_states();

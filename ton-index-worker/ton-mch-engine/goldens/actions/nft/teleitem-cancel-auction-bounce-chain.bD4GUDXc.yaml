@@ -78,7 +78,6 @@ actions:
       forward_amount: null
       forward_payload: null
       is_purchase: null
-      marketplace: null
       marketplace_address: null
       nft_item_index: null
       payout_amount: null

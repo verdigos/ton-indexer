@@ -78,7 +78,6 @@ actions:
       forward_amount: null
       forward_payload: cellhash:75FD71EC954E2F5D90A71AF260BD5BBA8304B3317EF37D4E35C3BDDA25E5A6E6
       is_purchase: true
-      marketplace: null
       marketplace_address: null
       nft_item_index: "53633955073287565867731672480849533865439820536360006364677515640351333243842"
       payout_amount: 5699311122
@@ -130,7 +129,6 @@ actions:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace: null
       marketplace_address: null
       nft_item_index: "53633955073287565867731672480849533865439820536360006364677515640351333243842"
       payout_amount: null

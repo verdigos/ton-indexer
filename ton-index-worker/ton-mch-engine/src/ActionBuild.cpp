@@ -206,7 +206,6 @@ void fill_nft_transfer(const Value &d, Action &a) {
   f.emplace_back("forward_payload", dg(d, "forward_payload"));
   Value resp = dg(d, "response_destination");
   f.emplace_back("response_destination", av_addr(resp));
-  f.emplace_back("marketplace", dg(d, "marketplace"));
   f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
   f.emplace_back("real_prev_owner", av_addr(dg(d, "real_prev_owner")));
   f.emplace_back("payout_amount", av_amount(dg(d, "payout_amount")));
@@ -1248,7 +1247,6 @@ void fill_nft_purchase(const Value &d, Action &a) {
   f.emplace_back("custom_payload", dg(d, "custom_payload"));
   f.emplace_back("forward_payload", dg(d, "forward_payload"));
   f.emplace_back("response_destination", av_addr(dg(d, "response_destination")));
-  f.emplace_back("marketplace", dg(d, "marketplace"));
   f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
   f.emplace_back("real_prev_owner", av_addr(dg(d, "real_prev_owner")));
   f.emplace_back("payout_amount", av_amount(dg(d, "payout_amount")));
@@ -1272,7 +1270,6 @@ void fill_dns_release(const Value &d, Action &a) {
   t.emplace_back("custom_payload", Value::null());
   t.emplace_back("forward_payload", Value::null());
   t.emplace_back("response_destination", Value::null());
-  t.emplace_back("marketplace", Value::null());
   t.emplace_back("marketplace_address", Value::null());
   t.emplace_back("real_prev_owner", Value::null());
   t.emplace_back("payout_amount", Value::null());
@@ -1301,7 +1298,6 @@ void fill_nft_put_on_auction(const Value &d, Action &a) {
   l.emplace_back("max_bid", av_amount(dg(d, "max_bid")));
   l.emplace_back("min_bid", av_amount(dg(d, "min_bid")));
   l.emplace_back("marketplace_fee_address", av_addr(dg(d, "mp_fee_address")));
-  l.emplace_back("marketplace", dg(d, "marketplace"));
   l.emplace_back("royalty_address", av_addr(dg(d, "royalty_fee_addr")));
   // Sale fields are deliberately null on auction listings.
   l.emplace_back("full_price", Value::null());
@@ -1329,7 +1325,6 @@ void fill_cancel_nft_trade(const Value &d, Action &a) {
   f.emplace_back("custom_payload", Value::null());
   f.emplace_back("forward_payload", Value::null());
   f.emplace_back("response_destination", Value::null());
-  f.emplace_back("marketplace", Value::null());
   f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
   f.emplace_back("real_prev_owner", Value::null());
   f.emplace_back("payout_amount", Value::null());
@@ -1359,7 +1354,6 @@ void fill_nft_put_on_sale(const Value &d, Action &a) {
   l.emplace_back("marketplace_fee", av_amount(dg(d, "marketplace_fee")));
   l.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
   l.emplace_back("marketplace_fee_address", av_addr(dg(d, "marketplace_fee_address")));
-  l.emplace_back("marketplace", dg(d, "marketplace"));
   l.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
   // Auction fields are deliberately null on sale listings.
   l.emplace_back("mp_fee_factor", Value::null());
@@ -1382,7 +1376,6 @@ void fill_sale_update(const Value &d, Action &a) {
   l.emplace_back("marketplace_fee", av_amount(dg(d, "new_marketplace_fee")));
   l.emplace_back("royalty_amount", av_amount(dg(d, "new_royalty_amount")));
   l.emplace_back("marketplace_fee_address", Value::null());
-  l.emplace_back("marketplace", Value::null());
   l.emplace_back("royalty_address", Value::null());
   l.emplace_back("mp_fee_factor", Value::null());
   l.emplace_back("mp_fee_base", Value::null());
@@ -1399,7 +1392,6 @@ void fill_sale_update(const Value &d, Action &a) {
   t.emplace_back("custom_payload", Value::null());
   t.emplace_back("forward_payload", Value::null());
   t.emplace_back("response_destination", Value::null());
-  t.emplace_back("marketplace", Value::null());
   t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
   t.emplace_back("real_prev_owner", Value::null());
   t.emplace_back("payout_amount", Value::null());
@@ -1418,7 +1410,6 @@ void fill_auction_bid(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "nft_collection"));
   Value::Fields t;
   t.emplace_back("nft_item_index", dg(d, "nft_item_index"));
-  t.emplace_back("marketplace", Value::null());
   a.nft_transfer_data = mkdict(std::move(t));
   push_account(a, a.asset_secondary);
   a.value = dg(d, "amount");  // raw int, not av_amount
@@ -1431,7 +1422,6 @@ void fill_auction_outbid(const Value &d, Action &a) {
   a.asset_secondary = av_addr(dg(d, "nft"));
   a.asset = av_addr(dg(d, "nft_collection"));
   Value::Fields t;
-  t.emplace_back("marketplace", Value::null());
   a.nft_transfer_data = mkdict(std::move(t));
   a.amount = av_amount(dg(d, "amount"));
   Value::Fields tt;
@@ -1454,7 +1444,6 @@ void fill_nft_discovery(const Value &d, Action &a) {
   t.emplace_back("custom_payload", Value::null());
   t.emplace_back("forward_payload", Value::null());
   t.emplace_back("response_destination", Value::null());
-  t.emplace_back("marketplace", Value::null());
   t.emplace_back("marketplace_address", Value::null());
   t.emplace_back("real_prev_owner", Value::null());
   t.emplace_back("payout_amount", Value::null());

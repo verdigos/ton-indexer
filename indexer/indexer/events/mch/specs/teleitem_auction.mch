@@ -26,7 +26,6 @@ matcher teleitem_start_auction {
         listing_address:     null
         auction_address:     item
         marketplace_address: null
-        marketplace:         null
         mp_fee_address:      account(auction.body.config.ref.beneficiary_address)
         mp_fee_factor:       amount(0)
         mp_fee_base:         amount(0)

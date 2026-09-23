@@ -48,7 +48,6 @@ actions:
     opcode: null
     nft_listing_data:
       full_price: 10000000000000000
-      marketplace: null
       marketplace_fee: 500000000000000
       marketplace_fee_address: null
       max_bid: null
@@ -64,7 +63,6 @@ actions:
       forward_amount: null
       forward_payload: null
       is_purchase: null
-      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: null
       payout_amount: null

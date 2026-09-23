@@ -17,6 +17,15 @@ predicate sale_contract_deploy
 
 fn optional_address(a) = null if a == addr_none() else a
 
+fn mp(a) = account(a) ?? addr_none()
+
+fn finish_auction_result(nft_address, nft_collection, owner, trade_contract) = {
+    nft_address:      nft_address
+    nft_collection:   nft_collection
+    owner:            owner
+    trade_contract:   trade_contract
+}
+
 fn sale_result(d, v4r1) = null if d == null else {
     full_price:              d.full_price
     marketplace_address:     optional_address(d.marketplace_address)
@@ -73,7 +82,7 @@ matcher nft_update_sale {
         new_full_price:      amount(upd.body.new_full_price)
         new_marketplace_fee: amount(upd.body.new_mp_fee)
         new_royalty_amount:  amount(upd.body.new_royalty_amount)
-        marketplace_address: account(sale.marketplace_address) ?? addr_none()
+        marketplace_address: mp(sale.marketplace_address)
     }
 }
 
@@ -115,8 +124,7 @@ matcher nft_put_on_sale {
             listing_address:         account(listing.data.new_owner) ?? addr_none()
             sale_address:            sale_init.msg.destination ?? addr_none()
             full_price:              amount(sd.full_price)
-            marketplace_address:     account(sd.marketplace_address) ?? addr_none()
-            marketplace:             null
+            marketplace_address:     mp(sd.marketplace_address)
             marketplace_fee_address: account(sd.marketplace_fee_address) ?? addr_none()
             marketplace_fee:         amount(sd.marketplace_fee)
             royalty_address:         account(sd.royalty_address) ?? addr_none()
@@ -129,8 +137,7 @@ matcher nft_put_on_sale {
             owner:               account(auction.nft_owner) ?? addr_none()
             listing_address:     account(listing.data.new_owner) ?? addr_none()
             auction_address:     sale_init.msg.destination ?? addr_none()
-            marketplace_address: account(auction.mp_addr) ?? addr_none()
-            marketplace:         null
+            marketplace_address: mp(auction.mp_addr)
             mp_fee_address:      account(ad.mp_fee_addr)
             mp_fee_factor:       amount(ad.mp_fee_factor)
             mp_fee_base:         amount(ad.mp_fee_base)
@@ -270,7 +277,7 @@ matcher nft_cancel_sale {
         nft_collection:      ret.data.nft.collection.address
         owner:               ret.data.new_owner
         trade_contract:      cancel.msg.destination ?? addr_none()
-        marketplace_address: account(sale.marketplace_address) ?? addr_none()
+        marketplace_address: mp(sale.marketplace_address)
     }
 }
 
@@ -288,12 +295,13 @@ matcher nft_finish_auction {
     require auction = getgems_auction(cancel.msg.destination)
     reject when account(ret.data.nft_address) != account(auction.nft_addr)
     failed when tx_failed(cancel)
+    let finish = finish_auction_result(ret.data.nft_address, ret.data.collection_address, ret.data.new_owner, cancel.msg.destination ?? addr_none())
     out {
-        nft_address:         ret.data.nft_address
-        nft_collection:      ret.data.collection_address
-        owner:               ret.data.new_owner
-        trade_contract:      cancel.msg.destination ?? addr_none()
-        marketplace_address: account(auction.mp_addr) ?? addr_none()
+        nft_address:         finish.nft_address
+        nft_collection:      finish.nft_collection
+        owner:               finish.owner
+        trade_contract:      finish.trade_contract
+        marketplace_address: mp(auction.mp_addr)
     }
 }
 
@@ -312,21 +320,22 @@ matcher nft_cancel_auction {
     require auction = getgems_auction(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(auction.nft_addr)
     failed when tx_failed(cancel)
+    let finish = finish_auction_result(ret.data.nft.address, ret.data.nft.collection.address, ret.data.new_owner, cancel.msg.destination ?? addr_none())
 
     produces switch {
         when (cancel.btype == "ton_transfer" and (cancel.data.comment in ["finish", "stop"])) or (cancel.btype == "call_contract" and (cancel.data.opcode in [0xB95616B6, 0x20C9EB18])) => nft_finish_auction out {
-            nft_address:         ret.data.nft.address
-            nft_collection:      ret.data.nft.collection.address
-            owner:               ret.data.new_owner
-            trade_contract:      cancel.msg.destination ?? addr_none()
-            marketplace_address: account(auction.mp_addr) ?? addr_none()
+            nft_address:         finish.nft_address
+            nft_collection:      finish.nft_collection
+            owner:               finish.owner
+            trade_contract:      finish.trade_contract
+            marketplace_address: mp(auction.mp_addr)
         }
         else => nft_cancel_auction out {
-            nft_address:         ret.data.nft.address
-            nft_collection:      ret.data.nft.collection.address
-            owner:               ret.data.new_owner
-            trade_contract:      cancel.msg.destination ?? addr_none()
-            marketplace_address: account(auction.mp_addr) ?? addr_none()
+            nft_address:         finish.nft_address
+            nft_collection:      finish.nft_collection
+            owner:               finish.owner
+            trade_contract:      finish.trade_contract
+            marketplace_address: mp(auction.mp_addr)
         }
     }
 }

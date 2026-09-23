@@ -1,0 +1,37 @@
+#pragma once
+
+#include "ClassifierWriter.h"
+
+#include <exception>
+#include <new>
+#include <string>
+#include <string_view>
+
+namespace mch {
+
+inline std::string classifier_failure_reason(std::exception_ptr error,
+                                             std::string_view sql_prefix,
+                                             std::string_view exception_prefix,
+                                             bool classify_insert_sql_error = false) {
+  auto bounded = [](std::string reason) {
+    return reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
+  };
+  try {
+    std::rethrow_exception(error);
+  } catch (const pqxx::broken_connection &) {
+    throw;
+  } catch (const pqxx::in_doubt_error &) {
+    throw;
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (const pqxx::sql_error &e) {
+    if (!classify_insert_sql_error || !insert_rejected(e.sqlstate())) throw;
+    return bounded(std::string(sql_prefix) + e.sqlstate() + " " + e.what());
+  } catch (const std::exception &e) {
+    return bounded(std::string(exception_prefix) + e.what());
+  } catch (...) {
+    return bounded(std::string(exception_prefix) + "unknown exception");
+  }
+}
+
+}  // namespace mch

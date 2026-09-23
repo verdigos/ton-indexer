@@ -2,6 +2,7 @@
 
 #include "DetectorInterfaceAdapter.h"
 #include "JvaultLookup.h"
+#include "LookupKinds.h"
 
 #include "smc-interfaces/Multisig.h"
 #include "smc-interfaces/NominatorPool.h"
@@ -15,6 +16,7 @@
 
 #include <exception>
 #include <map>
+#include <new>
 #include <utility>
 
 namespace mch {
@@ -57,6 +59,8 @@ const schema::AccountState *CelldbTier2Lookup::account(const block::StdAddress &
     } else {
       state = r.move_as_ok();
     }
+  } catch (const std::bad_alloc &) {
+    throw;
   } catch (const vm::VmError &e) {
     LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
                  << " status=exception: " << e.get_msg();
@@ -86,33 +90,18 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       fault_logged = true;
     }
   };
-  enum class Handler {
-    JvaultAssets,
-    JettonWallet,
-    DedustPool,
-    NominatorPool,
-    CodeHash,
-    NftItem,
-    NftAuction,
-    NftSale,
-    MultisigOrder,
-  };
-  static const std::map<std::string, Handler> handlers = {
-      {"jvault_assets", Handler::JvaultAssets},
-      {"jetton_wallet", Handler::JettonWallet},
-      {"dedust_pool", Handler::DedustPool},
-      {"nominator_pool", Handler::NominatorPool},
-      {"code_hash", Handler::CodeHash},
-      {"nft_item", Handler::NftItem},
-      {"nft_auction", Handler::NftAuction},
-      {"nft_sale", Handler::NftSale},
-      {"multisig_order", Handler::MultisigOrder},
-  };
+  static const std::map<std::string, LookupHandler> handlers = [] {
+    std::map<std::string, LookupHandler> result;
+    for (const auto &kind : kLookupKindTable) {
+      if (kind.tier2) result.emplace(kind.name, kind.handler);
+    }
+    return result;
+  }();
   auto handler = handlers.find(kind);
   if (handler == handlers.end()) {
     return Value::null();
   }
-  if (handler->second == Handler::JvaultAssets) {
+  if (handler->second == LookupHandler::JvaultAssets) {
     return jvault_assets(addr);
   }
 
@@ -124,7 +113,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
   // Detectors that execute get-methods require config.
   std::optional<schema::BlockchainInterfaceV2> iface;
   switch (handler->second) {
-    case Handler::NftItem: {
+    case LookupHandler::NftItem: {
       if (config_ == nullptr) {
         return Value::null();
       }
@@ -136,7 +125,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
-    case Handler::NftAuction: {
+    case LookupHandler::NftAuction: {
       if (config_ == nullptr) {
         return Value::null();
       }
@@ -148,7 +137,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
-    case Handler::JettonWallet: {
+    case LookupHandler::JettonWallet: {
       if (config_ == nullptr) {
         return Value::null();
       }
@@ -160,7 +149,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
-    case Handler::DedustPool: {
+    case LookupHandler::DedustPool: {
       if (config_ == nullptr) {
         return Value::null();
       }
@@ -172,7 +161,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
-    case Handler::NominatorPool: {
+    case LookupHandler::NominatorPool: {
       auto r = NominatorPoolContract::detect(addr, st->code, st->data);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
@@ -181,10 +170,10 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
-    case Handler::CodeHash:
+    case LookupHandler::CodeHash:
       return st->code.is_null() ? Value::null()
                                 : Value::make_str(td::base64_encode(st->code->get_hash().as_slice()));
-    case Handler::NftSale: {
+    case LookupHandler::NftSale: {
       if (config_ == nullptr && !nft_sale_v4_detector_) {
         return Value::null();
       }
@@ -203,7 +192,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
-    case Handler::MultisigOrder: {
+    case LookupHandler::MultisigOrder: {
       if (config_ == nullptr) {
         return Value::null();
       }
@@ -215,7 +204,8 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       break;
     }
-    case Handler::JvaultAssets:
+    case LookupHandler::JvaultAssets:
+    case LookupHandler::TelemintItem:
       break;
   }
   if (!iface) {
@@ -288,6 +278,8 @@ Value CelldbTier2Lookup::fetch(const std::string &kind, const std::vector<Value>
   Value v;
   try {
     v = resolve(kind, addr);
+  } catch (const std::bad_alloc &) {
+    throw;
   } catch (const vm::VmError &e) {
     LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
                  << " address=" << raw_address(addr) << " status=exception: " << e.get_msg();

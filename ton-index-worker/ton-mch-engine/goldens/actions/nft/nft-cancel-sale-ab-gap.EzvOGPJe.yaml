@@ -51,7 +51,6 @@ actions:
       forward_amount: null
       forward_payload: null
       is_purchase: null
-      marketplace: null
       marketplace_address: 0:6EAE12B6CB0BE7566B822BED6114D7807910F86FAF471B04704E5B682F359048
       nft_item_index: null
       payout_amount: null
@@ -99,7 +98,6 @@ actions:
       forward_amount: 0
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace: null
       marketplace_address: null
       nft_item_index: 2649
       payout_amount: null

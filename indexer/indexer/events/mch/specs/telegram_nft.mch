@@ -33,7 +33,6 @@ matcher telegram_nft_purchase {
         nft:                  d.nft
         real_prev_owner:      null
         price:                amount(d.bid) if d.is_bid else null
-        marketplace:          null
         payout_amount:        get(seller.data, "value")
         payout_address:       get(seller.data, "destination")
         royalty_amount?:      get(royalty.data, "value")
@@ -71,7 +70,6 @@ matcher telegram_nft_assigned {
             nft:                  d.nft
             real_prev_owner:      null
             price:                amount(d.bid)
-            marketplace:          null
             payout_amount?:       get(seller.data, "value")
             payout_address?:      get(seller.data, "destination")
             royalty_amount?:      get(royalty.data, "value")
