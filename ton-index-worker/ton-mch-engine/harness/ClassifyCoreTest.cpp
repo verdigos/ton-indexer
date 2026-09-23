@@ -2,6 +2,7 @@
 #include "ClassifyCoreTest.h"
 
 #include "BlockTree.h"
+#include "CelldbTier2Lookup.h"
 #include "ClassifyCore.h"
 #include "ExprRuntime.h"
 #include "EnginePrep.h"
@@ -12,7 +13,6 @@
 #include "IrTables.h"
 #include "TraceModel.h"
 #include "fixtures/FixtureLookupSource.h"
-#include "fixtures/FixtureLoader.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -21,8 +21,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <filesystem>
-#include <map>
 #include <memory>
 #include <new>
 #include <optional>
@@ -129,6 +127,16 @@ BuildOutcome successful_build(BuildEnv &env) {
   g_success_calls++;
   g_rejected_anchor_stayed_unconsumed &= env.anchor->parent == nullptr;
   return BuildOutcome::accepted();
+}
+
+const std::string kUncoveredWorkchainAddress = "1:" + std::string(64, 'A');
+
+BuildOutcome uncovered_workchain_lookup_build(BuildEnv &env) {
+  EvalResult lookup = rt_lookup_build(
+      env, "nominator_pool", {Value::make_str(kUncoveredWorkchainAddress)});
+  if (lookup.faulted) return BuildOutcome::rejected(lookup.message);
+  return lookup.value.is_null() ? BuildOutcome::rejected("nominator pool lookup missed")
+                                : BuildOutcome::accepted();
 }
 
 BuildOutcome serious_host_build(BuildEnv &env) {
@@ -634,79 +642,75 @@ void test_schema_tick_tock() {
         pair.outcome != TraceOutcome::skipped_lone_tick_tock);
 }
 
-void test_schema_history_precedence() {
-  const auto fixture = std::filesystem::path(__FILE__).parent_path() /
-      "../../../indexer/tests/traces/CFl6PQXQyJ4FQFj9YsZwblnCg3m8Po9wuiBmrR4zGz4=.lz4";
-  auto loaded = load_trace(fixture.string());
-  check("schema/history/fixture_loaded", loaded.is_ok());
-  if (loaded.is_error()) return;
-  auto trace = loaded.move_as_ok();
-  check("schema/history/fixture_nonempty", !trace.transactions.empty());
-  if (trace.transactions.empty()) return;
-  auto hash = [](const std::string &encoded) {
-    auto bytes = td::base64_decode(encoded).move_as_ok();
-    td::Bits256 value;
-    value.as_slice().copy_from(td::Slice(bytes));
-    return value;
+void test_tier2_uncovered_workchain_miss_preserves_trace() {
+  std::vector<CompiledMatcher> matchers{
+      test_matcher("uncovered-workchain-lookup", 0),
   };
-  const std::map<std::string, schema::AccountStatus> statuses{
-      {"active", schema::AccountStatus::active}, {"uninit", schema::AccountStatus::uninit},
-      {"frozen", schema::AccountStatus::frozen}, {"nonexist", schema::AccountStatus::nonexist}};
-  std::vector<schema::Transaction> txs;
-  for (const auto &tx : trace.transactions) {
-    schema::Transaction st{};
-    st.hash = hash(tx->hash);
-    st.account = block::StdAddress::parse(td::Slice(tx->account)).move_as_ok();
-    st.lt = tx->lt;
-    st.now = tx->now;
-    st.mc_seqno = tx->mc_block_seqno;
-    st.orig_status = statuses.at(tx->orig_status);
-    st.end_status = statuses.at(tx->end_status);
-    schema::TransactionDescr_ord descr{};
-    schema::TrComputePhase_vm compute{};
-    compute.exit_code = tx->compute_exit_code.value_or(0);
-    descr.compute_ph = compute;
-    if (tx->skipped_reason) {
-      const std::map<std::string, schema::ComputeSkipReason> reasons{
-          {"no_state", schema::cskip_no_state}, {"bad_state", schema::cskip_bad_state},
-          {"no_gas", schema::cskip_no_gas}, {"suspended", schema::cskip_suspended}};
-      descr.compute_ph = schema::TrComputePhase_skipped{reasons.at(*tx->skipped_reason)};
-    }
-    descr.aborted = tx->aborted;
-    st.description = descr;
-    for (const auto &msg : tx->messages) {
-      schema::Message sm{};
-      sm.hash = hash(msg->msg_hash);
-      sm.source = msg->source;
-      sm.destination = msg->destination;
-      sm.opcode = msg->opcode;
-      if (msg->value) sm.value = schema::CurrencyCollection{td::make_refint(*msg->value), {}};
-      sm.created_lt = msg->created_lt;
-      sm.created_at = msg->created_at;
-      sm.bounce = msg->bounce;
-      sm.bounced = msg->bounced;
-      if (msg->content) sm.body_boc = msg->content->body;
-      if (msg->direction == "in") st.in_msg = std::move(sm);
-      else st.out_msgs.push_back(std::move(sm));
-    }
-    txs.push_back(std::move(st));
-  }
-  auto prepared = make_engine_prep();
-  check("schema/history/prepared", prepared.is_ok());
-  if (prepared.is_error()) return;
-  auto prep = prepared.move_as_ok();
-  TieredLookupSource available(nullptr);
-  auto normal = classify_schema_trace(*prep, trace.trace_id, txs, available);
-  check("schema/history/classified", normal.outcome == TraceOutcome::classified);
-  check("schema/history/normal_rows", !normal.rows.empty());
-  TieredLookupSource unavailable(nullptr,
-      [](const std::string &, const std::vector<Value> &) {
-        return TieredLookupSource::Tier2Result{Value::null(), true};
+  matchers.front().ref_lookups.insert("nominator_pool");
+  ClassifySetup setup;
+  setup.included = {0};
+  setup.build_fns.emplace(0, uncovered_workchain_lookup_build);
+  setup.kinds.insert("nominator_pool");
+  MchEnginePrep prep{&matchers, std::move(setup)};
+
+  schema::Transaction tx{};
+  tx.hash.set_zero();
+  tx.hash.data()[31] = 1;
+  tx.account = block::StdAddress(0, tx.hash);
+  tx.lt = 100;
+  tx.now = 200;
+  tx.mc_seqno = 300;
+  tx.orig_status = schema::AccountStatus::active;
+  tx.end_status = schema::AccountStatus::active;
+  schema::TransactionDescr_ord descr{};
+  schema::TrComputePhase_vm compute{};
+  compute.exit_code = 0;
+  descr.compute_ph = compute;
+  tx.description = descr;
+  schema::Message message{};
+  message.hash.set_zero();
+  message.hash.data()[31] = 2;
+  message.source = "0:" + std::string(64, 'B');
+  message.destination = "0:" + tx.hash.to_hex();
+  message.opcode = 0x11223344;
+  message.value = schema::CurrencyCollection{td::make_refint(1000), {}};
+  message.bounce = true;
+  tx.in_msg = std::move(message);
+
+  AllShardStates states{vm::CellBuilder().finalize()};
+  CelldbTier2Lookup tier2(&states, nullptr);
+  int reads = 0;
+  bool saw_uncovered_address = false;
+  tier2.set_account_source(
+      [&](const block::StdAddress &address)
+          -> td::Result<std::optional<schema::AccountState>> {
+        reads++;
+        saw_uncovered_address = address.workchain == 1 &&
+                                address.addr.to_hex() == std::string(64, 'A');
+        return td::Status::Error("Account not found in shards");
       });
-  unavailable.fetch("nominator_pool", {Value::make_str(trace.transactions.front()->account)});
-  auto result = classify_schema_trace(*prep, trace.trace_id, txs, unavailable);
-  check("schema/history/outcome", result.outcome == TraceOutcome::history_unavailable);
-  check("schema/history/rows_retained", !result.rows.empty() && result.rows.size() == normal.rows.size());
+  TieredLookupSource source(
+      nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
+        return tier2.fetch(kind, args);
+      });
+
+  auto result = classify_schema_trace(
+      prep, "tier2-uncovered-workchain-miss", {tx}, source);
+  check("schema/tier2_uncovered_workchain/looked_up_by_matcher",
+        reads == 1 && saw_uncovered_address && source.stats().misses == 1);
+  check("schema/tier2_uncovered_workchain/matcher_rejected",
+        result.matcher_names.empty());
+  check("schema/tier2_uncovered_workchain/outcome",
+        result.outcome == TraceOutcome::classified);
+  check("schema/tier2_uncovered_workchain/rows_retained", !result.rows.empty());
+  check("schema/tier2_uncovered_workchain/writer_persists",
+        should_persist_outcome(result.outcome));
+  BlockClassification block;
+  TraceClassificationResult trace;
+  trace.outcome = result.outcome;
+  block.traces.push_back(std::move(trace));
+  check("schema/tier2_uncovered_workchain/task_can_replace",
+        outcomes_allow_replacement(block));
 }
 
 // Startup is fatal on a skipped matcher, so the compiled-in table must have none:
@@ -735,7 +739,7 @@ int run_classify_core_test() {
   test_find_frontier_terminates_on_self_edge();
   test_childless_root_failure_serializes_root();
   test_schema_tick_tock();
-  test_schema_history_precedence();
+  test_tier2_uncovered_workchain_miss_preserves_trace();
   test_engine_prep_has_no_skips();
   std::printf("CLASSIFY-CORE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;

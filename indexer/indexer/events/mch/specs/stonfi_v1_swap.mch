@@ -17,8 +17,6 @@ matcher stonfi_v1_swap {
     let payload            = in_transfer.data.stonfi_swap_body
     let out_wallet_address = payload.jetton_wallet if payload != null else d.out_address
 
-    # Output wallet lookup miss leaves the destination asset unknown.
-    # Outgoing wallet lookup miss treats the outgoing asset as TON.
     let out_wallet        = lookup jetton_wallet(out_wallet_address)
     let actual_out_wallet = lookup jetton_wallet(d.out_address)
     let dex_in_wallet     = lookup jetton_wallet(swap.body.token_wallet)
@@ -26,11 +24,13 @@ matcher stonfi_v1_swap {
     reject when out_wallet_address == null or account(out_wallet_address) == addr_none()
     reject when d.out_address == null or account(d.out_address) == addr_none()
     reject when swap.body.token_wallet == null or account(swap.body.token_wallet) == addr_none()
+    reject when payload == null and out_wallet == null
+    reject when actual_out_wallet == null
     reject when dex_in_wallet == null
 
     let outgoing       = d.outgoing_transfer
-    let outgoing_asset = asset(actual_out_wallet.jetton) ?? ton_asset()
-    let incoming_asset = asset(dex_in_wallet.jetton) ?? ton_asset()
+    let outgoing_asset = asset(actual_out_wallet.jetton)
+    let incoming_asset = asset(dex_in_wallet.jetton)
     let out_destination_wallet = outgoing.data.receiver_wallet if outgoing.data.has_internal_transfer else null
     let out_destination = outgoing.data.receiver if out_destination_wallet != null else (
         account(payload.user_address) if payload != null else account(swap.body.from_user_address))

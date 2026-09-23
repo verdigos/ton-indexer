@@ -10,7 +10,10 @@
 #include "smc-interfaces/Tokens.h"
 
 #include "td/utils/base64.h"
+#include "td/utils/logging.h"
+#include "vm/excno.hpp"
 
+#include <exception>
 #include <map>
 #include <utility>
 
@@ -21,6 +24,10 @@ namespace {
 // The NUL separates lookup kind from the canonical raw address without aliasing.
 std::string memo_key(const std::string &kind, const block::StdAddress &addr) {
   return kind + std::string(1, '\0') + std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
+}
+
+std::string raw_address(const block::StdAddress &addr) {
+  return std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
 }
 
 }  // namespace
@@ -44,10 +51,27 @@ const schema::AccountState *CelldbTier2Lookup::account(const block::StdAddress &
   std::optional<schema::AccountState> state;
   try {
     auto r = account_source_(addr);
-    history_unavailable_ |= r.is_error();
-    if (r.is_ok()) state = r.move_as_ok();
+    if (r.is_error()) {
+      LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                   << " status=" << r.error();
+    } else {
+      state = r.move_as_ok();
+    }
+  } catch (const vm::VmError &e) {
+    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                 << " status=exception: " << e.get_msg();
+  } catch (const vm::VmNoGas &e) {
+    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                 << " status=exception: " << e.get_msg();
+  } catch (const vm::VmVirtError &e) {
+    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                 << " status=exception: " << e.get_msg();
+  } catch (const std::exception &e) {
+    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                 << " status=exception: " << e.what();
   } catch (...) {
-    history_unavailable_ = true;
+    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                 << " status=unknown exception";
   }
   auto [pos, _] = account_memo_.emplace(addr, std::move(state));
   return pos->second ? &*pos->second : nullptr;
@@ -205,7 +229,7 @@ Value CelldbTier2Lookup::jvault_assets(const block::StdAddress &stake_wallet) {
   if (r_lock.is_error()) {
     return Value::null();
   }
-  Value jw = fetch("jetton_wallet", {Value::make_str(r_lock.move_as_ok())}).value;
+  Value jw = fetch("jetton_wallet", {Value::make_str(r_lock.move_as_ok())});
   const Value *jetton = jw.field("jetton");
   if (jetton == nullptr || jetton->t != VType::Str) {
     return Value::null();
@@ -215,20 +239,18 @@ Value CelldbTier2Lookup::jvault_assets(const block::StdAddress &stake_wallet) {
                        std::move(jvault_asset));
 }
 
-TieredLookupSource::Tier2Result CelldbTier2Lookup::fetch(
-    const std::string &kind, const std::vector<Value> &args) {
-  // No states at all (listener-emulated view) is a plain miss, not a read fault.
+Value CelldbTier2Lookup::fetch(const std::string &kind, const std::vector<Value> &args) {
   if (shard_states_ == nullptr || shard_states_->empty()) {
-    return {Value::null(), false};
+    return Value::null();
   }
   if (args.size() != 1 ||
       !(args[0].t == VType::Str ||
         (args[0].t == VType::Account && !args[0].addr_none))) {
-    return {Value::null(), history_unavailable_};
+    return Value::null();
   }
   auto r_addr = block::StdAddress::parse(td::Slice(args[0].str));
   if (r_addr.is_error()) {
-    return {Value::null(), history_unavailable_};
+    return Value::null();
   }
   block::StdAddress addr = r_addr.move_as_ok();
 
@@ -236,7 +258,7 @@ TieredLookupSource::Tier2Result CelldbTier2Lookup::fetch(
   auto it = value_memo_.find(key);
   if (it != value_memo_.end()) {
     stats_.memo_hits++;
-    return {it->second, history_unavailable_};
+    return it->second;
   }
   // Detector parse failures remain misses.
   Value v;
@@ -246,7 +268,7 @@ TieredLookupSource::Tier2Result CelldbTier2Lookup::fetch(
     v = Value::null();
   }
   value_memo_.emplace(key, v);
-  return {std::move(v), history_unavailable_};
+  return std::move(v);
 }
 
 }  // namespace mch

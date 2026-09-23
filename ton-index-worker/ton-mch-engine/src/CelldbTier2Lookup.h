@@ -27,11 +27,10 @@ class CelldbTier2Lookup {
   // `shard_states` and `config` must outlive this object (they are the view's).
   CelldbTier2Lookup(const AllShardStates *shard_states, std::shared_ptr<block::ConfigInfo> config);
 
-  // Detector misses are null; account read errors also flag unavailable history.
-  TieredLookupSource::Tier2Result fetch(const std::string &kind, const std::vector<Value> &args);
+  // Detector misses and account read errors are null.
+  Value fetch(const std::string &kind, const std::vector<Value> &args);
 
   const Tier2Stats &stats() const { return stats_; }
-  bool history_unavailable() const { return history_unavailable_; }
   void set_account_source(AccountSource src) { account_source_ = std::move(src); }
 
  private:
@@ -49,7 +48,6 @@ class CelldbTier2Lookup {
   std::unordered_map<block::StdAddress, std::optional<schema::AccountState>> account_memo_;
   std::unordered_map<std::string, Value> value_memo_;
   Tier2Stats stats_;
-  bool history_unavailable_{false};
 };
 
 }  // namespace mch

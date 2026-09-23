@@ -93,7 +93,7 @@ matcher jvault_unstake_request {
                    -> { maybe $jvault_referrals ; op JVaultUpdateRewards } )
     let assets = lookup jvault_assets(request_anchor.msg.destination)
     let early  = request == null
-    reject when early and assets == null
+    reject when assets == null
     reject when early and assets.asset == null
     failed when early
     failed when (not early) and (request_anchor.failed or request.failed)

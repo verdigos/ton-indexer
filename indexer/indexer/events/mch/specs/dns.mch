@@ -41,8 +41,8 @@ matcher change_dns {
 
     op ChangeDnsRecord @dns as ChangeDnsRecordMessage -> maybe op Bounce
 
-    # NFT lookup miss: the DNS event remains and omits collection_address.
     let nft = lookup nft_item(dns.msg.destination)
+    reject when nft == null
     failed when any_failed(dns)
     produces switch {
         when dns.body.has_value => change_dns out {

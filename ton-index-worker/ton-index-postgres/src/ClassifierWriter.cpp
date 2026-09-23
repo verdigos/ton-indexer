@@ -35,8 +35,8 @@ constexpr auto kInsertIssue =
 constexpr auto kDeleteIssues = "DELETE FROM _classifier_block_issues WHERE mc_seqno = $1";
 
 bool recoverable_skip(TraceOutcome outcome) {
-  return outcome == TraceOutcome::history_unavailable || outcome == TraceOutcome::skipped_evicted ||
-         outcome == TraceOutcome::skipped_incomplete || outcome == TraceOutcome::skipped_missing_root;
+  return outcome == TraceOutcome::skipped_evicted || outcome == TraceOutcome::skipped_incomplete ||
+         outcome == TraceOutcome::skipped_missing_root;
 }
 
 std::pair<std::uint64_t, std::uint64_t> insert_capped(

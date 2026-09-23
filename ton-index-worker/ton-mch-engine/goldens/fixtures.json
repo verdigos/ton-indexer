@@ -685,7 +685,7 @@
    "group": "dedust-swaps",
    "name": "DeDust v2 failed swap with TON refund",
    "slug": "dedust-v2-failed-swap-with-ton-refund",
-   "note": "The failed swap refunds TON and classifies as a failed swap and failed TON transfer"
+   "note": "The pool lookup misses, the dedust_v2_failed_swap matcher rejects, and the trace yields three call_contract fallback rows"
   },
   "OyAQgEdEKZcuU2-3dAkKpk_RFjTYJXXQYxCKoZSB7uA=": {
    "group": "evaa",

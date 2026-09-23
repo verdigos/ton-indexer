@@ -920,9 +920,6 @@ SchemaClassifyResult classify_schema_trace(
     result.matcher_names.clear();
     result.unknown_row = false;
   }
-  if (src.history_unavailable()) {
-    result.outcome = TraceOutcome::history_unavailable;
-  }
   return result;
 }
 

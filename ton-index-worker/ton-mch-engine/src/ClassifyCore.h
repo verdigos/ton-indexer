@@ -39,16 +39,13 @@ enum class FailureCategory {
 };
 
 // Terminal per-trace outcome of the in-indexer classification stage. Exactly
-// one per admitted or rejected trace input; precedence when several apply:
-// history unavailable > classification state > rows. The first three carry
-// rows (possibly zero) and are written; every other outcome only counts.
+// one per admitted or rejected trace input. The first three carry rows
+// (possibly zero) and are written; every other outcome only counts.
 // Task replacement accepts persisted outcomes and broken, capped, or lone tick-tock
 // skips. Missing roots and other skips remain ineligible.
 //   classified / fallback / terminal_failure_empty: classify_schema_trace ran
 //     (normal rows / basic-action fallback rows / failure with nothing usable).
 //   timeout:              reserved; the worker keeps results of slow jobs.
-//   history_unavailable:  a state read failed (tri-state lookup); a live-mode
-//                         skip, a task-mode failure with retry.
 //   skipped_*:            assembly-side rejections, never classified:
 //     missing_root  — no legitimate root transaction;
 //     broken        — the assembler published the trace as broken;
@@ -65,7 +62,6 @@ enum class TraceOutcome {
   fallback,
   terminal_failure_empty,
   timeout,
-  history_unavailable,
   skipped_missing_root,
   skipped_broken,
   skipped_evicted,
@@ -109,7 +105,6 @@ constexpr const char *trace_outcome_name(TraceOutcome o) {
     case TraceOutcome::fallback: return "fallback";
     case TraceOutcome::terminal_failure_empty: return "terminal_failure_empty";
     case TraceOutcome::timeout: return "timeout";
-    case TraceOutcome::history_unavailable: return "history_unavailable";
     case TraceOutcome::skipped_missing_root: return "skipped_missing_root";
     case TraceOutcome::skipped_broken: return "skipped_broken";
     case TraceOutcome::skipped_evicted: return "skipped_evicted";

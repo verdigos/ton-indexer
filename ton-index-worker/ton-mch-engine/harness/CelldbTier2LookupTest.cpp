@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <variant>
@@ -387,13 +388,13 @@ void test_jvault_hook() {
   {
     Fixture f;  // stake wallet absent
     auto t = f.make();
-    check("jvault_hook/wallet_absent_null", t.fetch("jvault_assets", wallet_arg).value.is_null());
+    check("jvault_hook/wallet_absent_null", t.fetch("jvault_assets", wallet_arg).is_null());
   }
   {
     Fixture f;  // stake wallet present, pool state absent -> PARTIAL record
     f.put('9', stake_wallet_data(pool, minter));
     auto t = f.make();
-    Value v = t.fetch("jvault_assets", wallet_arg).value;
+    Value v = t.fetch("jvault_assets", wallet_arg);
     const Value *sp = v.field("staking_pool");
     const Value *asset = v.field("asset");
     const Value *jv = v.field("jvault_asset");
@@ -410,7 +411,7 @@ void test_jvault_hook() {
     f.put('1', junk.finalize());
     auto t = f.make();
     check("jvault_hook/pool_data_malformed_null",
-          t.fetch("jvault_assets", wallet_arg).value.is_null());
+          t.fetch("jvault_assets", wallet_arg).is_null());
   }
   {
     Fixture f;  // full chain, but the lock wallet is not a jetton wallet
@@ -421,7 +422,7 @@ void test_jvault_hook() {
     f.put('3', junk.finalize());
     auto t = f.make();
     check("jvault_hook/lock_not_jetton_wallet_null",
-          t.fetch("jvault_assets", wallet_arg).value.is_null());
+          t.fetch("jvault_assets", wallet_arg).is_null());
   }
 }
 
@@ -465,14 +466,14 @@ void test_memo_and_guards() {
     Fixture f;
     auto t = f.make();
     check("guard/non_str_arg_null",
-          t.fetch("nominator_pool", {Value::make_int(td::make_refint(1))}).value.is_null());
-    check("guard/wrong_arity_null", t.fetch("nominator_pool", {}).value.is_null());
+          t.fetch("nominator_pool", {Value::make_int(td::make_refint(1))}).is_null());
+    check("guard/wrong_arity_null", t.fetch("nominator_pool", {}).is_null());
     check("guard/account_none_null",
-          t.fetch("nominator_pool", {Value::make_account_none()}).value.is_null());
+          t.fetch("nominator_pool", {Value::make_account_none()}).is_null());
     check("guard/malformed_addr_null",
-          t.fetch("nominator_pool", {Value::make_str("not-an-address")}).value.is_null());
+          t.fetch("nominator_pool", {Value::make_str("not-an-address")}).is_null());
     check("guard/unknown_kind_null",
-          t.fetch("no_such_kind", {Value::make_str(raw_of('A'))}).value.is_null());
+          t.fetch("no_such_kind", {Value::make_str(raw_of('A'))}).is_null());
     check("guard/no_reads_on_guarded", f.reads == 0 && t.stats().fetched == 0);
     // An Account-typed argument must pass the guard and reach the account
     // read.
@@ -483,7 +484,7 @@ void test_memo_and_guards() {
     Fixture f;
     auto t = f.make();
     check("dispatch/" + kind + "/absent_is_null",
-          t.fetch(kind, {Value::make_str(raw_of('A'))}).value.is_null());
+          t.fetch(kind, {Value::make_str(raw_of('A'))}).is_null());
     check("dispatch/" + kind + "/reaches_account_read",
           f.reads == 1 && t.stats().fetched == 1);
   }
@@ -492,35 +493,33 @@ void test_memo_and_guards() {
     AllShardStates none;
     CelldbTier2Lookup t(&none, nullptr);
     check("guard/no_shard_states_null",
-          t.fetch("nominator_pool", {Value::make_str(raw_of('A'))}).value.is_null());
-    check("guard/no_shard_states_not_unavailable",
-          !t.history_unavailable() && t.stats().fetched == 0);
+          t.fetch("nominator_pool", {Value::make_str(raw_of('A'))}).is_null());
+    check("guard/no_shard_states_no_read", t.stats().fetched == 0);
   }
 }
 
 void test_account_lookup_states() {
   const std::vector<Value> arg{Value::make_str(raw_of('A'))};
-  for (bool unavailable : {false, true}) {
+  for (int behavior = 0; behavior < 3; behavior++) {
     Fixture f;
     auto t = f.make();
     t.set_account_source([&](const block::StdAddress &)
                              -> td::Result<std::optional<schema::AccountState>> {
       f.reads++;
-      if (unavailable) return td::Status::Error("read failed");
+      if (behavior == 1) return td::Status::Error("read failed");
+      if (behavior == 2) throw std::runtime_error("read threw");
       return std::optional<schema::AccountState>{};
     });
     TieredLookupSource src(nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
       return t.fetch(kind, args);
     });
-    const std::string name = unavailable ? "account/unavailable/" : "account/absent/";
+    const std::string name = behavior == 0 ? "account/absent/"
+                                          : behavior == 1 ? "account/error/"
+                                                          : "account/exception/";
     check(name + "null", src.fetch("nominator_pool", arg).is_null());
-    check(name + "tier2_flag", t.history_unavailable() == unavailable);
-    check(name + "source_flag", src.history_unavailable() == unavailable);
     check(name + "memoized_null", src.fetch("nominator_pool", arg).is_null());
     check(name + "one_read", f.reads == 1 && t.stats().memo_hits == 1);
     check(name + "account_memo_null", src.fetch("nft_item", arg).is_null() && f.reads == 1);
-    check(name + "sticky", t.history_unavailable() == unavailable &&
-                               src.history_unavailable() == unavailable);
   }
 }
 
@@ -539,14 +538,14 @@ void test_two_tier_routing() {
 
   int hook_calls = 0;
   TieredLookupSource::Tier2Hook hook = [&](const std::string &kind,
-                                                const std::vector<Value> &) -> TieredLookupSource::Tier2Result {
+                                           const std::vector<Value> &) -> Value {
     hook_calls++;
     if (kind != "nominator_pool") {
-      return {Value::null(), false};
+      return Value::null();
     }
     schema::NominatorPoolData p{};
     p.address = addr_of('D');
-    return {TieredLookupSource::iface_value(kind, p), false};
+    return TieredLookupSource::iface_value(kind, p);
   };
   TieredLookupSource src(&map, std::move(hook));
 
@@ -587,9 +586,9 @@ void test_tier1_authoritative_miss() {
   int hook_calls = 0;
   TieredLookupSource::Tier2Hook hook =
       [&](const std::string &, const std::vector<Value> &)
-      -> TieredLookupSource::Tier2Result {
+      -> Value {
     hook_calls++;
-    return {Value::null(), false};
+    return Value::null();
   };
   TieredLookupSource src(&map, hook, &stable);
   TieredLookupSource src_unstable(&map, hook, &unstable);

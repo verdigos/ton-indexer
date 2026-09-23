@@ -1,13 +1,12 @@
 # dedust-swaps / DeDust v2 failed swap with TON refund
-# note: The failed swap refunds TON and classifies as a failed swap and failed TON transfer
+# note: The pool lookup misses, the dedust_v2_failed_swap matcher rejects, and the trace yields three call_contract fallback rows
 # trace: Ou-hXwfHtNeTs97mBY3LVCmlnsoySA7hJXeoZSfOAao=
 actions:
-  - type: jetton_swap
-    matcher: dedust_v2_failed_swap
-    anchor: jetton_swap@75914987000003
-    id: CRt7WaOspIN6jHSpsV8DaUBU4617IQ6LQBjJGBtVxtc=
-    success: false
-    source: 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
+  - type: call_contract
+    anchor: call_contract#3216ca09@75915001000005
+    id: Fhm/owuCl4//du3Y+JH7X+TcnnfgpfACoAnKpVNxCpE=
+    success: true
+    source: 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
     source_secondary: null
     destination: 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
     destination_secondary: null
@@ -16,38 +15,69 @@ actions:
     asset2: null
     asset2_secondary: null
     amount: null
-    value: null
-    opcode: null
-    jetton_swap_data:
-      dex: dedust_v2
-      dex_incoming_transfer:
-        amount: 349999999865
-        asset: null
-        destination: 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
-        destination_jetton_wallet: null
-        source: 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
-        source_jetton_wallet: null
-      dex_outgoing_transfer:
-        amount: 0
-        asset: null
-        destination: 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
-        destination_jetton_wallet: null
-        source: 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
-        source_jetton_wallet: null
-      min_out_amount: 746186621886
-      peer_swaps: []
-      sender: 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
+    value: 349999999865
+    opcode: 0x3216ca09
+    tx_hashes:
+      - Z0cmIg9iv2E0ApMNKQg4tw9gNzj241hFRY6J/YhFEt8=
+      - iXW+aNSowtVIW2eDLlhbxPsPgtUPSCD0/+uHaFFmFJs=
+    accounts:
+      - 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
+      - 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
+    start_lt: 75915001000005
+    end_lt: 75915001000006
+    start_utime: 1778356004
+    end_utime: 1778356004
+    mc_seqno_end: 65723071
+  - type: call_contract
+    anchor: call_contract#a5a7cbf8@75914987000003
+    id: HzSYz4vjAEXxmalBXA+HCbDp5B9K5l3UseqNlzwWfUA=
+    success: true
+    source: 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
+    source_secondary: null
+    destination: 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 350699999865
+    opcode: 0xa5a7cbf8
     tx_hashes:
       - Ou+hXwfHtNeTs97mBY3LVCmlnsoySA7hJXeoZSfOAao=
       - Z0cmIg9iv2E0ApMNKQg4tw9gNzj241hFRY6J/YhFEt8=
-      - iXW+aNSowtVIW2eDLlhbxPsPgtUPSCD0/+uHaFFmFJs=
-      - w5mrq9ZpqIyuczqEkrCFwvHz6HBHXcSJkKiHQhZTXmU=
     accounts:
       - 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
       - 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
     start_lt: 75914987000003
-    end_lt: 75915001000007
+    end_lt: 75915001000004
     start_utime: 1778355998
+    end_utime: 1778356004
+    mc_seqno_end: 65723071
+  - type: call_contract
+    anchor: call_contract#d53276db@75915001000006
+    id: KtcfMDXSpsiMmx9W/W3E21gRsUD93EePhrfe7NZEBGk=
+    success: true
+    source: 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
+    source_secondary: null
+    destination: 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 698805132
+    opcode: 0xd53276db
+    tx_hashes:
+      - Z0cmIg9iv2E0ApMNKQg4tw9gNzj241hFRY6J/YhFEt8=
+      - w5mrq9ZpqIyuczqEkrCFwvHz6HBHXcSJkKiHQhZTXmU=
+    accounts:
+      - 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
+      - 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
+    start_lt: 75915001000006
+    end_lt: 75915001000007
+    start_utime: 1778356004
     end_utime: 1778356004
     mc_seqno_end: 65723071
   - type: ton_transfer

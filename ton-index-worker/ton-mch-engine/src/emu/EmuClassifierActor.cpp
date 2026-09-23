@@ -157,9 +157,6 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       auto txs = r_txs.move_as_ok();
       past_conversion = true;
       auto classified = classify_txs(cfg_, view, txs, res);
-      if (classified.outcome == TraceOutcome::history_unavailable) {
-        stats_.history_unavailable++;
-      }
       // AAI uses the minimum transaction LT as the trace-start score. Redis
       // sorted-set scores lose integer precision above 2^53.
       std::int64_t aai_score = 0;
@@ -300,7 +297,6 @@ void EmuClassifierActor::alarm() {
             << " confirmed=" << stats_.by_finality[1]
             << " finalized=" << stats_.by_finality[2] << "}"
             << " [" << cats << "]"
-            << " history_unavailable=" << stats_.history_unavailable
             << " lookups{tier1=" << stats_.lookups.tier1_hits
             << " tier2=" << stats_.lookups.tier2_hits << " miss=" << stats_.lookups.misses
             << " miss_by_kind={" << miss_kinds << "}"

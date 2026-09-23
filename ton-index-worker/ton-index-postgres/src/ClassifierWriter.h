@@ -21,8 +21,8 @@
 // Uncovered traces suppress live markers and make task replacement throw.
 // Capped traces get scalar `unknown` rows and account links from transactions.
 // Broken traces are never persisted; lone tick-tock traces have no actions.
-// History unavailable, evicted, incomplete and missing-root outcomes suppress
-// the marker and record `_classifier_block_issues` for replay by a task worker.
+// Evicted, incomplete and missing-root outcomes suppress the marker and record
+// `_classifier_block_issues` for replay by a task worker.
 // Connection loss, resource exhaustion, statement timeout, deadlock and schema
 // drift propagate to the caller and abort its transaction. The writer never retries.
 // A trace-scoped task refuses a seqno with no marker; a whole-seqno task writes

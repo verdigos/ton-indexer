@@ -251,9 +251,7 @@ Value TieredLookupSource::fetch(const std::string &kind, const std::vector<Value
     }
   }
   // Tier-2-only kinds and every non-authoritative tier-1 miss fall through.
-  auto result = tier2_ ? tier2_(kind, args) : Tier2Result{Value::null(), false};
-  history_unavailable_ |= result.unavailable;
-  Value r = std::move(result.value);
+  Value r = tier2_ ? tier2_(kind, args) : Value::null();
   if (!r.is_null()) {
     stats_.tier2_hits++;
     stats_.tier2_hits_by_kind[kind]++;

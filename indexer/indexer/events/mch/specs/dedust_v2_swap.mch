@@ -114,8 +114,8 @@ matcher dedust_v2_failed_swap {
 
     let sender = l.source
     let pool   = l.destination
-    # Pool lookup miss leaves the destination asset null while the failed swap row remains.
-    let assets = lookup dedust_pool(pool).assets
+    require pool_iface = lookup dedust_pool(pool)
+    let assets = pool_iface.assets
     let a0     = first(assets)
     let a1     = last(assets)
     let asset0 = null if a0 == null else (ton_asset() if a0.is_ton else asset(a0.address))
