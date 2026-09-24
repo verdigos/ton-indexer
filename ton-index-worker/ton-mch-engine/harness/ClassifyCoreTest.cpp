@@ -130,17 +130,21 @@ BuildOutcome successful_build(BuildEnv &env) {
 }
 
 bool g_bad_payload_address = true;
+bool g_payload_bad_first = false;
+int g_payload_build_calls = 0;
 BuildOutcome payload_address_build(BuildEnv &) {
+  bool bad = g_bad_payload_address || (g_payload_bad_first && g_payload_build_calls == 0);
+  ++g_payload_build_calls;
   BuildOutcome out = BuildOutcome::accepted();
   out.data = Value::make_dict({
-      {"response_address", Value::make_account_raw(g_bad_payload_address ? "bad-address" :
+      {"response_address", Value::make_account_raw(bad ? "bad-address" :
                                                     "0:" + std::string(64, 'A'))},
       {"query_id", Value::make_int64(1)},
   });
   return out;
 }
 
-void test_payload_encode_failure_is_classification_failure() {
+void test_payload_encode_failure_skips_one_action() {
   std::vector<CompiledMatcher> matchers{test_matcher("payload-encode", 0)};
   matchers.front().produces = {"jetton_transfer"};
   ClassifySetup setup;
@@ -169,13 +173,38 @@ void test_payload_encode_failure_is_classification_failure() {
   TieredLookupSource::InterfaceMap interfaces;
   TieredLookupSource source(&interfaces);
   g_bad_payload_address = true;
+  g_payload_bad_first = false;
+  g_payload_build_calls = 0;
   auto bad = classify_schema_trace(prep, "payload-bad", {tx}, source);
-  check("payload_failure/outcome", bad.outcome == TraceOutcome::terminal_failure_empty);
+  check("payload_failure/outcome", bad.outcome == TraceOutcome::classified);
   check("payload_failure/reason", bad.failure_reason.find("response_destination expects W:HEX address: bad-address") != std::string::npos);
   check("payload_failure/no_rows", bad.rows.empty());
+  check("payload_failure/skipped_one", bad.skipped_payload_actions == 1);
+
+  schema::Transaction child = tx;
+  child.hash.data()[31] = 3;
+  child.account = block::StdAddress(0, child.hash);
+  child.lt = 101;
+  schema::Message link = *tx.in_msg;
+  link.hash.data()[31] = 4;
+  link.source = "0:" + tx.hash.to_hex();
+  link.destination = "0:" + child.hash.to_hex();
+  tx.out_msgs.push_back(link);
+  child.in_msg = link;
   g_bad_payload_address = false;
+  g_payload_bad_first = true;
+  g_payload_build_calls = 0;
+  auto mixed = classify_schema_trace(prep, "payload-mixed", {tx, child}, source);
+  check("payload_mixed/two_actions_built", g_payload_build_calls == 2);
+  check("payload_mixed/classified", mixed.outcome == TraceOutcome::classified);
+  check("payload_mixed/one_good_row", mixed.rows.size() == 1);
+  check("payload_mixed/one_skipped", mixed.skipped_payload_actions == 1);
+  check("payload_mixed/reason", mixed.failure_reason.find("response_destination expects W:HEX address: bad-address") != std::string::npos);
+  g_payload_bad_first = false;
+  g_payload_build_calls = 0;
   auto good = classify_schema_trace(prep, "payload-good", {tx}, source);
-  check("payload_failure/process_continues", good.outcome == TraceOutcome::classified && !good.rows.empty());
+  check("payload_failure/process_continues", good.outcome == TraceOutcome::classified &&
+        !good.rows.empty() && good.skipped_payload_actions == 0 && good.failure_reason.empty());
 }
 
 const std::string kUncoveredWorkchainAddress = "1:" + std::string(64, 'A');
@@ -854,8 +883,8 @@ void test_engine_prep_has_no_skips() {
 }  // namespace
 
 int run_classify_core_test() {
-  test_payload_encode_failure_is_classification_failure();
   g_fail = 0;
+  test_payload_encode_failure_skips_one_action();
   test_host_fn_exception_is_clean_rejection();
   test_host_fn_error_rejects_attempt_and_next_matcher_runs();
   test_host_fn_serious_exception_stays_trace_failure();

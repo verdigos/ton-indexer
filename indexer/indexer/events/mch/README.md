@@ -523,6 +523,10 @@ and hashes use binary values; unsigned decimals use MessagePack uint through
 uint64, then minimal big-endian binary. The action goldens still show names
 and decimal text.
 
+An invalid payload value skips its action. Other actions in the trace remain
+classified, while the trace records the bounded payload error. If all actions
+are skipped, storage writes the unknown rescue row with that error record.
+
 ## 10. Comment rules for specs
 
 Keep comments that change what the next matcher author does: contract facts hidden by opcodes, traps, or intentional degradation on a lookup miss.
@@ -620,10 +624,6 @@ Eleven tests are wired into the engine's own build directory.
 | `mch_actions_golden` | the committed action goldens |
 | `mch_ir_equivalence` | IR emitter determinism between the two emitted copies |
 
-Twenty-four more tests are wired only in the git-excluded devtools overlay and run from that overlay's own build subdirectory.
-They gate the classify golden, the build vectors through the artifact interpreter, the walker `peek` and `many` cases, the matcher order graph, and the in-indexer components.
-`mch_local_classifier_writer_pg` prints `SKIP` and exits 0 without a scratch database DSN, so a green run does not by itself mean the PostgreSQL writer ran.
-
 ## 13. Traps and FAQ
 
 **A children block ends its chain.**
@@ -670,8 +670,7 @@ Two rules referencing each other loop the inliner until the compile aborts on a 
 The same holds for a cycle among `fn` declarations and for an import cycle.
 
 **Order is semantics.**
-`order_graph.py --assert`, the devtools `mch_local_order_graph` gate, is the only automatic order check, and it sees producer-to-consumer edges only.
-It cannot see two matchers competing for one anchor; the manifest comment and the action goldens protect that.
+No automatic check here sees two matchers competing for one anchor; the manifest comment and the action goldens protect that.
 
 **One build directory per session.**
 A parallel edit of a spec mid-build can be captured by one generator run and not another.

@@ -47,6 +47,13 @@ std::string typed_text(const Value &v, std::string_view name, std::string_view e
     invalid(name, expected, "non-text value");
   return value_text(v);
 }
+std::string typed_str(const Value &v, std::string_view name, std::string_view expected,
+                      bool address = false) {
+  if (v.t == VType::Str) return v.str;
+  if (address && (v.t == VType::Account || v.t == VType::Asset))
+    return canonicalize_or_passthrough(v.str);
+  invalid(name, expected, v.t == VType::Int || v.t == VType::Amount ? value_text(v) : "non-text value");
+}
 std::string cell_bytes(const Value &v, std::string_view name) {
   auto boc = td_boc_serialize_crc(v.cell);
   if (boc.is_error()) invalid(name, "serializable boc", boc.error().message().str());
@@ -116,7 +123,7 @@ void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
       if (v.t != VType::Bool) invalid(name, "bool", "non-bool value");
       pk.pack(v.boolean); return;
     case PayloadKeyType::Address: {
-      auto text = typed_text(v, name, "W:HEX address");
+      auto text = typed_str(v, name, "W:HEX address", true);
       auto colon = text.find(':');
       if (colon == std::string::npos || text.size() != colon + 65) invalid(name, "W:HEX address", text);
       int wc = 0;
@@ -133,9 +140,9 @@ void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
     case PayloadKeyType::Boc:
       if (v.t == VType::Bytes) { pack_binary(pk, v.str); return; }
       if (v.t == VType::Cell) { pack_binary(pk, cell_bytes(v, name)); return; }
-      pack_binary(pk, base64_bytes(name, typed_text(v, name, "padded base64 boc"), false)); return;
+      pack_binary(pk, base64_bytes(name, typed_str(v, name, "padded base64 boc"), false)); return;
     case PayloadKeyType::Hash: case PayloadKeyType::HashHex: case PayloadKeyType::Hash0x: {
-      auto text = typed_text(v, name, "32-byte hash");
+      auto text = typed_str(v, name, "32-byte hash");
       if (key.type == PayloadKeyType::Hash) { pack_binary(pk, base64_bytes(name, text, true)); return; }
       bool prefixed = key.type == PayloadKeyType::Hash0x;
       if (prefixed && !text.starts_with("0x")) invalid(name, "0x lowercase 32-byte hash", text);
@@ -189,5 +196,8 @@ std::string encode_action_payload(const Action &action) {
     pack_fields(pk, *action.data.fields);
   else pk.pack_map(0);
   return std::string(buffer.data(), buffer.size());
+}
+std::string action_payload_bytes(const Action &action) {
+  return action.encoded_payload.empty() ? encode_action_payload(action) : action.encoded_payload;
 }
 }  // namespace mch

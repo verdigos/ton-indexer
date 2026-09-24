@@ -5,6 +5,7 @@
 #include "ActionPayload.h"
 #include "ClassifyCore.h"
 #include "EnginePrep.h"
+#include "ExprRuntime.h"
 #include "GenMatchers.h"
 #include "RedisActionSerialize.h"
 #include "Value.h"
@@ -454,6 +455,62 @@ void test_compact_types_and_errors() {
   fails("compact/hash_error", {{"signers_hash", Value::make_str("short")}}, "signers_hash expects 32-byte");
   fails("compact/hash_hex_error", {{"btc_txid", Value::make_str("0x" + std::string(64, 'a'))}}, "btc_txid expects lowercase");
   fails("compact/hash_0x_error", {{"asset_id", Value::make_str(std::string(64, 'a'))}}, "asset_id expects 0x");
+  for (const char *key : {"asset", "custom_payload", "signers_hash", "btc_txid", "asset_id", "pubkey", "new_secret_hash"}) {
+    fails((std::string("compact/type_error/") + key).c_str(),
+          {{key, Value::make_int64(123)}}, "expects");
+  }
+  fails("compact/amount_type_error", {{"custom_payload", Value::make_amount(td::make_refint(123))}}, "custom_payload expects");
+  check("compact/uint_int_allowed", encoded({{"query_id", Value::make_int64(123)}}) == "\x01\x81\x59\x7b");
+}
+
+void test_fixed_width_producers() {
+  const auto number = td::hex_string_to_int256(std::string(63, 'f'));
+  check("producer/precondition_63_digits", td::hex_string(number, false).size() == 63);
+  auto pubkey = rt_builtin_uint_hex(Value::make_int(number));
+  check("producer/uint_hex_is_general", !pubkey.faulted && pubkey.value.str.size() == 63);
+  struct Case { const char *btype; const char *input; const char *key; Value value; const char *prefix; };
+  for (const auto &item : std::vector<Case>{
+           {"evaa_supply", "asset_id", "asset_id", Value::make_int(number), "0x"},
+           {"cocoon_client_change_secret_hash", "new_secret_hash", "new_secret_hash", Value::make_int(number), ""},
+           {"tgbtc_new_key", "pubkey", "pubkey", pubkey.value, ""},
+           {"tgbtc_dkg_log", "internal_pubkey", "pubkey", pubkey.value, ""},
+       }) {
+    Block block;
+    block.btype = item.btype;
+    block.data = Value::make_dict({{item.input, item.value}});
+    Action action;
+    const std::string label = std::string("producer/") + item.btype;
+    check(label + "/build", build_action(&block, action));
+    const Value *value = action.data.field(item.key);
+    check(label + "/text", value != nullptr && value->t == VType::Str &&
+          value->str == std::string(item.prefix) + "0" + std::string(63, 'f'));
+    try {
+      const std::string bytes = encode_action_payload(action);
+      Decoded decoded(bytes.substr(1));
+      bool found = false;
+      if (decoded.ok() && decoded.root().type == msgpack::type::MAP) {
+        for (std::uint32_t i = 0; i < decoded.root().via.map.size; ++i) {
+          const auto &entry = decoded.root().via.map.ptr[i].val;
+          if (entry.type == msgpack::type::BIN && entry.via.bin.size == 32 &&
+              td::hex_encode(td::Slice(entry.via.bin.ptr, entry.via.bin.size)) ==
+                  "0" + std::string(63, 'f')) found = true;
+        }
+      }
+      check(label + "/32_bytes_roundtrip", found);
+    } catch (const std::exception &) {
+      check(label + "/32_bytes_roundtrip", false);
+    }
+  }
+}
+
+void test_cached_payload() {
+  Action action = base_action();
+  action.data = Value::make_dict({{"query_id", Value::make_str("1")}});
+  action.encoded_payload = "sentinel payload bytes";
+  Decoded decoded(serialize_redis_actions({action}, make_view({EmuFinality::finalized})));
+  const auto *row = first_row(decoded);
+  check("payload_cache/redis_sentinel", decoded.ok() && row != nullptr &&
+        is_binary(at(*row, "payload"), action.encoded_payload));
 }
 
 }  // namespace
@@ -491,6 +548,8 @@ int run_action_msgpack_test() {
   test_positional_legs();
   test_tx_hash_order();
   test_compact_types_and_errors();
+  test_fixed_width_producers();
+  test_cached_payload();
   std::printf("ACTIONS-MSGPACK-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

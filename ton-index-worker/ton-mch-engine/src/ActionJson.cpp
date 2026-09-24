@@ -112,7 +112,7 @@ std::string action_row_json_impl(const Action &a, const ActionRowContext &ctx, b
     if (legacy) {
       row("data", td::JsonRaw(omitted(a.data) ? "{}" : value_json(a.data)));
     } else {
-      row("payload", "\\x" + td::hex_encode(encode_action_payload(a)));
+      row("payload", "\\x" + td::hex_encode(action_payload_bytes(a)));
     }
   }
   return jb.string_builder().as_cslice().str();

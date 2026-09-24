@@ -256,7 +256,7 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
     }
   }
   pack_key(pk, "payload");
-  pack_binary(pk, encode_action_payload(a));
+  pack_binary(pk, action_payload_bytes(a));
 
   for (const ActionField &f : opt) {
     const Value &v = a.*f.member;

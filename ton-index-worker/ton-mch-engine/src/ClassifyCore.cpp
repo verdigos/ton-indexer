@@ -598,9 +598,18 @@ SchemaClassifyResult classify_schema_trace(
         continue;
       }
       result.scrubbed += scrub_arena_refs(action);
-      // Validate while the classification failure handler can still report the
-      // key and value; storage and emulator serialization happen later.
-      encode_action_payload(action);
+      // Only payload validation is isolated per action. Engine faults still
+      // reach the trace-level handler below.
+      try {
+        action.encoded_payload = encode_action_payload(action);
+      } catch (const std::runtime_error &error) {
+        ++result.skipped_payload_actions;
+        if (!result.failure_reason.empty()) result.failure_reason += "; ";
+        result.failure_reason += error.what();
+        LOG(ERROR) << "trace=" << trace_id << " action=" << action.action_id
+                   << " " << error.what();
+        continue;
+      }
       result.rows.push_back(std::move(action));
     }
 

@@ -91,6 +91,7 @@ struct TraceClassificationResult {
   std::map<std::string, std::size_t> lookup_misses_by_kind;
   std::size_t tier2_fetched{0};
   std::size_t tier2_memo_hits{0};
+  std::size_t skipped_payload_actions{0};
 };
 
 struct BlockClassification {
@@ -162,6 +163,7 @@ struct SchemaClassifyResult {
   std::vector<std::string> matcher_names;
   std::size_t scrubbed{0};
   std::size_t unsupported_action_rows{0};
+  std::size_t skipped_payload_actions{0};
   bool unknown_row{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
@@ -197,7 +199,8 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 
-// Classification exceptions become terminal outcomes with no rows. Rescue
+// Engine exceptions become terminal outcomes with no rows. Payload validation
+// skips only that action and retains a failure reason. Rescue
 // construction precedes classification and may throw on allocation failure.
 // History unavailability overrides the outcome while retaining computed rows.
 // `prep` is process-lifetime const and shareable across threads.

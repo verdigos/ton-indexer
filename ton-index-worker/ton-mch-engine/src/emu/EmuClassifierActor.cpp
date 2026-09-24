@@ -140,6 +140,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       res.failure_category = classified.failure_category;
       res.used_fallback = classified.outcome == TraceOutcome::fallback;
       res.unsupported_action_rows += classified.unsupported_action_rows;
+      res.skipped_payload_actions = classified.skipped_payload_actions;
       res.lookup_stats = std::move(run.lookup_stats);
       res.tier2_stats = run.tier2_stats;
       // AAI uses the minimum transaction LT as the trace-start score. Redis
@@ -179,6 +180,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         stats_.fallback_actions += classified.rows.size();
       }
       stats_.unsupported_action_rows += res.unsupported_action_rows;
+      stats_.skipped_payload_actions += res.skipped_payload_actions;
       stats_.lookups.tier1_hits += res.lookup_stats.tier1_hits;
       stats_.lookups.tier2_hits += res.lookup_stats.tier2_hits;
       stats_.lookups.misses += res.lookup_stats.misses;
@@ -206,7 +208,12 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         stats_.classified++;
         res.outcome = EmuClassifyOutcome::classified;
         // The state distinguishes a synthetic unknown row from protocol actions.
-        res.payload.state = classified.unknown_row ? "unknown" : "ok";
+        res.payload.state = res.failure_reason.empty() ?
+            (classified.unknown_row ? "unknown" : "ok") : "partial";
+        if (!res.failure_reason.empty()) {
+          LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                       << " classified with skipped payload actions: " << res.failure_reason;
+        }
         std::string names;
         for (const std::string &n : classified.matcher_names) {
           if (!names.empty()) names += ",";
@@ -278,6 +285,7 @@ void EmuClassifierActor::alarm() {
             << " actions=" << stats_.actions << " (+" << (stats_.actions - prev_.actions) << ")"
             << " fallback_actions=" << stats_.fallback_actions
             << " unsupported_action_rows=" << stats_.unsupported_action_rows
+            << " skipped_payload_actions=" << stats_.skipped_payload_actions
             << " arena_refs_scrubbed=" << stats_.arena_refs_scrubbed
             << " finality{emulated=" << stats_.by_finality[0]
             << " confirmed=" << stats_.by_finality[1]

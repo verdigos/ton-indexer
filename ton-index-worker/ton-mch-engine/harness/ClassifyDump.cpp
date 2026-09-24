@@ -387,7 +387,7 @@ int run_action_payload_dump(const std::vector<std::string> &paths, const std::st
     view.nodes.resize(1);
     view.nodes.front().finality = EmuFinality::finalized;
     for (const auto &action : actions) {
-      const auto payload = encode_action_payload(action);
+      const auto payload = action_payload_bytes(action);
       const auto wire = serialize_redis_actions({action}, view);
       td::JsonBuilder builder;
       {

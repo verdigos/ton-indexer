@@ -239,6 +239,7 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   }
 
   ++classification_outcomes_[classified.outcome];
+  skipped_payload_actions_ += classified.skipped_payload_actions;
   LOG(DEBUG) << "trace=" << trace_key << " outcome=" << mch::trace_outcome_name(classified.outcome);
   if (classified.outcome == mch::TraceOutcome::fallback ||
       classified.outcome == mch::TraceOutcome::terminal_failure_empty) {
@@ -248,6 +249,11 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
                  << " (" << category_name(classified.failure_category)
                  << "): " << classified.failure_reason;
     return;
+  }
+  if (!classified.failure_reason.empty()) {
+    failed_trace_keys_.push_back(trace_key);
+    LOG(WARNING) << "trace=" << trace_key << " classified with skipped payload actions: "
+                 << classified.failure_reason;
   }
 
   total_actions_emitted_ += classified.rows.size();
@@ -327,6 +333,7 @@ void BatchRunner::finish() {
           << ",engine_fault=" << failures(mch::FailureCategory::engine_fault)
           << ",malformed_trace=" << failures(mch::FailureCategory::malformed_trace) << "}"
           << "; actions emitted=" << total_actions_emitted_
+          << "; skipped payload actions=" << skipped_payload_actions_
           << "; lookups{tier1_hits=" << lookup_stats_.tier1_hits
           << ",tier2_hits=" << lookup_stats_.tier2_hits << ",misses=" << lookup_stats_.misses
           << ",misses_by_kind={" << misses_by_kind << "}}"

@@ -41,6 +41,8 @@ struct Action {
   // consumed it and the btypes of every ancestor up the consumption chain.
   std::string parent_action_id;
   std::vector<std::string> ancestor_type;
+  // Set after the final data mutation in classification; empty for ad hoc actions.
+  std::string encoded_payload;
 };
 
 // One serialized row: the block, its precomputed id, and the fields determined

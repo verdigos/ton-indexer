@@ -46,18 +46,27 @@ Value dg(const Value &d, const char *k) {
 }
 bool has(const Value &d, const char *k) { return d.field(k) != nullptr; }
 
-// "0x" + lowercase magnitude, no leading zeros. Only used for EVAA asset_id
+// "0x" + lowercase, fixed-width 256-bit id. Only used for EVAA asset_id
 // (a positive 256-bit id). Null -> Null.
 Value av_hex(const Value &v) {
   if (v.is_null() || v.t != VType::Int || v.num.is_null()) return Value::null();
-  return Value::make_str("0x" + td::hex_string(v.num, false));
+  return Value::make_str("0x" + td::hex_string(v.num, false, 64));
 }
 
-// Same lowercase magnitude as av_hex, WITHOUT the "0x". Exists solely for
+// Same fixed-width hex as av_hex, WITHOUT the "0x". Exists solely for
 // Cocoon's `new_secret_hash`.
 Value av_hex_bare(const Value &v) {
   if (v.is_null() || v.t != VType::Int || v.num.is_null()) return Value::null();
-  return Value::make_str(td::hex_string(v.num, false));
+  return Value::make_str(td::hex_string(v.num, false, 64));
+}
+
+// uint_hex is general-purpose; only TgBTC's pubkey payload requires 32 bytes.
+Value av_pubkey(const Value &v) {
+  if (v.t != VType::Str || v.str.empty() || v.str.size() >= 64 ||
+      !std::all_of(v.str.begin(), v.str.end(), [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+      })) return v;
+  return Value::make_str(std::string(64 - v.str.size(), '0') + v.str);
 }
 
 // jetton/nft `comment`: produced field is RAW bytes (Bytes) or Null. encrypted
@@ -970,7 +979,7 @@ void fill_tgbtc_new_key(const Value &d, Action &a) {
   Value cr = dg(d, "crippled");
   if (cr.t == VType::Bool && cr.boolean) a.type += "_fallback";
   a.source = av_addr(dg(d, "teleport_contract"));
-  Value::Fields f{{"pubkey", dg(d, "pubkey")}};
+  Value::Fields f{{"pubkey", av_pubkey(dg(d, "pubkey"))}};
   if (a.type != "tgbtc_new_key") f.emplace_back("timestamp", dg(d, "timestamp"));
   a.data = mkdict(std::move(f));
   a.destination = av_addr(dg(d, "coordinator_contract"));
@@ -983,7 +992,7 @@ void fill_tgbtc_new_key(const Value &d, Action &a) {
 void fill_tgbtc_dkg_log(const Value &d, Action &a) {
   a.type = "tgbtc_dkg_log_fallback";
   a.source = av_addr(dg(d, "coordinator_contract"));
-  a.data = mkdict({{"pubkey", dg(d, "internal_pubkey")},
+  a.data = mkdict({{"pubkey", av_pubkey(dg(d, "internal_pubkey"))},
                    {"timestamp", dg(d, "timestamp")}});
 }
 

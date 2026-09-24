@@ -33,6 +33,7 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
     result.lookup_misses_by_kind = std::move(run.lookup_stats.misses_by_kind);
     result.tier2_fetched = run.tier2_stats.fetched;
     result.tier2_memo_hits = run.tier2_stats.memo_hits;
+    result.skipped_payload_actions = r.skipped_payload_actions;
     const double seconds = timer.elapsed();
     result.slow = seconds > policy_.slow_job_threshold_s;
     if (result.slow) {

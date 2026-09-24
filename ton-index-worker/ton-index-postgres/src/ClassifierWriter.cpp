@@ -99,7 +99,8 @@ bool insert_trace(pqxx::dbtransaction &txn, const TraceClassificationResult &tra
       throw std::runtime_error("no_account_links");
     }
     std::uint64_t failed = 0;
-    if (trace.outcome == TraceOutcome::fallback || trace.outcome == TraceOutcome::terminal_failure_empty) {
+    if (trace.outcome == TraceOutcome::fallback || trace.outcome == TraceOutcome::terminal_failure_empty ||
+        !trace.failure_reason.empty()) {
       failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id,
           trace.failure_reason.substr(0, trace.failure_reason.find_first_of("\r\n")).substr(0, 200)}).affected_rows();
     }
