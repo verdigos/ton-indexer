@@ -1,18 +1,21 @@
-// Internal registry surface: the registered host predicates and fns, one TU per
-// protocol. Declared here so
-// HostRegistry.cpp's host_predicates()/host_fns() maps can reference them across
-// TU boundaries. NOT part of the public HostRegistry.h surface.
+// Internal host-layer surface: the registered host predicates and fns, one TU
+// per protocol, plus the post-pass spine surgery ClassifyCore runs after the
+// walk. Declared here so HostRegistry.cpp's host_predicates()/host_fns() maps
+// and ClassifyCore.cpp's run_post_processors can reference them across TU
+// boundaries. NOT part of the public HostRegistry.h surface.
 #pragma once
 
 #include "ExprRuntime.h"
 #include "Value.h"
 
+#include <set>
 #include <vector>
 
 namespace mch {
 
-struct Block;     // BlockTree.h
-struct BuildEnv;  // BuildRuntime.h
+struct Block;       // BlockTree.h
+struct BlockArena;  // BlockTree.h
+struct BuildEnv;    // BuildRuntime.h
 struct ShaperMatch;  // HostRegistry.h
 
 // Getgems (HostNftSale.cpp): finish/stop sibling-payout shaper.
@@ -54,4 +57,12 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
 
 // Tonstakers (HostTonstakers.cpp).
 EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
+
+// Post-pass spine surgery for the liquidity-deposit pairs, in the order
+// ClassifyCore's run_post_processors fixes: DeDust V1 merge, then DeDust V2
+// pairing, then STON.fi V2 pairing. `removed` collects the folded-in blocks.
+void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block *> &removed);
+void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks, std::set<Block *> &removed);
+void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &arena,
+                                      std::set<Block *> &removed);
 }  // namespace mch

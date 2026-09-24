@@ -53,4 +53,10 @@ Value data_field(const Block *b, const char *name);
 // Equal iff same addr_none state and canonical "wc:HEX" string.
 bool same_account(const Value &a, const Value &b);
 
+// Post-pass spine helpers: a Dict field by name (Null when absent), and the
+// task-level equality the DeDust/STON.fi liquidity post-processors compare
+// assets with.
+Value pp_field(const Value &d, const std::string &k);
+bool pp_eq(const Value &a, const Value &b);
+
 }  // namespace mch

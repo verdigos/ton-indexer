@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -704,4 +705,103 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(d)));
 }
 
+// --- Post-pass spine surgery: STON.fi v2 liquidity pairing --------------------
+// Runs from ClassifyCore's run_post_processors over the spine, after the walk.
+
+namespace {
+
+// Stonfi v2 liquidity pairing. ZERO corpus coverage: the `< 2 legs` guard
+// returns immediately for every trace. KEEP; exercising it needs a 2-leg
+// fixture the corpus does not have yet.
+bool is_stonfi_v2_leg(const Block *b) {
+  if (b->btype != mch::btype::kDexDepositLiquidity) return false;
+  Value dex = pp_field(b->data, "dex");
+  return dex.t == VType::Str && dex.str == "stonfi_v2";
+}
+std::pair<int, std::int64_t> stonfi_v2_fire_order(const Block *b) {
+  const Block *anchor = nullptr;
+  for (Block *c : b->children_blocks) {
+    if (c->opcode && *c->opcode == 0x37c096dfu) { anchor = c; break; }
+  }
+  int depth = 0;
+  for (const Block *cur = anchor; cur != nullptr && cur->previous_block != nullptr;
+       cur = cur->previous_block) {
+    depth++;
+  }
+  return {depth, b->min_lt};
+}
+Block *stonfi_v2_leg_head(Block *block, Block *proxied) {
+  for (Block *c : block->children_blocks) {
+    if (c->previous_block == proxied) return c;
+  }
+  return nullptr;
+}
+void stonfi_v2_data_merge(Block *final_b, Block *partial) {
+  auto set = [&](const std::string &k, Value v) {
+    if (!final_b->data.fields) return;
+    for (auto &kv : *final_b->data.fields) {
+      if (kv.first == k) { kv.second = std::move(v); return; }
+    }
+    final_b->data.fields->emplace_back(k, std::move(v));
+  };
+  set("amount_2", pp_field(partial->data, "amount_1"));
+  set("asset_2", pp_field(partial->data, "asset_1"));
+  set("sender_wallet_2", pp_field(partial->data, "sender_wallet_1"));
+  if (pp_field(final_b->data, "lp_tokens_minted").is_null()) {
+    set("lp_tokens_minted", pp_field(partial->data, "lp_tokens_minted"));
+  }
+}
+
+}  // namespace
+
+void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &arena,
+                                      std::set<Block *> &removed) {
+  std::vector<Block *> deposits;
+  for (Block *b : blocks) {
+    if (is_stonfi_v2_leg(b)) deposits.push_back(b);
+  }
+  if (deposits.size() < 2) return;  // corpus always returns here
+  std::stable_sort(deposits.begin(), deposits.end(), [](const Block *a, const Block *b) {
+    return stonfi_v2_fire_order(a) < stonfi_v2_fire_order(b);
+  });
+  std::vector<Block *> alive;
+  for (Block *b : deposits) {
+    Block *a = nullptr;
+    for (Block *cand : alive) {
+      if (cand->previous_block != nullptr && cand->previous_block == b->previous_block) a = cand;
+    }
+    if (a != nullptr) {
+      Value as = pp_field(a->data, "sender"), bs = pp_field(b->data, "sender");
+      Value ap = pp_field(a->data, "pool"), bp = pp_field(b->data, "pool");
+      Value al = pp_field(a->data, "lp_tokens_minted"), bl = pp_field(b->data, "lp_tokens_minted");
+      Block *proxied = a->previous_block;
+      if (pp_eq(as, bs) && pp_eq(ap, bp) && !pp_eq(al, bl)) {
+        Block *in_transfer = stonfi_v2_leg_head(b, proxied);
+        Block *proxy = arena.make(mch::btype::kEmpty);
+        if (proxied != nullptr && in_transfer != nullptr) {
+          proxied->insert_between({a, in_transfer}, proxy);
+        }
+        b->children_blocks.push_back(a);
+        b->children_blocks.push_back(proxy);
+        a->parent = b;
+        proxy->parent = b;
+        b->initiating_event_node = proxy->initiating_event_node;
+        for (const EventNode *n : a->event_nodes) b->event_nodes.push_back(n);
+        b->calculate_min_max_lt();
+        stonfi_v2_data_merge(b, a);
+      } else {
+        b->children_blocks.push_back(a);
+        if (proxied != nullptr) b->children_blocks.push_back(proxied);
+        a->parent = b;
+        if (proxied != nullptr) proxied->parent = b;
+        for (const EventNode *n : a->event_nodes) b->event_nodes.push_back(n);
+        b->calculate_min_max_lt();
+      }
+      blocks.erase(std::remove(blocks.begin(), blocks.end(), a), blocks.end());
+      alive.erase(std::remove(alive.begin(), alive.end(), a), alive.end());
+      removed.insert(a);
+    }
+    alive.push_back(b);
+  }
+}
 }  // namespace mch

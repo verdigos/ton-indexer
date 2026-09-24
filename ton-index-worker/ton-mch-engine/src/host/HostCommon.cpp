@@ -1,6 +1,7 @@
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
+#include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "TraceModel.h"
 #include "btypes_gen.h"
@@ -91,6 +92,17 @@ Value data_field(const Block *b, const char *name) {
 bool same_account(const Value &a, const Value &b) {
   return a.t == VType::Account && b.t == VType::Account && a.addr_none == b.addr_none &&
          a.str == b.str;
+}
+
+// Post-pass spine helpers, shared by ClassifyCore's row filter and the DeDust
+// and STON.fi liquidity post-processors.
+Value pp_field(const Value &d, const std::string &k) {
+  const Value *v = d.field(k);
+  return v != nullptr ? *v : Value::null();
+}
+bool pp_eq(const Value &a, const Value &b) {
+  EvalResult r = rt_eq(a, b);
+  return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
 }
 
 }  // namespace mch
