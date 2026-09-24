@@ -763,9 +763,10 @@ std::string generate_builds_file(const Json &root, const std::string &header,
     const Json *matcher;
   };
   std::vector<Entry> entries;
-  // TODO: remove (harness): the `build_vectors` root is the TEST-ONLY document
-  // consumed by the devtools vector runner. The production root is the `matchers`
-  // branch below. The dual-root shape is what forces --suffix to exist at all.
+  // The `build_vectors` root is the test-only document (one entry per case, id = case
+  // index); the production root is the `matchers` branch below, where a matcher
+  // contributes an entry only if it carries a build_program. Both roots emit the same
+  // table shape, which is why the caller must pass a symbol suffix.
   if (const Json *cases = jfield(root, "build_vectors");
       cases != nullptr && cases->type() == JType::Array) {
     const auto &arr = cases->get_array();

@@ -67,13 +67,13 @@ does. The built-in source list still emits both build-tree IR copies, and
 
 ## Concurrency hazard
 
-Never share one binary dir across concurrently working agents/sessions: a
-parallel edit of an input spec or the built-in source list mid-build can be
+Never share one binary dir across concurrent builds: a parallel
+edit of an input spec or the built-in source list mid-build can be
 captured by one generator run and not another (and Syncthing can revert a file
 with its mtime preserved, so ninja may not even rerun the generator).
 `prepare_classify`'s
 cross-table sha check catches the resulting mismatch at startup, but the fix is
-isolation: one binary dir per agent.
+isolation: one binary dir per build.
 
 ## Vector sources
 
