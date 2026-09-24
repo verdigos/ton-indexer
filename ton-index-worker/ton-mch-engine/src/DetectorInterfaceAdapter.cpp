@@ -4,7 +4,7 @@
 
 namespace mch {
 
-schema::JettonWalletDataV2 to_v2(const JettonWalletDetectorR::Result &r) {
+schema::JettonWalletDataV2 to_schema(const JettonWalletDetectorR::Result &r) {
   schema::JettonWalletDataV2 v{};
   v.balance = r.balance;
   v.address = r.address;
@@ -14,7 +14,7 @@ schema::JettonWalletDataV2 to_v2(const JettonWalletDetectorR::Result &r) {
   return v;
 }
 
-schema::NFTItemDataV2 to_v2(const NftItemDetectorR::Result &r) {
+schema::NFTItemDataV2 to_schema(const NftItemDetectorR::Result &r) {
   schema::NFTItemDataV2 v{};
   v.address = r.address;
   v.init = r.init;
@@ -27,7 +27,7 @@ schema::NFTItemDataV2 to_v2(const NftItemDetectorR::Result &r) {
   return v;
 }
 
-schema::GetGemsNftFixPriceSaleData to_v2(const GetGemsNftFixPriceSale::Result &r) {
+schema::GetGemsNftFixPriceSaleData to_schema(const GetGemsNftFixPriceSale::Result &r) {
   schema::GetGemsNftFixPriceSaleData v{};
   v.address = r.address;
   v.is_complete = r.is_complete;
@@ -43,7 +43,7 @@ schema::GetGemsNftFixPriceSaleData to_v2(const GetGemsNftFixPriceSale::Result &r
   return v;
 }
 
-schema::GetGemsNftAuctionData to_v2(const GetGemsNftAuction::Result &r) {
+schema::GetGemsNftAuctionData to_schema(const GetGemsNftAuction::Result &r) {
   schema::GetGemsNftAuctionData v{};
   v.address = r.address;
   v.end = r.end;
@@ -75,7 +75,7 @@ schema::GetGemsNftAuctionData to_v2(const GetGemsNftAuction::Result &r) {
   return v;
 }
 
-schema::DedustPoolData to_v2(const DedustPoolDetector::Result &r) {
+schema::DedustPoolData to_schema(const DedustPoolDetector::Result &r) {
   schema::DedustPoolData v{};
   v.address = r.address;
   v.asset_1 = r.asset_1;
@@ -89,7 +89,7 @@ schema::DedustPoolData to_v2(const DedustPoolDetector::Result &r) {
   return v;
 }
 
-schema::NominatorPoolData to_v2(const NominatorPoolContract::Result &r) {
+schema::NominatorPoolData to_schema(const NominatorPoolContract::Result &r) {
   schema::NominatorPoolData v{};
   v.address = r.address;
   v.state = r.state;
@@ -111,7 +111,7 @@ schema::NominatorPoolData to_v2(const NominatorPoolContract::Result &r) {
   return v;
 }
 
-schema::GetGemsNftFixPriceSaleV4Data to_v2(const GetGemsNftFixPriceSaleV4::Result &r) {
+schema::GetGemsNftFixPriceSaleV4Data to_schema(const GetGemsNftFixPriceSaleV4::Result &r) {
   schema::GetGemsNftFixPriceSaleV4Data v{};
   v.address = r.address;
   v.is_complete = r.is_complete;
@@ -130,7 +130,7 @@ schema::GetGemsNftFixPriceSaleV4Data to_v2(const GetGemsNftFixPriceSaleV4::Resul
   return v;
 }
 
-schema::MultisigOrderData to_v2(const MultisigOrder::Result &r) {
+schema::MultisigOrderData to_schema(const MultisigOrder::Result &r) {
   schema::MultisigOrderData v{};
   v.address = r.address;
   v.multisig_address = r.multisig_address;

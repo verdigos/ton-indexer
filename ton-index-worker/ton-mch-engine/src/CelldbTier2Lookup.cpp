@@ -92,7 +92,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       fault_logged = true;
     }
   };
-  // One arm for every detector whose result maps straight through to_v2.
+  // One arm for every detector whose result maps straight through to_schema.
   // The telemint_item arm, nft_sale V1 leg, and code_hash arm keep their own
   // shape; the nft_sale V4 fallback shares only this tail.
   auto run_detector = [&](const auto &detect) -> std::optional<schema::BlockchainInterfaceV2> {
@@ -101,7 +101,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       log_detector_error(r.error());
       return std::nullopt;
     }
-    return to_v2(r.move_as_ok());
+    return to_schema(r.move_as_ok());
   };
 
   // The kind table is the one registry; a kind missing from it, or one tier 2
@@ -172,7 +172,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       }
       auto r = GetGemsNftFixPriceSale::detect(addr, st->code, st->data, config_);
       if (r.is_ok()) {
-        iface = to_v2(r.move_as_ok());
+        iface = to_schema(r.move_as_ok());
         break;
       }
       iface = run_detector([&] {

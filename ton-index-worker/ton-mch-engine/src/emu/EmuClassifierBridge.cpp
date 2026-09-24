@@ -42,32 +42,32 @@ TieredLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
     for (const auto &iface : ifaces) {
       std::visit(
           td::overloaded(
-              [&](const JettonWalletDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const JettonWalletDetectorR::Result &r) { adapted.push_back(to_schema(r)); },
               [&](const NftItemDetectorR::Result &r) {
-                auto v = to_v2(r);
+                auto v = to_schema(r);
                 v.code_hash = code_hash;
                 adapted.push_back(std::move(v));
               },
               [&](const GetGemsNftFixPriceSale::Result &r) {
-                auto v = to_v2(r);
+                auto v = to_schema(r);
                 v.code_hash = code_hash;
                 adapted.push_back(std::move(v));
               },
               [&](const GetGemsNftAuction::Result &r) {
-                auto v = to_v2(r);
+                auto v = to_schema(r);
                 v.code_hash = code_hash;
                 adapted.push_back(std::move(v));
               },
               // DeDust and nominator pools resolve in tier 1. nft_sale accepts
               // either fixed-price-sale variant.
               [&](const GetGemsNftFixPriceSaleV4::Result &r) {
-                auto v = to_v2(r);
+                auto v = to_schema(r);
                 v.code_hash = code_hash;
                 adapted.push_back(std::move(v));
               },
-              [&](const DedustPoolDetector::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const MultisigOrder::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const NominatorPoolContract::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const DedustPoolDetector::Result &r) { adapted.push_back(to_schema(r)); },
+              [&](const MultisigOrder::Result &r) { adapted.push_back(to_schema(r)); },
+              [&](const NominatorPoolContract::Result &r) { adapted.push_back(to_schema(r)); },
               [&](const TelemintContract::Result &r) {
                 adapted.push_back(schema::TelemintData{.address = r.address});
               },
