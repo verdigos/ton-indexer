@@ -1,8 +1,9 @@
 """M4 build-language frontend: lexer, parser, and resolver coverage.
 
-The compiler ignores build statements entirely in v0 (proof-of-concept branch);
-these tests exercise tokenizing, AST construction, and the one new resolver
-diagnostic (R010). See docs/mch-spec.md §9 for the normative build language.
+Build statements are compiled: `ir_emit` emits every matcher's `build_stmts` as
+its IR `build_program`. These tests exercise tokenizing, AST construction, and
+the resolver diagnostic (R010); build programs themselves are documented in
+`indexer/events/mch/README.md` §3.4.
 """
 from __future__ import annotations
 
