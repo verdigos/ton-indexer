@@ -160,10 +160,6 @@ bool insert_trace(pqxx::dbtransaction &txn, const TraceClassificationResult &tra
 
 }  // namespace
 
-bool insert_rejected(const std::string &sqlstate) {
-  return sqlstate.starts_with("22") || sqlstate.starts_with("23") || sqlstate.starts_with("54");
-}
-
 void classify_lock_blocks(pqxx::dbtransaction &txn, const std::vector<std::uint32_t> &seqnos) {
   auto sorted = seqnos;
   std::sort(sorted.begin(), sorted.end());

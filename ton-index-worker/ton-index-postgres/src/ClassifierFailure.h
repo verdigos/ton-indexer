@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ClassifierWriter.h"
+#include <pqxx/pqxx>
 
 #include <exception>
 #include <new>
@@ -8,6 +8,10 @@
 #include <string_view>
 
 namespace mch {
+
+inline bool insert_rejected(const std::string &sqlstate) {
+  return sqlstate.starts_with("22") || sqlstate.starts_with("23") || sqlstate.starts_with("54");
+}
 
 inline std::string classifier_failure_reason(std::exception_ptr error,
                                              std::string_view sql_prefix,

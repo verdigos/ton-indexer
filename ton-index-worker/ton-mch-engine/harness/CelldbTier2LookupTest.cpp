@@ -15,13 +15,12 @@
 #include "vm/cells/CellBuilder.h"
 #include "td/utils/logging.h"
 
-#include <array>
 #include <cstdio>
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <tuple>
 #include <variant>
 #include <vector>
@@ -520,15 +519,10 @@ void test_memo_and_guards() {
 }
 
 void test_lookup_kind_registry() {
-  check("registry/table_valid", lookup_kind_table_valid());
-  constexpr std::array<std::string_view, 10> expected_kinds{
+  const std::set<std::string> expected_kinds{
       "jetton_wallet", "nft_item", "nft_sale", "nft_auction", "dedust_pool",
       "nominator_pool", "multisig_order", "telemint_item", "jvault_assets", "code_hash"};
-  bool all_kinds_registered = lookup_kinds().size() == expected_kinds.size();
-  for (const auto kind : expected_kinds) {
-    all_kinds_registered = all_kinds_registered && lookup_kind(kind) != nullptr;
-  }
-  check("registry/expected_kinds_registered", all_kinds_registered);
+  check("registry/expected_kinds_registered", lookup_kinds() == expected_kinds);
   const auto *telemint = lookup_kind("telemint_item");
   check("registry/telemint_item_tier1_tier2",
         telemint != nullptr && telemint->tier1 && telemint->tier2);

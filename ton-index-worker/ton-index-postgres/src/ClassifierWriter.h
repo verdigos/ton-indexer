@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ClassifierFailure.h"
 #include "ClassifyCore.h"
 
 #include <pqxx/pqxx>
@@ -38,8 +39,6 @@ struct ClassifierWriterStats {
   std::uint64_t rejected_traces{0};
   std::uint64_t blocks_unmarked{0}, rescue_unset{0}, rescue_rejected{0};
 };
-
-bool insert_rejected(const std::string &sqlstate);
 
 void classify_live_write(pqxx::dbtransaction &txn, std::uint32_t mc_seqno,
                          const BlockClassification &bc, ClassifierWriterStats &st);
