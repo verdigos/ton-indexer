@@ -16,7 +16,6 @@
 #include "vm/excno.hpp"
 
 #include <exception>
-#include <map>
 #include <new>
 #include <utility>
 
@@ -93,18 +92,26 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       fault_logged = true;
     }
   };
-  static const std::map<std::string, LookupHandler> handlers = [] {
-    std::map<std::string, LookupHandler> result;
-    for (const auto &kind : kLookupKindTable) {
-      if (kind.tier2) result.emplace(kind.name, kind.handler);
+  // One arm for every detector whose result maps straight through to_v2. Arms
+  // whose detector takes no config (nominator_pool) or maps a different result
+  // (telemint_item) keep their own shape; the nft_sale V1→V4 fallback shares
+  // only this tail.
+  auto run_detector = [&](const auto &detect) -> std::optional<schema::BlockchainInterfaceV2> {
+    auto r = detect();
+    if (r.is_error()) {
+      log_detector_error(r.error());
+      return std::nullopt;
     }
-    return result;
-  }();
-  auto handler = handlers.find(kind);
-  if (handler == handlers.end()) {
+    return to_v2(r.move_as_ok());
+  };
+
+  // The kind table is the one registry; a kind missing from it, or one tier 2
+  // does not serve, is a miss.
+  const LookupKind *row = lookup_kind(kind);
+  if (row == nullptr || !row->tier2) {
     return Value::null();
   }
-  if (handler->second == LookupHandler::JvaultAssets) {
+  if (row->handler == LookupHandler::JvaultAssets) {
     return jvault_assets(addr);
   }
 
@@ -115,64 +122,34 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
 
   // Detectors that execute get-methods require config.
   std::optional<schema::BlockchainInterfaceV2> iface;
-  switch (handler->second) {
-    case LookupHandler::NftItem: {
-      if (config_ == nullptr) {
-        return Value::null();
-      }
-      auto r = NftItemDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
-      if (r.is_ok()) {
-        iface = to_v2(r.move_as_ok());
-      } else {
-        log_detector_error(r.error());
-      }
+  switch (row->handler) {
+    case LookupHandler::NftItem:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return NftItemDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
       break;
-    }
-    case LookupHandler::NftAuction: {
-      if (config_ == nullptr) {
-        return Value::null();
-      }
-      auto r = GetGemsNftAuction::detect(addr, st->code, st->data, config_);
-      if (r.is_ok()) {
-        iface = to_v2(r.move_as_ok());
-      } else {
-        log_detector_error(r.error());
-      }
+    case LookupHandler::NftAuction:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector(
+          [&] { return GetGemsNftAuction::detect(addr, st->code, st->data, config_); });
       break;
-    }
-    case LookupHandler::JettonWallet: {
-      if (config_ == nullptr) {
-        return Value::null();
-      }
-      auto r = JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
-      if (r.is_ok()) {
-        iface = to_v2(r.move_as_ok());
-      } else {
-        log_detector_error(r.error());
-      }
+    case LookupHandler::JettonWallet:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
       break;
-    }
-    case LookupHandler::DedustPool: {
-      if (config_ == nullptr) {
-        return Value::null();
-      }
-      auto r = DedustPoolDetector::detect(addr, st->code, st->data, *shard_states_, config_);
-      if (r.is_ok()) {
-        iface = to_v2(r.move_as_ok());
-      } else {
-        log_detector_error(r.error());
-      }
+    case LookupHandler::DedustPool:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return DedustPoolDetector::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
       break;
-    }
-    case LookupHandler::NominatorPool: {
-      auto r = NominatorPoolContract::detect(addr, st->code, st->data);
-      if (r.is_ok()) {
-        iface = to_v2(r.move_as_ok());
-      } else {
-        log_detector_error(r.error());
-      }
+    case LookupHandler::NominatorPool:
+      iface = run_detector(
+          [&] { return NominatorPoolContract::detect(addr, st->code, st->data); });
       break;
-    }
     case LookupHandler::TelemintItem: {
       if (config_ == nullptr && !telemint_detector_) {
         return Value::null();
@@ -199,28 +176,19 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
         iface = to_v2(r.move_as_ok());
         break;
       }
-      auto r4 = nft_sale_v4_detector_
-                    ? nft_sale_v4_detector_(addr, st->code, st->data, config_)
-                    : GetGemsNftFixPriceSaleV4::detect(addr, st->code, st->data, config_);
-      if (r4.is_ok()) {
-        iface = to_v2(r4.move_as_ok());
-      } else {
-        log_detector_error(r4.error());
-      }
+      iface = run_detector([&] {
+        return nft_sale_v4_detector_
+                   ? nft_sale_v4_detector_(addr, st->code, st->data, config_)
+                   : GetGemsNftFixPriceSaleV4::detect(addr, st->code, st->data, config_);
+      });
       break;
     }
-    case LookupHandler::MultisigOrder: {
-      if (config_ == nullptr) {
-        return Value::null();
-      }
-      auto r = MultisigOrder::detect(addr, st->code, st->data, *shard_states_, config_);
-      if (r.is_ok()) {
-        iface = to_v2(r.move_as_ok());
-      } else {
-        log_detector_error(r.error());
-      }
+    case LookupHandler::MultisigOrder:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return MultisigOrder::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
       break;
-    }
     case LookupHandler::JvaultAssets:
       break;
   }
