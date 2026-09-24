@@ -8,7 +8,7 @@
 
 #include "AbiBridgeTest.h"
 #include "ActionJsonTest.h"
-#include "Classify.h"
+#include "../harness/ClassifyDump.h"
 #include "RedisActionSerializeTest.h"
 #include "CelldbTier2LookupTest.h"
 #include "ClassifyCoreTest.h"

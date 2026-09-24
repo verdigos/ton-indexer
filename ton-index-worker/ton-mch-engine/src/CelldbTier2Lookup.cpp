@@ -92,10 +92,9 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
       fault_logged = true;
     }
   };
-  // One arm for every detector whose result maps straight through to_v2. Arms
-  // whose detector takes no config (nominator_pool) or maps a different result
-  // (telemint_item) keep their own shape; the nft_sale V1→V4 fallback shares
-  // only this tail.
+  // One arm for every detector whose result maps straight through to_v2.
+  // The telemint_item arm, nft_sale V1 leg, and code_hash arm keep their own
+  // shape; the nft_sale V4 fallback shares only this tail.
   auto run_detector = [&](const auto &detect) -> std::optional<schema::BlockchainInterfaceV2> {
     auto r = detect();
     if (r.is_error()) {

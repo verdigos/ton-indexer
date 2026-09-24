@@ -6,7 +6,7 @@
 
 #include "ActionBuild.h"
 #include "BlockTree.h"
-#include "Classify.h"
+#include "ClassifyDump.h"
 #include "SchemaTraceLoader.h"
 #include "Value.h"
 #include "RedisActionSerialize.h"

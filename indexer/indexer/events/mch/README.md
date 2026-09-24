@@ -452,6 +452,8 @@ Resolution has two tiers.
 Tier 1 reads interfaces already computed for the trace, in the indexer the completing block's own detections and in the emulator the trace's own emulation results.
 Tier 2 reads account state from celldb shard states through `CelldbTier2Lookup`.
 Both tiers render through the same mapper in `TieredLookupSource`, so the tier that served a value cannot change its shape.
+For an interface lookup, a tier-1 miss is final only for a trace transaction account that has no active-to-inactive transition and is present in the tier-1 map.
+An account outside that map still reaches tier 2.
 A miss in both tiers is `null`; a tier-2 read that fails logs one WARNING and returns a plain miss, so a lookup can never drop a trace's actions.
 
 | Kind | Tier 1 | Tier 2 | Record fields the specs read |

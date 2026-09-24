@@ -7,6 +7,7 @@
 #include "BlockInterfacesDetector.h"
 #include "Classify.h"
 #include "RedisActionSerialize.h"
+#include "emu/EmuTypes.h"
 
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/base64.h"

@@ -152,7 +152,7 @@ add_custom_target(mch_generate_sources
 # postgres links THIS; the CLI exe below links it + the harness TUs. Action-row
 # construction (Action struct + build_action + the fill_*) lives here in
 # ActionBuild.cpp; only the dump-side render_action + stdout printing stayed
-# with the harness Classify.cpp.
+# with the harness ClassifyDump.cpp.
 # ton-abi generated pairs live here (fixture pairs for the harness test below;
 # the PRODUCTION pairs compiled into mch-classify).
 set(TON_ABI_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/../ton-abi/generated)
@@ -314,7 +314,7 @@ add_custom_command(
 
 add_executable(ton-mch-engine
     src/main.cpp
-    harness/Classify.cpp
+    harness/ClassifyDump.cpp
     harness/AbiBridgeTest.cpp
     harness/RedisActionSerializeTest.cpp
     harness/CelldbTier2LookupTest.cpp
