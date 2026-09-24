@@ -1,9 +1,20 @@
+"""Build an LZ4 trace fixture from the TON HTTP APIs.
+
+Get methods run locally in the TVM emulator (pytvm). The emulator bundled with pytvm is too old
+(its c7 lacks MYCODE, so TEP-74 jetton wallets fail); download a current one first:
+
+    curl -L -o ~/libemulator-linux-x86_64.so \
+        https://github.com/ton-blockchain/ton/releases/latest/download/libemulator-linux-x86_64.so
+
+TVM_EMULATOR_LIB overrides the path.
+"""
 from __future__ import annotations
 
 import argparse
 import base64
 import hashlib
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -14,7 +25,10 @@ from typing import Any, Iterable
 import lz4.frame
 import msgpack
 from dotenv import dotenv_values
-from pytoniq_core import Address, Cell, ExternalMsgInfo, ExternalOutMsgInfo, HashMap, InternalMsgInfo, Transaction
+from pytoniq_core import (Address, Cell, ExternalMsgInfo, ExternalOutMsgInfo, HashMap, InternalMsgInfo, Slice,
+                          Transaction, VmStack)
+from pytvm.engine import EmulatorEngineC
+from pytvm.utils import get_method_id
 
 
 V2_URL = "https://toncenter.com/api/v2/"
@@ -57,6 +71,8 @@ class ApiClient:
         self.backoff = backoff
         self.opener = opener or (lambda request: urllib.request.urlopen(request, timeout=30))
         self.sleep = sleep or time.sleep
+        self._states: dict[tuple[str, int], dict | None] = {}
+        self._libraries: dict[bytes, Cell] = {}
         self._last_request: float | None = None
 
     def request(self, version: int, endpoint: str, *, params: dict | None = None,
@@ -98,8 +114,7 @@ class ApiClient:
                 last_status, last_gc = exc.status, exc.gc
             except urllib.error.HTTPError as exc:
                 last_status = exc.code
-                response_body = exc.read().decode("utf-8", "replace")
-                last_gc = "state already gc'd" in response_body.lower()
+                last_gc = "state already gc'd" in exc.read().decode("utf-8", "replace").lower()
                 if exc.code != 429 and exc.code < 500:
                     raise ApiError(f"TON API request failed with status {exc.code}") from None
             except (urllib.error.URLError, TimeoutError):
@@ -109,8 +124,10 @@ class ApiClient:
             except Exception:
                 raise ApiError("TON API transport failed") from None
 
+            # Only a rate limit backs off exponentially; other failures retry at a fixed pace,
+            # since the next request may land on another replica behind the load balancer.
             if attempt < self.retries:
-                self.sleep(min(self.backoff * (2 ** attempt), 8.0))
+                self.sleep(min(self.backoff * (2 ** attempt), 8.0) if last_status == 429 else self.backoff)
 
         if gc_miss and last_gc:
             return None
@@ -126,21 +143,60 @@ class ApiClient:
         })
         return result if isinstance(result, list) else result.get("transactions", [])
 
-    def get_address_information(self, address: str, seqno: int) -> dict:
-        return self.request(2, "getAddressInformation", params={"address": address, "seqno": seqno})
+    def get_address_information(self, address: str, seqno: int) -> dict | None:
+        key = (address, seqno)
+        if key not in self._states:
+            self._states[key] = self.request(2, "getAddressInformation", params={"address": address, "seqno": seqno}, gc_miss=True)
+        return self._states[key]
+
+    def get_library(self, lib_hash: bytes) -> Cell:
+        if lib_hash not in self._libraries:
+            result = self.request(2, "getLibraries", params={"libraries": lib_hash.hex()})
+            self._libraries[lib_hash] = Cell.one_from_boc(base64.b64decode(result[0]["data"]))
+        return self._libraries[lib_hash]
 
     def run_get_method(self, address: str, method: str, seqno: int,
                        stack: list | None = None) -> dict | None:
-        result = self.request(2, "runGetMethodStd", body={
-            "address": address, "method": method, "stack": stack or [], "seqno": seqno,
-        }, gc_miss=True)
-        try:
-            success = result is not None and int(result.get("exit_code", -1)) in (0, 1)
-        except (AttributeError, TypeError, ValueError):
-            success = False
-        if not success:
+        # Get methods run locally on the account state at `seqno`; only the state and
+        # library cells come from the API.
+        state = self.get_address_information(address, seqno)
+        if not state or not state.get("code") or not state.get("data"):
             return None
-        return result
+        code = Cell.one_from_boc(base64.b64decode(state["code"]))
+        engine = _tvm_engine()
+        emulator = engine.tvm_emulator_create(state["code"].encode(), state["data"].encode(), 0)
+        try:
+            libraries = self._code_libraries(code)
+            if libraries:
+                engine.tvm_emulator_set_libraries(emulator, _b64(libraries.to_boc()).encode())
+            engine.tvm_emulator_set_c7(emulator, address.encode(), int(state.get("sync_utime", 0)),
+                                       int(state["balance"]), b"0" * 64, None)
+            stack_boc = VmStack.serialize([_stack_value(entry) for entry in stack or []])
+            result = engine.tvm_emulator_run_get_method(emulator, get_method_id(method),
+                                                        _b64(stack_boc.to_boc()).encode())
+        finally:
+            engine.tvm_emulator_destroy(emulator)
+        if not result.get("success") or int(result.get("vm_exit_code", -1)) not in (0, 1):
+            return None
+        values = VmStack.deserialize(Slice.one_from_boc(result["stack"]))
+        return {"exit_code": int(result["vm_exit_code"]), "stack": [_stack_entry(value) for value in values]}
+
+    def _code_libraries(self, code: Cell) -> Cell | None:
+        libraries: dict[int, Cell] = {}
+        pending = [code]
+        while pending:
+            cell = pending.pop()
+            if cell.type_ == 2:
+                lib_hash = cell.bits[8:].tobytes()
+                if int.from_bytes(lib_hash, "big") not in libraries:
+                    library = self.get_library(lib_hash)
+                    libraries[int.from_bytes(lib_hash, "big")] = library
+                    pending.append(library)
+            pending.extend(cell.refs)
+        if not libraries:
+            return None
+        return HashMap(256, value_serializer=lambda value, builder: builder.store_ref(value),
+                       map_=libraries).serialize()
 
 
 class _Retryable(Exception):
@@ -151,6 +207,41 @@ class _Retryable(Exception):
 
 def _b64(value: bytes) -> str:
     return base64.b64encode(value).decode()
+
+
+_ENGINE: EmulatorEngineC | None = None
+
+
+def _tvm_engine() -> EmulatorEngineC:
+    global _ENGINE
+    if _ENGINE is None:
+        library = Path(os.environ.get("TVM_EMULATOR_LIB", "~/libemulator-linux-x86_64.so")).expanduser()
+        if not library.exists():
+            raise ApiError(f"TVM emulator library not found at {library}; see the module docstring")
+        _ENGINE = EmulatorEngineC(str(library))
+        _ENGINE.emulator_set_verbosity_level(0)
+    return _ENGINE
+
+
+def _stack_value(entry: dict):
+    """API-shaped TVM stack entry -> the value pytoniq's VmStack serializes."""
+    if entry.get("@type") == "tvm.stackEntryNumber":
+        return stack_number(entry)
+    cell, _ = stack_cell(entry)
+    return cell.begin_parse() if entry["@type"] == "tvm.stackEntrySlice" else cell
+
+
+def _stack_entry(value) -> dict:
+    """Emulator stack value -> the API-shaped entry the interface parsers read."""
+    if isinstance(value, int):
+        return _number_entry(value)
+    if isinstance(value, Slice):
+        return {"@type": "tvm.stackEntrySlice", "slice": {"bytes": _b64(value.to_cell().to_boc(hash_crc32=True))}}
+    if isinstance(value, Cell):
+        return {"@type": "tvm.stackEntryCell", "cell": {"bytes": _b64(value.to_boc(hash_crc32=True))}}
+    if value is None:
+        return {"@type": "tvm.stackEntryNull"}
+    return {"@type": "tvm.stackEntryUnsupported"}
 
 
 def fixture_int(value: int) -> int | str:
@@ -577,6 +668,8 @@ def collect_interfaces(client: ApiClient, addresses: Iterable[str], seqno: int,
         try:
             state = client.get_address_information(address, seqno)
         except ApiError:
+            return
+        if state is None:
             return
         states[address] = state
         data_boc, code_boc = state.get("data"), state.get("code")
