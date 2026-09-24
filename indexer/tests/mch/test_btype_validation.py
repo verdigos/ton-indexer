@@ -111,4 +111,4 @@ def test_btype_in_imported_recursive_rule(tmp_path, head, cyclic):
 
 def test_production_btype_heads_are_known():
     specs = Path(ir_emit.__file__).parent / "specs"
-    assert len(ir_emit.emit_manifest(specs / "manifest.yaml")["matchers"]) == 109
+    assert len(ir_emit.emit_manifest(specs / "manifest.yaml")["matchers"]) == 110

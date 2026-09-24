@@ -1516,6 +1516,36 @@
    "name": "Tonco swap, intermediate wallet interface pruned",
    "slug": "tonco-swap-intermediate-wallet-miss",
    "note": "synthetic: A Tonco swap lacks an intermediate wallet and classifies as two jetton transfers"
+  },
+  "TIPfXq6pzI9BouyiGiiy04DBqreAzocYnqyyE_ydtWw=": {
+   "group": "evaa",
+   "name": "EVAA liquidation ALTS jetton success",
+   "slug": "liquidate-alts-jetton-success"
+  },
+  "dsqOhobEBnBJeg2mAUe_Q5YtuVug0ac--2xDLzAkZ2M=": {
+   "group": "evaa",
+   "name": "EVAA liquidation TON success",
+   "slug": "liquidate-ton-success"
+  },
+  "Iq5x1H67TD8ExK7BujNojqa_t6oAdBMPsCa44S0bw2M=": {
+   "group": "evaa",
+   "name": "EVAA liquidation TON unsatisfied",
+   "slug": "liquidate-ton-unsatisfied"
+  },
+  "yfu-nSd0GWEtLshp9_aZrKBwVoSGvct8XJqHAKe8EFQ=": {
+   "group": "evaa",
+   "name": "EVAA liquidation TON bounce",
+   "slug": "liquidate-ton-bounce"
+  },
+  "lkXOvxpiT9rdz2JqxvEwVS7M2wwxLK52n1P3RD6yVf4=": {
+   "group": "evaa",
+   "name": "EVAA liquidation main jetton report success",
+   "slug": "liquidate-main-jetton-report"
+  },
+  "KFWQRXh705boDKq5Lk2LP-o5d2wJ9mDlO-v3kzRyMXA=": {
+   "group": "evaa",
+   "name": "EVAA liquidation main jetton payout success",
+   "slug": "liquidate-main-jetton-payout"
   }
  }
 }

@@ -643,6 +643,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"EvaaWithdrawFailExcess", &abi_parse_evaa_withdraw_fail_excess},
       {"EvaaSupplyJettonForward", &abi_parse_body<evaa_forward::EvaaSupplyJettonForward>},
       {"EvaaLiquidateMaster", &abi_parse_body<evaa::EvaaLiquidateMaster>},
+      {"EvaaLiquidateMasterV7", &abi_parse_body<evaa::EvaaLiquidateMasterV7>},
       {"EvaaLiquidateSatisfied", &abi_parse_body<evaa::EvaaLiquidateSatisfied>},
       {"EvaaLiquidateUnsatisfied", &abi_parse_evaa_liquidate_unsatisfied},
       {"EvaaLiquidateJettonForward", &abi_parse_body<evaa_forward::EvaaLiquidateJettonForward>},

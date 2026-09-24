@@ -57,7 +57,9 @@ order:
   - evaa_supply
   - evaa_supply_jetton
   - evaa_withdraw
+  # EVAA liquidation entries have disjoint jetton and direct master anchors.
   - evaa_liquidate
+  - evaa_liquidate_ton
 
   # Build NFT transfers before purchases and sales consume them.
   - nft_transfer

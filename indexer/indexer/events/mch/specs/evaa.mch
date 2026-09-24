@@ -13,6 +13,7 @@ opcode EvaaWithdrawLockedExcess            = 0x21e6
 opcode EvaaWithdrawNotCollateralizedExcess = 0x21e7
 opcode EvaaWithdrawMissingPricesExcess     = 0x21e8
 opcode EvaaWithdrawExecutionCrashed        = 0x21ec
+opcode EvaaLiquidateMaster                 = 0x3
 opcode EvaaLiquidateSatisfied              = 0x311
 opcode EvaaLiquidateUnsatisfied            = 0x31f
 opcode EvaaLiquidateSuccessReport          = 0x311d
@@ -21,6 +22,18 @@ opcode EvaaLiquidateFail                   = 0x311f
 rule evaa_note = btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
 rule liq_finish = xor { op EvaaLiquidateSuccessReport; op EvaaLiquidateFail; btype jetton_transfer }
 fn evaa_op(b) = (parse? b as EvaaUserOp).op
+fn evaa_refund_reason(code) = (
+    "liquidate_asset_transaction_fees" if code == 0x30e9 else
+    "master_liquidating_too_much" if code == 0x30f1 else
+    "user_withdraw_in_progress" if code == 0x31f0 else
+    "not_liquidatable" if code == 0x31f2 else
+    "min_collateral_not_satisfied" if code == 0x31f3 else
+    "user_not_enough_collateral" if code == 0x31f4 else
+    "user_liquidating_too_much" if code == 0x31f5 else
+    "master_not_enough_liquidity" if code == 0x31f6 else
+    "liquidation_prices_missing" if code == 0x31f7 else
+    "liquidation_execution_crashed" if code == 0x31fe else null
+)
 
 rule evaa_supply_flow =
     btype call_contract @user where (evaa_op(.) == 0x11)
@@ -30,6 +43,38 @@ rule evaa_supply_flow =
              op EvaaSupplyFail
              btype jetton_transfer @refund
          }
+
+rule evaa_liquidate_flow =
+    or {
+        btype call_contract @user where (evaa_op(.) == 0x31)
+          -> or {
+                 op EvaaLiquidateSatisfied @satisfied_success as EvaaLiquidateSatisfied
+                   -> { btype call_contract where (evaa_op(.) == 0x311a)
+                          -> maybe $evaa_note
+                        $liq_finish }
+                 op EvaaLiquidateSatisfied
+                   -> { op EvaaLiquidateFail
+                        $liq_finish }
+                 op EvaaLiquidateUnsatisfied @unsatisfied as EvaaLiquidateUnsatisfied
+                   -> $liq_finish
+             }
+        xor {
+            btype call_contract @immediate where (.msg.bounced)
+            btype jetton_transfer @immediate
+        }
+    }
+
+# EVAA refunds carry the error code as their opcode.
+rule evaa_liquidate_refund_leg =
+    btype call_contract @refund where (.msg.opcode in [0x30e9, 0x30f1, 0x31f0, 0x31f2, 0x31f3, 0x31f4, 0x31f5, 0x31f6, 0x31f7, 0x31fe])
+
+rule evaa_liquidate_refund =
+    or {
+        btype call_contract @user where (evaa_op(.) == 0x31)
+          -> op [EvaaLiquidateSatisfied, EvaaLiquidateUnsatisfied]
+          -> $evaa_liquidate_refund_leg
+        $evaa_liquidate_refund_leg
+    }
 
 matcher evaa_supply {
     produces evaa_supply
@@ -129,24 +174,7 @@ matcher evaa_liquidate {
     produces evaa_liquidate
 
     btype jetton_transfer @master where (.payload_opcode == 0x3)
-      -> or {
-             btype call_contract @user where (evaa_op(.) == 0x31)
-               -> or {
-                      op EvaaLiquidateSatisfied @satisfied_success as EvaaLiquidateSatisfied
-                        -> { btype call_contract where (evaa_op(.) == 0x311a)
-                               -> maybe $evaa_note
-                             $liq_finish }
-                      op EvaaLiquidateSatisfied
-                        -> { op EvaaLiquidateFail
-                             $liq_finish }
-                      op EvaaLiquidateUnsatisfied @unsatisfied as EvaaLiquidateUnsatisfied
-                        -> $liq_finish
-                  }
-             xor {
-                 btype call_contract @immediate where (.msg.bounced)
-                 btype jetton_transfer @immediate
-             }
-         }
+      -> $evaa_liquidate_flow
 
     let m = parse? master.data.forward_payload as EvaaLiquidateJettonForward
     let success = satisfied_success != null
@@ -162,5 +190,31 @@ matcher evaa_liquidate {
         is_success:          success
         fail_reason:         null if success else ("immediate_rejection" if immediate != null else ((unsatisfied.body.reason ?? "liquidation_error") if unsatisfied != null else "master_not_enough_liquidity"))
         debt_amount:         s.liquidatable_amount if success else l.amount.value
+    }
+}
+
+matcher evaa_liquidate_ton {
+    produces evaa_liquidate
+
+    op EvaaLiquidateMaster @master as EvaaLiquidateMaster
+      -> or { $evaa_liquidate_flow; $evaa_liquidate_refund }
+
+    let success = satisfied_success != null
+    let s = satisfied_success.body.info.ref
+    let v7 = parse? master as EvaaLiquidateMasterV7
+    # A v7 body names the liquidator; a mismatch with the sender means the new layout.
+    reject when v7 != null and account(v7.liquidator_address) != master.msg.source
+    reject when v7 == null and master.body == null
+    reject when success and satisfied_success.body == null
+    let m = v7 if v7 != null else master.body
+    out {
+        liquidator:          master.msg.source
+        borrower:            account(m.borrower_address) ?? addr_none()
+        borrower_contract:   user.msg.destination
+        collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
+        collateral_amount:   s.collateral_reward if success else 0
+        is_success:          success
+        fail_reason:         null if success else ("immediate_rejection" if immediate != null else (evaa_refund_reason(refund.msg.opcode) if refund != null else ((unsatisfied.body.reason ?? "liquidation_error") if unsatisfied != null else "master_not_enough_liquidity")))
+        debt_amount:         s.liquidatable_amount if success else m.liquidate_incoming_amount
     }
 }

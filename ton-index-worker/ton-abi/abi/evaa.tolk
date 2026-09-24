@@ -50,6 +50,17 @@ struct (0x00000003) EvaaLiquidateMaster {
     liquidate_incoming_amount: uint64;
 }
 
+@overflow1023_policy("suppress")
+struct (0x00000003) EvaaLiquidateMasterV7 {
+    _query_id: bits64;
+    borrower_address: any_address;
+    liquidator_address: any_address;
+    collateral_asset_id: uint256;
+    _min_collateral_amount: bits64;
+    _include_user_code: bits2;
+    liquidate_incoming_amount: uint64;
+}
+
 struct EvaaLiquidateSatisfiedInfo {
     _delta_loan_principal: int64;
     liquidatable_amount: uint64;
@@ -92,4 +103,6 @@ type AllowedMessage = EvaaSupplyMaster | EvaaSupplySuccess | EvaaWithdrawMaster 
 
 contract EvaaMessages {
     incomingMessages: AllowedMessage
+    // Both liquidation layouts use opcode 0x3; v7 includes liquidator_address.
+    forceAbiExport: EvaaLiquidateMasterV7
 }
