@@ -46,8 +46,8 @@ actions:
     value: 148596074
     opcode: 0x29ff1bcf
     tx_hashes:
-      - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
       - eqC+iJC977tFMqUEYZy61gtvsrbM1rMazQoF6nvt+1Q=
+      - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
     accounts:
       - 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
       - 0:26EC6A7A585F31A1E34F70F6B1C45FEA0A561F805D17B4A78909B6120EF2D9F0
@@ -75,8 +75,8 @@ actions:
     value: 150000000
     opcode: 0x5652f1df
     tx_hashes:
-      - 9J1LDeN0UIMV1E/jhswNeDaIWTvo8iz7jMlHb2ZZr/Y=
       - fjQUb23kT00oQ91fTrD48MAYii2jG9XD/bft1iLtzJc=
+      - 9J1LDeN0UIMV1E/jhswNeDaIWTvo8iz7jMlHb2ZZr/Y=
     accounts:
       - 0:12C0363D59F32479735CE6DAF8F2C36588EE8BA6442B1E0CCD9DC2EA6F9031F2
       - 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
@@ -148,12 +148,12 @@ actions:
           user_jetton_wallet: 0:AE3591F11C5F9B70937BF92B6AA5278AC28420082319D13E61C9220F1EE55AD8
       protocol: dedust_v2
     tx_hashes:
+      - fjQUb23kT00oQ91fTrD48MAYii2jG9XD/bft1iLtzJc=
       - 1uI+npDWnqXgJOfZkwZMGSysVKlVvCXOSA2z46nIdv0=
       - 9J1LDeN0UIMV1E/jhswNeDaIWTvo8iz7jMlHb2ZZr/Y=
       - DksAkNRRES3S/OVb6dOrk6ledsTTE9VGmRJyv6nmJW0=
       - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
       - eqC+iJC977tFMqUEYZy61gtvsrbM1rMazQoF6nvt+1Q=
-      - fjQUb23kT00oQ91fTrD48MAYii2jG9XD/bft1iLtzJc=
       - nL0Y071jbvN2uAT3s4h6ATcHwDVa34wgtgFfDQGeqDM=
       - rIgpzHTj9LuaIFQ2GduIMUwGRuhnriU/jwMwJjoy8CQ=
       - scQ9a7Xz+KTkfG+ZOiD2SALVENkU9xJFLtjiCnVMAtE=
@@ -194,8 +194,8 @@ actions:
       query_id: 557926665469839454
       response_destination: 0:12C0363D59F32479735CE6DAF8F2C36588EE8BA6442B1E0CCD9DC2EA6F9031F2
     tx_hashes:
-      - DksAkNRRES3S/OVb6dOrk6ledsTTE9VGmRJyv6nmJW0=
       - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
+      - DksAkNRRES3S/OVb6dOrk6ledsTTE9VGmRJyv6nmJW0=
       - rIgpzHTj9LuaIFQ2GduIMUwGRuhnriU/jwMwJjoy8CQ=
       - scQ9a7Xz+KTkfG+ZOiD2SALVENkU9xJFLtjiCnVMAtE=
     accounts:
@@ -233,8 +233,8 @@ actions:
       query_id: 557926665469839454
       response_destination: 0:12C0363D59F32479735CE6DAF8F2C36588EE8BA6442B1E0CCD9DC2EA6F9031F2
     tx_hashes:
-      - 1uI+npDWnqXgJOfZkwZMGSysVKlVvCXOSA2z46nIdv0=
       - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
+      - 1uI+npDWnqXgJOfZkwZMGSysVKlVvCXOSA2z46nIdv0=
       - nL0Y071jbvN2uAT3s4h6ATcHwDVa34wgtgFfDQGeqDM=
       - u7Y/5DbgwWBHvZUEPwq5O+XM4caQiGvCQv4edXAb/Y8=
     accounts:

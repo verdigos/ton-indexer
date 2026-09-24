@@ -24,8 +24,8 @@ actions:
       protocol: stonfi_v2
       tokens_minted: 123456
     tx_hashes:
-      - Cp/wzktBlN8geUnTlLmTPYp4Q00YJQ+EjQ4t5DVWzeI=
       - Ib2z1E8lOmcyvssFbaG1Mt7fXdmi3ExrE5DVyoVSwSo=
+      - Cp/wzktBlN8geUnTlLmTPYp4Q00YJQ+EjQ4t5DVWzeI=
       - IysnsBdnxJLYMcsz7DsQK9N4LCMoHbpsOd+/MUB+o8Y=
       - ahu+OauIJ+RwJB/WcvYRssFGX1ICylKkDqTiX7EKBN4=
       - jaoW09vTv34stljFA+feHwzvgdyPjGAG9pLeIlVqItY=

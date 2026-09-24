@@ -162,7 +162,7 @@ type RawAction struct {
 	EvaaLiquidateDebtAmount                              *string
 	EvaaLiquidateAssetId                                 *string
 	JvaultClaimClaimedJettons                            []RawActionJvaultClaimReward // carries claimed_rewards
-	JvaultClaimClaimedAmounts                            []string
+	JvaultClaimClaimedAmounts                            []string                     // no payload key; kept for the frozen RawAction JSON
 	JvaultStakePeriod                                    *int64
 	JvaultStakeMintedStakeJettons                        *string
 	JvaultStakeStakeWallet                               *AccountAddress
@@ -182,7 +182,7 @@ type RawAction struct {
 	CoffeeCreatePoolInitiator2                           *AccountAddress
 	CoffeeCreatePoolProvidedAsset                        *AccountAddress
 	CoffeeCreatePoolLpTokensMinted                       *string
-	CoffeeCreatePoolPoolCreatorContract                  *AccountAddress
+	CoffeeCreatePoolPoolCreatorContract                  *AccountAddress // no payload key; kept for the frozen RawAction JSON
 	CoffeeStakingDepositMintedItemAddress                *AccountAddress
 	CoffeeStakingDepositMintedItemIndex                  *string
 	CoffeeStakingWithdrawNftAddress                      *AccountAddress

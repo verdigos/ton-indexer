@@ -75,8 +75,8 @@ actions:
     value: 699414800
     opcode: 0xfafa6cc1
     tx_hashes:
-      - 6oc6UvfoZUkwNPJArlXhKYyCRebujYLtssWHJ5mTIGM=
       - AMdf+I0NoFEBeMMac3s9+0LcCUfLy1fYZcSp0MH7lnA=
+      - 6oc6UvfoZUkwNPJArlXhKYyCRebujYLtssWHJ5mTIGM=
     accounts:
       - 0:EE35299E2C43D1455080253B6BF9D350FE3EC7353CD90A2F07DF31CE68B6EF6C
       - 0:F978B227515EB9390BED8220B922543CFEFB5AE63BBB29BCFA95FA628E5D50EF
@@ -108,8 +108,8 @@ actions:
       query_id: 14276226389141423125
       via_wallet: false
     tx_hashes:
-      - 6oc6UvfoZUkwNPJArlXhKYyCRebujYLtssWHJ5mTIGM=
       - AMdf+I0NoFEBeMMac3s9+0LcCUfLy1fYZcSp0MH7lnA=
+      - 6oc6UvfoZUkwNPJArlXhKYyCRebujYLtssWHJ5mTIGM=
       - FgzifrEzAj9y6sA6kaSC1U3Be75WcSxwpD7mbr276mM=
       - s2+8VG+YrerxxNKq43vkPcfpr98ycyebl7dGd7LwQ1I=
     accounts:

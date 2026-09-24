@@ -17,8 +17,8 @@ actions:
     value: 156734800
     opcode: 0x178d4519
     tx_hashes:
-      - 17l2OpogiqlbwlpCM8CQCKYKYvFsvjunDy2zuHE23Bs=
       - baUTCqut179Bf7wMB8suObf0TZYyVoT725OOq6El8vE=
+      - 17l2OpogiqlbwlpCM8CQCKYKYvFsvjunDy2zuHE23Bs=
     accounts:
       - 0:1F9EA604EBCF3C6235686BFD4D7B55E9A32F78CADE68A4EC19A6A405BBB22673
       - 0:4EEC921B9D4D56A0D94676016D49C26B39B1D7901A7E153E66033F146A0886F4
@@ -62,10 +62,10 @@ actions:
       protocol: stonfi
       sender: 0:D5F187E3B4B97342D09FE17AD28C6B3097D909F8F32C3843B85DF90FBA5D8194
     tx_hashes:
+      - E/ktemwUPyP4hfuuBbuf3DUnN33611NaKQhG3odLZao=
       - /2En88JKP7+7mtr+IpWtE9jygEqSzRoPE7/0w5OrnL0=
       - 17l2OpogiqlbwlpCM8CQCKYKYvFsvjunDy2zuHE23Bs=
       - 9mSP456c9f00t+hsWwkodYhrGyKPzAiAjW65Hdc1yrk=
-      - E/ktemwUPyP4hfuuBbuf3DUnN33611NaKQhG3odLZao=
       - Fi3WYWI9veAVPPnx6FdYwwBerQkprfCG7mmatagZQV4=
       - MUw0+LTvCA0CWRQFWSgE7A1kvWr8NPdNEIFEMYAjA8I=
       - baUTCqut179Bf7wMB8suObf0TZYyVoT725OOq6El8vE=

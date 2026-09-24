@@ -34,8 +34,8 @@ actions:
       protocol: stonfi
       sender: 0:49E60973E9A8F252D986DDB49895A0D7419A077891E4CA6B66D4664ED06AB8DC
     tx_hashes:
-      - +LJ7Qa77hEXs1XsyQJPfxnOVLWvcsLG5SCU5uFW30hY=
       - 01SkGWslZ8iEn3bXyb0ga5dWB5gRzw8zWAuwfUI4ZMA=
+      - +LJ7Qa77hEXs1XsyQJPfxnOVLWvcsLG5SCU5uFW30hY=
       - LLa2LDE9JTIksF56EdXgEFLMqakKjCZlt0vK+T1shW4=
       - feBysXar3Lpn61a5g6gbhHpYY90W5RVNcNlo3ZY2HlI=
       - gzV5K5gxMXQbiJgxzF/FBVGLVO90Zi1hTZK+Fc2n39k=

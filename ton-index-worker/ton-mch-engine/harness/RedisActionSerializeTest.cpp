@@ -83,6 +83,14 @@ bool is_str(const msgpack::object *value, const std::string &want) {
          std::memcmp(value->via.str.ptr, want.data(), want.size()) == 0;
 }
 
+bool is_hash_array(const msgpack::object *value, const std::vector<std::string> &want) {
+  if (value == nullptr || value->type != msgpack::type::ARRAY || value->via.array.size != want.size()) return false;
+  for (std::size_t i = 0; i < want.size(); i++) {
+    if (!is_str(elem(value, static_cast<std::uint32_t>(i)), want[i])) return false;
+  }
+  return true;
+}
+
 bool is_uint(const msgpack::object *value, std::uint64_t want) {
   return value != nullptr && value->type == msgpack::type::POSITIVE_INTEGER && value->via.u64 == want;
 }
@@ -103,6 +111,7 @@ std::string binary_string(const msgpack::object *value) {
 
 const std::string kAddrA = "0:" + std::string(64, 'A');
 const std::string kAddrB = "0:" + std::string(64, 'B');
+const std::string kAddrC = "0:" + std::string(64, 'C');
 const std::string kTraceKey = "6JLNRxi7yQKUYYSGxSt8SVLZKvC3vHMqBLHqOKTqDGA=";
 
 EmuTraceView make_view(std::vector<EmuFinality> finalities) {
@@ -150,13 +159,11 @@ void test_fixed_envelope() {
   check("fixed/trace_external_hash_norm", is_str(at(*row, "trace_external_hash_norm"), kTraceKey));
   check("fixed/tx_hashes", at(*row, "tx_hashes") != nullptr);
   check("fixed/accounts", at(*row, "accounts") != nullptr);
-  check("fixed/parent_action_id_nil", at(*row, "parent_action_id") != nullptr &&
-                                           at(*row, "parent_action_id")->type == msgpack::type::NIL);
   check("fixed/payload_binary", at(*row, "payload") != nullptr &&
                                    at(*row, "payload")->type == msgpack::type::BIN);
   check("fixed/omits_data", absent(*row, "data"));
   check("fixed/omits_legacy_composite", absent(*row, "ton_transfer_data"));
-  check("fixed/exact_key_count", row->via.map.size == 13);
+  check("fixed/exact_key_count", row->via.map.size == 12);
 }
 
 void test_columns_and_payload() {
@@ -200,14 +207,12 @@ void test_columns_and_payload() {
 
 void test_finality_and_child_fields() {
   Action action = base_action();
-  action.parent_action_id = "QIoX0flkEEHBMhk2Z6QlnxrXlWXACZBCee6T8YKYSKE=";
   action.ancestor_type = {"jvault_stake", "teleitem_start_auction"};
   Decoded decoded(serialize_redis_actions(
       {action}, make_view({EmuFinality::finalized, EmuFinality::emulated, EmuFinality::confirmed})));
   const auto *row = first_row(decoded);
   check("child/decodes", decoded.ok() && row != nullptr);
   if (row == nullptr) return;
-  check("child/parent_action_id", is_str(at(*row, "parent_action_id"), action.parent_action_id));
   check("child/ancestor_type", elem(at(*row, "ancestor_type"), 0) != nullptr &&
                                   is_str(elem(at(*row, "ancestor_type"), 0), "jvault_stake"));
   check("child/finality_min", is_uint(at(*row, "finality"), 0));
@@ -254,6 +259,8 @@ void test_fixture_emulator_batch_parity() {
     check("fixture/row_payload_" + std::to_string(i),
           row != nullptr && is_binary(at(*row, "payload"), encode_action_payload(actions[i])) &&
               absent(*row, "data") && absent(*row, "ton_transfer_data"));
+    check("fixture/row_hashes_" + std::to_string(i),
+          row != nullptr && is_hash_array(at(*row, "tx_hashes"), actions[i].tx_hashes));
   }
 #else
   check("fixture/path_macro", false);
@@ -278,12 +285,116 @@ void test_determinism() {
   check("determinism/byte_identical", !first.empty() && first == second);
 }
 
+void test_positional_legs() {
+  auto payload = [](bool first, bool second) {
+    Block block;
+    block.btype = "dedust_deposit_liquidity_partial";
+    Value::Fields fields{{"dex", Value::make_str("dedust")}};
+    auto add_leg = [&](int slot, const std::string &asset, std::int64_t amount) {
+      const auto suffix = std::to_string(slot);
+      fields.emplace_back("asset_" + suffix, Value::make_account_raw(asset));
+      fields.emplace_back("amount_" + suffix, Value::make_int64(amount));
+      fields.emplace_back("target_asset_" + suffix, Value::make_account_raw(kAddrB));
+      fields.emplace_back("target_amount_" + suffix, Value::make_int64(amount + 1));
+      fields.emplace_back("user_jetton_wallet_" + suffix, Value::make_account_raw(kAddrC));
+    };
+    if (first) add_leg(1, kAddrA, 123);
+    if (second) add_leg(2, kAddrA, 456);
+    block.data = Value::make_dict(std::move(fields));
+    Action action;
+    check("legs/build", build_action(&block, action));
+    return encode_action_payload(action);
+  };
+
+  const auto one_sided = payload(false, true);
+  Decoded first_empty(one_sided.substr(1));
+  const auto *first_data = at(first_empty.root(), "data");
+  const auto *first_legs = first_data ? at(*first_data, "legs") : nullptr;
+  const auto *slot_1 = elem(first_legs, 0);
+  const auto *slot_2 = elem(first_legs, 1);
+  check("legs/first_empty", one_sided.front() == '\x01' && first_empty.ok() &&
+                               first_legs != nullptr && first_legs->type == msgpack::type::ARRAY &&
+                               first_legs->via.array.size == 2 &&
+                               first_data != nullptr && is_str(at(*first_data, "protocol"), "dedust") &&
+                               slot_1 != nullptr && slot_1->type == msgpack::type::NIL &&
+                               slot_2 != nullptr && slot_2->type == msgpack::type::MAP &&
+                               slot_2->via.map.size == 5 &&
+                               is_str(at(*slot_2, "asset"), kAddrA) &&
+                               is_str(at(*slot_2, "amount"), "456") &&
+                               is_str(at(*slot_2, "target_asset"), kAddrB) &&
+                               is_str(at(*slot_2, "target_amount"), "457") &&
+                               is_str(at(*slot_2, "user_jetton_wallet"), kAddrC));
+  std::printf("LEGS-ONE-SIDED-HEX ");
+  for (unsigned char byte : one_sided) std::printf("%02x", byte);
+  std::printf("\n");
+
+  const auto trailing_empty = payload(true, false);
+  Decoded second_empty(trailing_empty.substr(1));
+  const auto *second_data = at(second_empty.root(), "data");
+  const auto *second_legs = second_data ? at(*second_data, "legs") : nullptr;
+  const auto *only_leg = elem(second_legs, 0);
+  check("legs/trailing_empty", second_empty.ok() && second_legs != nullptr &&
+                                  second_legs->type == msgpack::type::ARRAY &&
+                                  second_legs->via.array.size == 1 && only_leg != nullptr &&
+                                  is_str(at(*only_leg, "amount"), "123"));
+
+  const auto all_empty = payload(false, false);
+  Decoded no_legs(all_empty.substr(1));
+  const auto *empty_data = at(no_legs.root(), "data");
+  check("legs/all_empty", no_legs.ok() && empty_data != nullptr && absent(*empty_data, "legs"));
+
+  const auto full = payload(true, true);
+  Decoded both(full.substr(1));
+  const auto *full_data = at(both.root(), "data");
+  const auto *full_legs = full_data ? at(*full_data, "legs") : nullptr;
+  const auto *full_first = elem(full_legs, 0);
+  const auto *full_second = elem(full_legs, 1);
+  check("legs/both_filled", both.ok() && full_legs != nullptr &&
+                                full_legs->type == msgpack::type::ARRAY &&
+                                full_legs->via.array.size == 2 &&
+                                full_first != nullptr && full_second != nullptr &&
+                                is_str(at(*full_first, "amount"), "123") &&
+                                is_str(at(*full_second, "amount"), "456"));
+}
+
+void test_tx_hash_order() {
+  Transaction tx_a, tx_b, tx_z;
+  tx_a.hash = "A"; tx_a.lt = 2;
+  tx_b.hash = "B"; tx_b.lt = 3;
+  tx_z.hash = "Z"; tx_z.lt = 1;
+  EventNode node_a, node_b, node_z, initiating;
+  node_a.tx = &tx_a; node_a.is_tick_tock = true;
+  node_b.tx = &tx_b; node_b.is_tick_tock = true;
+  node_z.tx = &tx_z; node_z.is_tick_tock = true;
+  initiating.tx = &tx_z;
+  Block block;
+  block.btype = "tick_tock";
+  block.event_nodes = {&node_z, &node_b, &node_a};
+  block.initiating_event_node = &initiating;
+  Action action;
+  check("hash_order/initiating_build", build_action(&block, action));
+  check("hash_order/initiating_first_unique", action.tx_hashes == std::vector<std::string>({"Z", "A", "B"}));
+  Decoded encoded(serialize_redis_actions({action}, make_view({EmuFinality::finalized})));
+  const auto *row = first_row(encoded);
+  check("hash_order/initiating_wire", encoded.ok() && row != nullptr &&
+                                       is_hash_array(at(*row, "tx_hashes"), {"Z", "A", "B"}));
+
+  block.initiating_event_node = nullptr;
+  Action rooted;
+  check("hash_order/rooted_build", build_action(&block, rooted));
+  check("hash_order/rooted_first", rooted.tx_hashes == std::vector<std::string>({"Z", "A", "B"}));
+
+  tx_b.lt = 1;
+  Action tied;
+  check("hash_order/tied_build", build_action(&block, tied));
+  check("hash_order/tied_smaller_hash_first", tied.tx_hashes == std::vector<std::string>({"B", "A", "Z"}));
+}
+
 }  // namespace
 
 std::string wire_fixture_bytes() {
   Action action = base_action();
   action.type = "jetton_transfer";
-  action.parent_action_id = "QIoX0flkEEHBMhk2Z6QlnxrXlWXACZBCee6T8YKYSKE=";
   action.ancestor_type = {"jvault_stake"};
   action.source = Value::make_account_raw(kAddrA);
   action.destination = Value::make_account_raw(kAddrB);
@@ -311,6 +422,8 @@ int run_action_msgpack_test() {
   test_fixture_emulator_batch_parity();
   test_wire_fixture();
   test_determinism();
+  test_positional_legs();
+  test_tx_hash_order();
   std::printf("ACTIONS-MSGPACK-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

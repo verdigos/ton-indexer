@@ -33,6 +33,7 @@ actions:
       protocol: coffee
       tokens_burnt: 3162270
     tx_hashes:
+      - b0QdK2TPX7Pv7NiXvpJxf/0PEumbW1FMewsnbFi+nqs=
       - 1uY8gWUsi2zTXjV4hruwJViuhIxhk0oNaRTDnop8ytE=
       - 3nRzXHN7CPoBn2qEJCqB7e9OyJmdOi1nNvsbcazR8E8=
       - 4vsKjIRSdepsJ1qlvnBK1hz06LKtZpiZKkL6lkCr7KE=
@@ -40,7 +41,6 @@ actions:
       - 7WOV035pLvo791GCGpRonDhPShxHoFtpoeYW+JNIOMs=
       - Dzc3e/IOzyeq51eiDFTABOkYzqDfOhnbZWsgrbltT2Y=
       - ZXyktBBGvmpX262/rdjbigOxPkczG5RDVPrvILlMejA=
-      - b0QdK2TPX7Pv7NiXvpJxf/0PEumbW1FMewsnbFi+nqs=
       - e9H7UdXUUBgxtKM4pPO0sAkTN+ziLDV5jwpqQwWeJRI=
       - hBT38CKSnAPq2RHmGHKsxL63ghE0NfaJ6OEXscvQ4GA=
       - yzSO3B5bfc0TinKPlSLvw6RINQzP0k37yeuw1dnoaiA=

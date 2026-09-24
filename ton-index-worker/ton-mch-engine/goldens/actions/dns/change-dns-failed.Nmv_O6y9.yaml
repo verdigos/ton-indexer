@@ -23,8 +23,8 @@ actions:
       record_value: 0:D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4
       value_schema: DNSNextResolver
     tx_hashes:
-      - A3cqAdmMk/EQWj6EutCLsNckUqeLGju+r27ND2McwTY=
       - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - A3cqAdmMk/EQWj6EutCLsNckUqeLGju+r27ND2McwTY=
       - zschLenripMM09j8QPwj4JSRqSOSiAPztimDu2x9j7o=
     accounts:
       - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1

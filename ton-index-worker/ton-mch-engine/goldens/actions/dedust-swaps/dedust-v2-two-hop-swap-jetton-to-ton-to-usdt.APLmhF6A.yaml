@@ -44,8 +44,8 @@ actions:
       protocol: dedust_v2
       sender: 0:D0DB2C7F2C12A8034635ED82A8161A10E10D22BC2F3860C8A0A8C0CFF0180BAF
     tx_hashes:
-      - /DVoqnCFe3tZzMdtUpDCi50X9GTYXFFrYs0AAnVOMo4=
       - APLmhF6A2x2HJkhGrBOB86fUizlonodaK7bUPNGDOIU=
+      - /DVoqnCFe3tZzMdtUpDCi50X9GTYXFFrYs0AAnVOMo4=
       - DRABUYsCmjCeGKkUSd/a6x3I5JSOByA2ZaCLiVaehvk=
       - F50zKrRKVhWxpK+UZXP0vSP4PxKSojjsO5aYosq+l8M=
       - Feh+OKLZzB39vWyFEBsjDAMiuVU9rQHJoZ+o4fT5sSo=

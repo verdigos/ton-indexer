@@ -50,8 +50,8 @@ actions:
       nft_address: 0:BC36AD7C77A596ABF16AB8BCE9D8B682D40B6EE1873D74114E9C151E63E435AC
       nft_index: 1317
     tx_hashes:
-      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - K/PlZB5RlxrIdSTiEdvKqazSqLUWzQ8PB4NzDTxAHk8=
+      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - W+DDyV7mEHP4gHOzPF8KuJavLsL/voR6/Lx5d2l1NGA=
       - ZoLRgarnN4Sepj6ZzNK/dnC1cxT/b9VO4WzxMzkykas=
       - oXqXwthII141mgeQXnubkvXh4tuTHG1H6w6Pg+x3Uc4=
@@ -118,8 +118,8 @@ actions:
       query_id: 1697643576172154
       response_destination: 0:626861460C096445C421A86448786B5D6A8339DFAE38406EFE4886ED9B4BC90B
     tx_hashes:
-      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - K/PlZB5RlxrIdSTiEdvKqazSqLUWzQ8PB4NzDTxAHk8=
+      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - W+DDyV7mEHP4gHOzPF8KuJavLsL/voR6/Lx5d2l1NGA=
       - ZoLRgarnN4Sepj6ZzNK/dnC1cxT/b9VO4WzxMzkykas=
       - t5TlcBe3sGJ/IQSO52Fmk3cDqytHpD3Ld0QmeW2pgOg=

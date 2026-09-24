@@ -538,7 +538,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		details.Owner = raw.Source
 		details.ListingAddress = raw.SourceSecondary
 		details.SaleAddress = raw.Destination
-		details.MarketplaceAddress = raw.DestinationSecondary
+		details.MarketplaceAddress = raw.NFTTransferMarketplaceAddress
 		if found, marketplaceName := GetMarketplaceName(raw.NFTTransferMarketplaceAddress, raw.Asset); found {
 			details.Marketplace = &marketplaceName
 		}
@@ -556,8 +556,8 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		details.Owner = raw.Source
 		details.ListingAddress = raw.SourceSecondary
 		details.AuctionAddress = raw.Destination
-		details.MarketplaceAddress = raw.DestinationSecondary
-		if found, marketplaceName := GetMarketplaceName(raw.DestinationSecondary, raw.Asset); found {
+		details.MarketplaceAddress = raw.NFTTransferMarketplaceAddress
+		if found, marketplaceName := GetMarketplaceName(raw.NFTTransferMarketplaceAddress, raw.Asset); found {
 			details.Marketplace = &marketplaceName
 		}
 		details.MarketplaceFeeFactor = raw.NFTListingMarketplaceFeeFactor
@@ -669,7 +669,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		}
 	case "evaa_supply":
 		act.Details = models.ActionDetailsEvaaSupply{
-			SenderJettonWallet:    raw.EvaaSupplySenderJettonWallet,
+			SenderJettonWallet:    raw.SourceSecondary,
 			RecipientJettonWallet: raw.EvaaSupplyRecipientJettonWallet,
 			MasterJettonWallet:    raw.EvaaSupplyMasterJettonWallet,
 			Master:                raw.EvaaSupplyMaster,
@@ -839,7 +839,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			Amount1:             raw.CoffeeCreatePoolAmount1,
 			Amount2:             raw.CoffeeCreatePoolAmount2,
 			LpTokensMinted:      raw.CoffeeCreatePoolLpTokensMinted,
-			PoolCreatorContract: raw.CoffeeCreatePoolPoolCreatorContract,
+			PoolCreatorContract: raw.DestinationSecondary,
 		}
 	case "coffee_create_pool_creator":
 		act.Details = models.ActionDetailsCoffeeCreatePoolCreator{
@@ -847,7 +847,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			SourceJettonWallet:  raw.SourceSecondary,
 			DepositRecipient:    raw.Destination,
 			PoolCreatorContract: raw.DestinationSecondary,
-			ProvidedAsset:       raw.CoffeeCreatePoolProvidedAsset,
+			ProvidedAsset:       raw.Asset,
 			Asset1:              raw.Asset,
 			Asset2:              raw.Asset2,
 			Amount:              raw.Amount,

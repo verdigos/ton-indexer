@@ -17,8 +17,8 @@ actions:
     value: 648198400
     opcode: 0x0000031f
     tx_hashes:
-      - 1JIzvYkEx7sGHB3L04Rv7UuO8RdYGQI3XgW8qxejn1g=
       - fIsrQUjAWP2Iwj25LBYvHOViaqR0XaYrMAD2vP0rKWI=
+      - 1JIzvYkEx7sGHB3L04Rv7UuO8RdYGQI3XgW8qxejn1g=
     accounts:
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
       - 0:CBB3B4378D1DC4CF7D80D9B33C8F50D80C4D20DBE96F0902DB78627300CE5E11
@@ -106,8 +106,8 @@ actions:
       debt_amount: 190432
       fail_reason: not_liquidatable
     tx_hashes:
-      - 1JIzvYkEx7sGHB3L04Rv7UuO8RdYGQI3XgW8qxejn1g=
       - Fj6hSkHT6F+PyFB1F3+hq2alVtEYB0BkAzPQCGUp3BI=
+      - 1JIzvYkEx7sGHB3L04Rv7UuO8RdYGQI3XgW8qxejn1g=
       - OEdU6bkWsF+QNeg/2TwPvirP7ThpKM9bzkr01CabGG0=
       - Z8IxqPKMhWN0iuM2x8q5jbPdEYfD0f6yVr1PoGOXpFQ=
       - cfky8pgW5efC70At0ay03+StFmsbvuiMju+OxtxEkPA=

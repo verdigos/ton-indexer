@@ -6,6 +6,7 @@ keeps these codec-prefixed bytes in its binary `payload` field. Row columns
 such as `source`, `destination`, `asset`, `amount` and `opcode` are not payload
 keys when they occur at the row level. The 124 rows below are the union of all
 per-stored-type key sets; absent keys are omitted.
+For classified actions, `tx_hashes` starts with the initiating transaction, or the root-level block's earliest transaction by `tx->lt`, followed by the remaining hashes sorted ascending.
 
 | Key | Shape | Uses |
 |---|---|---:|
@@ -47,7 +48,7 @@ per-stored-type key sets; absent keys are omitted.
 | `initial_price_x96` | integer_string | Tonco |
 | `initiator` | ton_address | Coffee legs |
 | `is_created_by_signer` | boolean | multisig |
-| `is_purchase` | boolean | NFT |
+| `is_purchase` | boolean | NFT transfer and purchase actions |
 | `is_refund` | boolean | DEX claims and withdrawals |
 | `is_signed_by_creator` | boolean | multisig |
 | `is_ton` | boolean | EVAA |
@@ -123,7 +124,7 @@ per-stored-type key sets; absent keys are omitted.
 | `tick_upper` | integer_string | DEX |
 | `tokens_burnt` | integer_string | DEX and staking |
 | `tokens_minted` | integer_string | DEX and staking |
-| `timestamp` | integer_string | tgBTC |
+| `timestamp` | integer_string | tgBTC fallback actions |
 | `uln` | ton_address | LayerZero |
 | `uln_connection` | ton_address | LayerZero |
 | `user_jetton_wallet` | ton_address | DEX legs |
@@ -136,7 +137,9 @@ per-stored-type key sets; absent keys are omitted.
 
 Nested record members (`asset`, `amount`, wallet fields, and the target fields)
 are scoped to their containing `legs`, transfer, peer swap, or excess record.
-Null fields are omitted. `parent_gasless_action` is added by the engine when a
+Encoded payloads omit null fields and list elements recursively, except `legs`
+retains null placeholders before filled legs, trims trailing placeholders, and
+omits the key when all legs are empty. `parent_gasless_action` is added by the engine when a
 row is produced from a gasless request.
 
 `dns_release` permits both `query_id` and `nft_index` in its flat data map.

@@ -78,9 +78,9 @@ actions:
     data:
       protocol: nominator
     tx_hashes:
+      - mnDlbgOSyeo1vKPnm1cZiFcooxRDLgkriK425p+1wPQ=
       - Qoi/anYdaO9ksxCoZ7IQ3V8gtySPuvnGR5yx/NsxWAE=
       - dF+QsiLaJ4/OeqpTJSNUY4kNi3FmrEXTbi3JuOa31Bo=
-      - mnDlbgOSyeo1vKPnm1cZiFcooxRDLgkriK425p+1wPQ=
     accounts:
       - "-1:38A38549467969D70B2A487A2FD50B6DA924D075AD99D6F18AF9BEC468F42878"
       - 0:28CAFA0E3C98C78380BF9FF1117926D2DA53C8E1792647551176D3F9861AFCE1

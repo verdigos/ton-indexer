@@ -34,11 +34,11 @@ actions:
       protocol: stonfi_v2
       sender: 0:EFC78159F866BC1756D0ADA37AD9CD20AE6D8105E1F8CF3FBF65CAE01DFE8302
     tx_hashes:
+      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - N6RlvvzdMeneYGKaIByI1Hnb7MrPmN/lBpz5cZK6ivc=
       - P68zSWdYXITXOowRMMFvBIfzXEy75b0Tx3VGIrqtMZk=
       - WO6YLBW9XXIB0rg5jQGB//Sndyb+Qrreu/kilkW9SCs=
       - XUOoQ45bP2pnsa6Ub2lKc00GQ+cgOChFZvBwa83UqBU=
-      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - dPx48Nmm/qO79a9jT+3M1/gBWHmJFWQFWzf84FK4+G4=
       - nqkPo0GeKH+5nqWnHi6M+AGM9ayf8m8uV9r9uWsckRI=
       - oONQx7968ENY+GZ/xSFNoqkzAm1tANuuD+nWId7mcmg=
@@ -86,12 +86,12 @@ actions:
       protocol: dedust
       sender: 0:EFC78159F866BC1756D0ADA37AD9CD20AE6D8105E1F8CF3FBF65CAE01DFE8302
     tx_hashes:
+      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - /cslwtIRY11/9enarZFWVblpEwg2ZjDua5h3OwpyUmE=
       - CZZIWgksLCjmBcf5BkzE8VK7ENIIvYeHnR7njkWWVms=
       - JJ9gZ/ePeH4RqqhVhVOwNA0/t4I+De2lfl31OwRlTTQ=
       - JzJOdaz7zy5NUYWLiLxu77ubta/mwXO54w48CtlB2T8=
       - Ybxgy/+jHqSgKU7mZD4TIl20OZtKga46oB53ppyNHg0=
-      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - njPco5YvW45kVDd8DA31JwhVUIl6CFN5URv8LFtpaZQ=
     accounts:
       - 0:18AA8E2EED51747DAE033C079B93883D941CAD8F65459F2EE9CD7474B6B8ED5D
@@ -139,11 +139,11 @@ actions:
       protocol: stonfi
       sender: 0:EFC78159F866BC1756D0ADA37AD9CD20AE6D8105E1F8CF3FBF65CAE01DFE8302
     tx_hashes:
+      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - 2YAuRRhzHKW48u/sihM3hlD2VOSkg3MvNX7uh/DRV3I=
       - 55nfwU+klzfg2NWdVuAv/dx7vP3hnxyDZ3LHaOqM9zo=
       - 9wnxk4Efljc3dOYfyKdrR7IwCccIsYB08F2rAcpPq5A=
       - JzHg7BoYLLEcC5XnmmPM4HOKasIRrKoS/qXdXhziqsU=
-      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - duMUcF9du07UtsuGYwNDUDIkH6BcrfanGiyRnSuHIuY=
       - ibe6uBT3ZCoYbKMrTg217FJTKLVN6AADSienSAhYMys=
       - zIO/fxT97wmHe1S+SP6o4VQG0LljG/oehk3ydrlDrkc=
@@ -191,13 +191,13 @@ actions:
       protocol: coffee
       sender: 0:EFC78159F866BC1756D0ADA37AD9CD20AE6D8105E1F8CF3FBF65CAE01DFE8302
     tx_hashes:
+      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - 3E3KZNNNPwfUwz0b2z1cz1XXBmMsGim5sjLGup+nFuQ=
       - I0EPrZT7GpCJ8cUIamAlxIcDK9d6LbAKEdoGwljNleg=
       - ImgCC/PGPJX+p4RsXnIMDPyAGQKZs/Vql5QUmo3KHMs=
       - REL44Z5fB0P/wO0TogkkgGTcwB+zA6muxSj70xmsNb0=
       - SKvkmuoO07fuqw1tJMXhe/T/lwOqGhvZ7lqSdXLKa40=
       - YFGYNHp9bTKKuf4DZaioJk+OWIMGj7/X/x9prGVroCU=
-      - cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=
       - vqNreDLBIdu92kadKYkgZPRjvM4suaTvdflzevFm+Ck=
     accounts:
       - 0:4CBBC2F32D6865100C7EA8960272CA6001733C8633A36B2FF11F08CEEA99E2CD
@@ -247,9 +247,9 @@ actions:
       protocol: stonfi_v2
       sender: 0:59668A4422B4E9A8773228454F846DB2C0C0F8A126D398EBDBF9A14A94B42351
     tx_hashes:
+      - ImgCC/PGPJX+p4RsXnIMDPyAGQKZs/Vql5QUmo3KHMs=
       - +iuEIlczA+98xHiDIy6V4cYDVSNQcgxqkrOg/MdJSRg=
       - C2kI7Kp51zFhnCmkJyzadr3PoUJ/Dvf9ELJSkWQqxEo=
-      - ImgCC/PGPJX+p4RsXnIMDPyAGQKZs/Vql5QUmo3KHMs=
       - LbtUteFIvI1L7fQwBHqP8SM5NOXTcLDzLUVgl7VZdWg=
       - WH91oH5QGzWlVIUK8ZYksS4klGWuebwHWHCJ8A258jg=
       - ZeXdzGvt4yohY+egCZmFSDxISa7O4RreP+WBby6XA1Q=

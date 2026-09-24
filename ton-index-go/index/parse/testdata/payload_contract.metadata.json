@@ -1,30 +1,20 @@
 {
-  "api_bytes": 4907296,
+  "api_bytes": 4717142,
   "api_reference": "generated with HEAD Go reader",
-  "api_sha256": "c1d33c04596e862462e627a78ce62241ba2e56adbff9912c7bc336a10eb556a9",
-  "engine_binary_mtime_utc": "2026-09-24T13:52:05.405911+00:00",
-  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-43a9298a-dab89b4.jsonl -T indexer/tests/traces",
+  "api_sha256": "1065ba09b6e233e241b9f7082099590553c9643469c3ba0c508216ac2570b6da",
+  "engine_binary_mtime_utc": "2026-09-24T17:19:05.061117+00:00",
+  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-bde04009-764880d.jsonl -T indexer/tests/traces",
   "generator": "devtools/bk-tools/generate_baseline.py",
   "generator_command": "python3 devtools/bk-tools/generate_baseline.py --create-head-api",
   "golden_files": 294,
-  "golden_set_sha256": "9db5cf4c9be22d97c7d0d24c5f698e5fe53e0fbe2f043eb4e28f4d521702619b",
-  "gzip_bytes": 833209,
-  "gzip_sha256": "7dbcf1f7c152478f4905dd5f09a7b46fa54f80a58f43f5bbc322bbd0751d0c36",
-  "main_sha": "43a9298a",
-  "overlay_sha": "dab89b4",
-  "payload_bytes": 3402143,
-  "payload_sha256": "b4e1fbc28fc3957c0095fb9b2dec2d42339cdf40d9b21e25095bbc590bf0397d",
-  "rename": {
-    "format": "_analysis-scratch/payload-wave/rename/FORMAT.md",
-    "note": "wire_hex and payload_hex are the flat registry payload; api is frozen and byte-identical to the source baseline",
-    "payload_bytes": 180444,
-    "payload_sha256": "94d7c3d7bed694ee3ab6a23308441093090e0037b3a19385616bec0c6e22c3d5",
-    "registry": "_analysis-scratch/payload-wave/keys-final-sol.md",
-    "rows": 1220,
-    "script": "devtools/bk-tools/rename_payload.py",
-    "source_repo_data": "ton-index-go/index/parse/testdata/payload_contract_43a9298a_dab89b4.jsonl.gz"
-  },
-  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-<tag>.jsonl ../_analysis-scratch/payload-wave/baseline/api-<tag>.jsonl",
+  "golden_set_sha256": "17dae4e4b9f010c975fbe356f547cdf06b3e63ddc82ac443de60f7a066fa74ed",
+  "gzip_bytes": 827461,
+  "gzip_sha256": "6e67f116e4341255a4ded6cb45ffe9c689d419ae636a385180191e1f20e346a2",
+  "main_sha": "bde04009",
+  "overlay_sha": "764880d",
+  "payload_bytes": 3211221,
+  "payload_sha256": "5032702b6c8cc48ecb8774dc6ac923b8a1ec05b6633fe203c77b7a5a3b2b16fc",
+  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-bde04009-764880d.jsonl ../_analysis-scratch/payload-wave/baseline/api-bde04009-764880d.jsonl",
   "render_cwd": "ton-index-go",
   "repo_data": "ton-index-go/index/parse/testdata/payload_contract.jsonl.gz",
   "repo_metadata": "ton-index-go/index/parse/testdata/payload_contract.metadata.json",
@@ -114,408 +104,408 @@
   },
   "type_breakdown": {
     "auction_bid": {
-      "bytes": 10346,
-      "gzip_bytes": 3066,
+      "bytes": 10088,
+      "gzip_bytes": 3022,
       "rows": 3
     },
     "auction_outbid": {
-      "bytes": 6751,
-      "gzip_bytes": 2115,
+      "bytes": 6331,
+      "gzip_bytes": 2037,
       "rows": 2
     },
     "call_contract": {
-      "bytes": 1533303,
-      "gzip_bytes": 253813,
+      "bytes": 1495853,
+      "gzip_bytes": 247789,
       "rows": 594
     },
     "change_dns": {
-      "bytes": 19559,
-      "gzip_bytes": 3241,
+      "bytes": 19095,
+      "gzip_bytes": 3197,
       "rows": 5
     },
     "change_wallet_key": {
-      "bytes": 4653,
+      "bytes": 4625,
       "gzip_bytes": 1486,
       "rows": 2
     },
     "cocoon_client_change_secret_hash": {
-      "bytes": 3728,
-      "gzip_bytes": 1514,
+      "bytes": 3595,
+      "gzip_bytes": 1497,
       "rows": 1
     },
     "cocoon_client_increase_stake": {
-      "bytes": 3297,
-      "gzip_bytes": 1419,
+      "bytes": 3058,
+      "gzip_bytes": 1388,
       "rows": 1
     },
     "cocoon_client_register": {
-      "bytes": 3326,
-      "gzip_bytes": 1429,
+      "bytes": 3225,
+      "gzip_bytes": 1407,
       "rows": 1
     },
     "cocoon_client_request_refund": {
-      "bytes": 6812,
-      "gzip_bytes": 2540,
+      "bytes": 6570,
+      "gzip_bytes": 2522,
       "rows": 2
     },
     "cocoon_client_top_up": {
-      "bytes": 3390,
-      "gzip_bytes": 1445,
+      "bytes": 3295,
+      "gzip_bytes": 1428,
       "rows": 1
     },
     "cocoon_client_withdraw": {
-      "bytes": 3512,
-      "gzip_bytes": 1547,
+      "bytes": 3273,
+      "gzip_bytes": 1520,
       "rows": 1
     },
     "cocoon_grant_refund": {
-      "bytes": 4472,
-      "gzip_bytes": 1848,
+      "bytes": 4380,
+      "gzip_bytes": 1825,
       "rows": 1
     },
     "cocoon_proxy_charge": {
-      "bytes": 3915,
-      "gzip_bytes": 1609,
+      "bytes": 3819,
+      "gzip_bytes": 1585,
       "rows": 1
     },
     "cocoon_proxy_payout": {
-      "bytes": 3325,
-      "gzip_bytes": 1416,
+      "bytes": 3229,
+      "gzip_bytes": 1392,
       "rows": 1
     },
     "cocoon_register_proxy": {
-      "bytes": 2469,
-      "gzip_bytes": 1134,
+      "bytes": 2371,
+      "gzip_bytes": 1114,
       "rows": 1
     },
     "cocoon_unregister_proxy": {
-      "bytes": 2535,
-      "gzip_bytes": 1167,
+      "bytes": 2433,
+      "gzip_bytes": 1141,
       "rows": 1
     },
     "cocoon_worker_payout": {
-      "bytes": 8572,
-      "gzip_bytes": 2903,
+      "bytes": 8386,
+      "gzip_bytes": 2877,
       "rows": 2
     },
     "coffee_create_pool": {
-      "bytes": 15904,
-      "gzip_bytes": 5486,
+      "bytes": 15846,
+      "gzip_bytes": 5470,
       "rows": 2
     },
     "coffee_create_pool_creator": {
-      "bytes": 23206,
-      "gzip_bytes": 6839,
+      "bytes": 24636,
+      "gzip_bytes": 6821,
       "rows": 5
     },
     "coffee_create_vault": {
-      "bytes": 3476,
-      "gzip_bytes": 1567,
+      "bytes": 3478,
+      "gzip_bytes": 1568,
       "rows": 1
     },
     "coffee_mev_protect_hold_funds": {
-      "bytes": 2898,
-      "gzip_bytes": 1314,
+      "bytes": 2900,
+      "gzip_bytes": 1316,
       "rows": 1
     },
     "coffee_staking_claim_rewards": {
-      "bytes": 8529,
-      "gzip_bytes": 3195,
+      "bytes": 8533,
+      "gzip_bytes": 3198,
       "rows": 2
     },
     "coffee_staking_deposit": {
-      "bytes": 10950,
-      "gzip_bytes": 3839,
+      "bytes": 10652,
+      "gzip_bytes": 3806,
       "rows": 2
     },
     "coffee_staking_withdraw": {
-      "bytes": 5540,
-      "gzip_bytes": 2212,
+      "bytes": 5436,
+      "gzip_bytes": 2185,
       "rows": 1
     },
     "contract_deploy": {
-      "bytes": 270269,
-      "gzip_bytes": 66346,
+      "bytes": 270405,
+      "gzip_bytes": 66361,
       "rows": 110
     },
     "dedust_v2_claim_fees": {
-      "bytes": 34280,
-      "gzip_bytes": 8822,
+      "bytes": 31450,
+      "gzip_bytes": 8652,
       "rows": 5
     },
     "dedust_v2_claim_reward": {
-      "bytes": 18896,
-      "gzip_bytes": 4927,
+      "bytes": 16864,
+      "gzip_bytes": 4716,
       "rows": 3
     },
     "delete_dns": {
-      "bytes": 3134,
-      "gzip_bytes": 1110,
+      "bytes": 2927,
+      "gzip_bytes": 1022,
       "rows": 1
     },
     "dex_deposit_liquidity": {
-      "bytes": 306642,
-      "gzip_bytes": 77679,
+      "bytes": 291330,
+      "gzip_bytes": 77387,
       "rows": 39
     },
     "dex_withdraw_liquidity": {
-      "bytes": 133530,
-      "gzip_bytes": 26730,
+      "bytes": 126048,
+      "gzip_bytes": 26465,
       "rows": 17
     },
     "dns_purchase": {
-      "bytes": 42360,
-      "gzip_bytes": 7137,
+      "bytes": 31776,
+      "gzip_bytes": 6696,
       "rows": 9
     },
     "dns_release": {
-      "bytes": 21463,
-      "gzip_bytes": 3880,
+      "bytes": 14993,
+      "gzip_bytes": 3456,
       "rows": 5
     },
     "election_recover": {
-      "bytes": 2349,
-      "gzip_bytes": 1126,
+      "bytes": 2351,
+      "gzip_bytes": 1129,
       "rows": 1
     },
     "evaa_liquidate": {
-      "bytes": 62338,
-      "gzip_bytes": 18809,
+      "bytes": 61207,
+      "gzip_bytes": 18732,
       "rows": 11
     },
     "evaa_supply": {
-      "bytes": 22731,
-      "gzip_bytes": 5908,
+      "bytes": 22097,
+      "gzip_bytes": 5874,
       "rows": 4
     },
     "evaa_withdraw": {
-      "bytes": 36206,
-      "gzip_bytes": 8778,
+      "bytes": 33995,
+      "gzip_bytes": 8763,
       "rows": 7
     },
     "gasless_request": {
-      "bytes": 14904,
-      "gzip_bytes": 3445,
+      "bytes": 14884,
+      "gzip_bytes": 3427,
       "rows": 6
     },
     "jetton_burn": {
-      "bytes": 12480,
-      "gzip_bytes": 3884,
+      "bytes": 12128,
+      "gzip_bytes": 3664,
       "rows": 4
     },
     "jetton_mint": {
-      "bytes": 34008,
-      "gzip_bytes": 11063,
+      "bytes": 33668,
+      "gzip_bytes": 10838,
       "rows": 10
     },
     "jetton_swap": {
-      "bytes": 558012,
-      "gzip_bytes": 102218,
+      "bytes": 541588,
+      "gzip_bytes": 101523,
       "rows": 52
     },
     "jetton_transfer": {
-      "bytes": 592770,
-      "gzip_bytes": 138976,
+      "bytes": 572742,
+      "gzip_bytes": 137046,
       "rows": 68
     },
     "jvault_claim": {
-      "bytes": 4938,
-      "gzip_bytes": 2136,
+      "bytes": 4850,
+      "gzip_bytes": 2106,
       "rows": 1
     },
     "jvault_stake": {
-      "bytes": 28461,
-      "gzip_bytes": 10437,
+      "bytes": 28132,
+      "gzip_bytes": 10404,
       "rows": 5
     },
     "jvault_unstake": {
-      "bytes": 9693,
-      "gzip_bytes": 4206,
+      "bytes": 9749,
+      "gzip_bytes": 4232,
       "rows": 2
     },
     "jvault_unstake_request": {
-      "bytes": 16760,
-      "gzip_bytes": 5976,
+      "bytes": 16820,
+      "gzip_bytes": 6001,
       "rows": 4
     },
     "layerzero_commit_packet": {
-      "bytes": 14126,
-      "gzip_bytes": 4492,
+      "bytes": 14980,
+      "gzip_bytes": 4493,
       "rows": 2
     },
     "layerzero_dvn_verify": {
-      "bytes": 5897,
-      "gzip_bytes": 2122,
+      "bytes": 5804,
+      "gzip_bytes": 2098,
       "rows": 1
     },
     "layerzero_receive": {
-      "bytes": 12614,
-      "gzip_bytes": 3877,
+      "bytes": 12460,
+      "gzip_bytes": 3834,
       "rows": 2
     },
     "layerzero_send": {
-      "bytes": 31043,
-      "gzip_bytes": 9231,
+      "bytes": 30496,
+      "gzip_bytes": 9112,
       "rows": 3
     },
     "layerzero_send_tokens": {
-      "bytes": 12704,
-      "gzip_bytes": 4818,
+      "bytes": 12553,
+      "gzip_bytes": 4774,
       "rows": 1
     },
     "multisig_approve": {
-      "bytes": 6955,
-      "gzip_bytes": 2631,
+      "bytes": 6799,
+      "gzip_bytes": 2605,
       "rows": 2
     },
     "multisig_create_order": {
-      "bytes": 26607,
-      "gzip_bytes": 6489,
+      "bytes": 26152,
+      "gzip_bytes": 6427,
       "rows": 5
     },
     "multisig_execute": {
-      "bytes": 32507,
-      "gzip_bytes": 9132,
+      "bytes": 32172,
+      "gzip_bytes": 9063,
       "rows": 5
     },
     "nft_cancel_auction": {
-      "bytes": 4921,
-      "gzip_bytes": 1736,
+      "bytes": 3621,
+      "gzip_bytes": 1404,
       "rows": 1
     },
     "nft_cancel_sale": {
-      "bytes": 4906,
-      "gzip_bytes": 1758,
+      "bytes": 3606,
+      "gzip_bytes": 1424,
       "rows": 1
     },
     "nft_mint": {
-      "bytes": 15447,
-      "gzip_bytes": 4449,
+      "bytes": 14897,
+      "gzip_bytes": 4311,
       "rows": 5
     },
     "nft_purchase": {
-      "bytes": 51277,
-      "gzip_bytes": 9596,
+      "bytes": 49055,
+      "gzip_bytes": 9498,
       "rows": 7
     },
     "nft_put_on_auction": {
-      "bytes": 7259,
-      "gzip_bytes": 2651,
+      "bytes": 6943,
+      "gzip_bytes": 2496,
       "rows": 1
     },
     "nft_put_on_sale": {
-      "bytes": 7189,
-      "gzip_bytes": 2426,
+      "bytes": 6575,
+      "gzip_bytes": 2249,
       "rows": 1
     },
     "nft_transfer": {
-      "bytes": 229767,
-      "gzip_bytes": 41856,
+      "bytes": 195559,
+      "gzip_bytes": 40598,
       "rows": 29
     },
     "nft_update_sale": {
-      "bytes": 5950,
-      "gzip_bytes": 1872,
+      "bytes": 3955,
+      "gzip_bytes": 1414,
       "rows": 1
     },
     "renew_dns": {
-      "bytes": 2495,
-      "gzip_bytes": 902,
+      "bytes": 2497,
+      "gzip_bytes": 903,
       "rows": 1
     },
     "stake_deposit": {
-      "bytes": 34009,
-      "gzip_bytes": 9829,
+      "bytes": 33429,
+      "gzip_bytes": 9808,
       "rows": 10
     },
     "stake_withdrawal": {
-      "bytes": 48990,
+      "bytes": 48063,
       "gzip_bytes": 9888,
       "rows": 16
     },
     "stake_withdrawal_request": {
-      "bytes": 30269,
-      "gzip_bytes": 7543,
+      "bytes": 29734,
+      "gzip_bytes": 7525,
       "rows": 10
     },
     "subscribe": {
-      "bytes": 9450,
-      "gzip_bytes": 2902,
+      "bytes": 9456,
+      "gzip_bytes": 2903,
       "rows": 3
     },
     "teleitem_cancel_auction": {
-      "bytes": 17786,
-      "gzip_bytes": 4107,
+      "bytes": 12146,
+      "gzip_bytes": 3667,
       "rows": 4
     },
     "teleitem_start_auction": {
-      "bytes": 10667,
-      "gzip_bytes": 2791,
+      "bytes": 9503,
+      "gzip_bytes": 2602,
       "rows": 2
     },
     "tgbtc_burn": {
-      "bytes": 17241,
-      "gzip_bytes": 6127,
+      "bytes": 17249,
+      "gzip_bytes": 6130,
       "rows": 4
     },
     "tgbtc_burn_fallback": {
-      "bytes": 1732,
+      "bytes": 1734,
       "gzip_bytes": 944,
       "rows": 1
     },
     "tgbtc_dkg_log_fallback": {
-      "bytes": 2337,
-      "gzip_bytes": 974,
+      "bytes": 2386,
+      "gzip_bytes": 965,
       "rows": 1
     },
     "tgbtc_mint": {
-      "bytes": 23829,
-      "gzip_bytes": 9176,
+      "bytes": 23725,
+      "gzip_bytes": 9181,
       "rows": 4
     },
     "tgbtc_mint_fallback": {
-      "bytes": 3114,
+      "bytes": 3088,
       "gzip_bytes": 999,
       "rows": 1
     },
     "tgbtc_new_key": {
-      "bytes": 7638,
-      "gzip_bytes": 2570,
+      "bytes": 7518,
+      "gzip_bytes": 2547,
       "rows": 2
     },
     "tgbtc_new_key_fallback": {
-      "bytes": 2981,
-      "gzip_bytes": 1013,
+      "bytes": 2951,
+      "gzip_bytes": 1001,
       "rows": 1
     },
     "ton_transfer": {
-      "bytes": 225335,
-      "gzip_bytes": 46062,
+      "bytes": 214311,
+      "gzip_bytes": 44083,
       "rows": 81
     },
     "tonco_deploy_pool": {
-      "bytes": 30318,
-      "gzip_bytes": 5688,
+      "bytes": 29743,
+      "gzip_bytes": 5548,
       "rows": 5
     },
     "unknown": {
-      "bytes": 28626,
-      "gzip_bytes": 2894,
+      "bytes": 28632,
+      "gzip_bytes": 2890,
       "rows": 3
     },
     "unsubscribe": {
-      "bytes": 5914,
-      "gzip_bytes": 2068,
+      "bytes": 5918,
+      "gzip_bytes": 2074,
       "rows": 2
     },
     "vesting_add_whitelist": {
-      "bytes": 3211,
-      "gzip_bytes": 1286,
+      "bytes": 3113,
+      "gzip_bytes": 1262,
       "rows": 1
     },
     "vesting_send_message": {
-      "bytes": 11493,
-      "gzip_bytes": 3391,
+      "bytes": 11208,
+      "gzip_bytes": 3373,
       "rows": 3
     }
   }

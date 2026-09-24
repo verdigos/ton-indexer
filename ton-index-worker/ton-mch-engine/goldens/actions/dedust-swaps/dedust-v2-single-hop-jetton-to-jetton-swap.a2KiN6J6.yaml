@@ -37,13 +37,13 @@ actions:
       protocol: dedust_v2
       sender: 0:00906F3C72A4C01F339B4329DDFDCA9F75B3EB9CA426237AC3CF593C8B1D2814
     tx_hashes:
+      - a2KiN6J6vxr1f0a+sfxXz4Q0znhuUAj6GUOSIeRdF+o=
       - 0R0GEqWDNRXoimV7a+xMWgwDy1FVpaUte1t4GdkB0do=
       - 7d8Xp4bMvdR3jwT1k14AICohn9AI1k+g8Ke2SA3gOZ0=
       - AjeQ4Oa/Lp7jgNP6UnAs7ohhbb41FR6BJrPPOcJparE=
       - PlvJEHvrawtVbrTe6XqDs7UWYWLeewdNQEsTZFF7jAw=
       - SCb6PTtyroZHWEJU6ZKE/jGc8B5Agih0VhcNXRlmYA8=
       - ZNf3of7MxwG8BXq5SSooyHDzz3da7Eij9qCiyrllCe4=
-      - a2KiN6J6vxr1f0a+sfxXz4Q0znhuUAj6GUOSIeRdF+o=
       - s0rNfa16SG5Gzr96VaXhkq97JT2CJ6yZ/jX5L09e1/4=
       - vOqHxbUpRrsaknquxNICigkzbJwGhJHEgHCNjReXgDY=
     accounts:

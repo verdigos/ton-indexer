@@ -21,10 +21,10 @@ actions:
       protocol: liquid_staking
       tokens_minted: 8771491638
     tx_hashes:
+      - rU8BN41CoPsfmLPpLrucPQX8v8lJnwob39gp5yKBdko=
       - 4TKJUOFoIRSmyNIlGJTDfr8M2k+eLfNmrNtegNifJyA=
       - 6D6wFIAUVfLjduq+NuGbermWZsorvKfa00i05hPW+/U=
       - XjNlrDGdqhfRL39zb7lItQD0LQbkDzBpWJJpyYgwEIw=
-      - rU8BN41CoPsfmLPpLrucPQX8v8lJnwob39gp5yKBdko=
       - s0L3X5U+3FQTIPK4wWz1MZazO8NFY58inbGdPpsWsKc=
       - z2xacWC3G92viKDHpXHI7t1psTH8Ww0TBoyU4qdbNPM=
     accounts:

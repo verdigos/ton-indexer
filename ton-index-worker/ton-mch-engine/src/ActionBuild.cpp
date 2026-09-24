@@ -96,10 +96,11 @@ void append_fields(Value::Fields &out, const Value &value) {
 
 void append_leg(std::vector<Value> &legs, Value::Fields fields) {
   Value leg = mkdict(std::move(fields));
-  if (leg.fields && !leg.fields->empty()) legs.push_back(std::move(leg));
+  legs.push_back(leg.fields && !leg.fields->empty() ? std::move(leg) : Value::null());
 }
 
 void append_legs(Value::Fields &fields, std::vector<Value> legs) {
+  while (!legs.empty() && legs.back().is_null()) legs.pop_back();
   if (!legs.empty()) fields.emplace_back("legs", Value::make_list(std::move(legs)));
 }
 
@@ -397,31 +398,17 @@ void fill_tonco_deposit(const Value &d, Action &a) {
   }
   Value amt1 = dg(d, "amount_1"), as1 = dg(d, "asset_1");
   Value amt2 = dg(d, "amount_2"), as2 = dg(d, "asset_2");
-  Value actual_amount_1 = Value::null(), actual_asset_1 = Value::null();
-  Value actual_amount_2 = Value::null(), actual_asset_2 = Value::null();
-  Value pairs_amt[2] = {amt1, amt2};
-  Value pairs_asset[2] = {as1, as2};
-  for (int i = 0; i < 2; i++) {
-    if (pairs_amt[i].is_null()) continue;
-    if (actual_amount_1.is_null()) {
-      actual_amount_1 = pairs_amt[i];
-      actual_asset_1 = pairs_asset[i];
-    } else {
-      actual_amount_2 = pairs_amt[i];
-      actual_asset_2 = pairs_asset[i];
-    }
-  }
   Value::Fields f;
   f.emplace_back("protocol", Value::make_str("tonco"));
-  // Preserve Tonco's old compressed amount/asset slots and uncompressed wallet/target slots.
+  // Tonco legs preserve the pool's slot order.
   std::vector<Value> legs;
-  append_leg(legs, {{"amount", av_amount(actual_amount_1)},
-                         {"asset", av_addr(actual_asset_1)},
+  append_leg(legs, {{"amount", av_amount(amt1)},
+                         {"asset", av_addr(as1)},
                          {"user_jetton_wallet", av_addr(sw1)},
                          {"target_amount", av_amount(dg(d, "position_amount_1"))},
                          {"target_asset", av_addr(dg(d, "asset_1"))}});
-  append_leg(legs, {{"amount", av_amount(actual_amount_2)},
-                         {"asset", av_addr(actual_asset_2)},
+  append_leg(legs, {{"amount", av_amount(amt2)},
+                         {"asset", av_addr(as2)},
                          {"user_jetton_wallet", av_addr(sw2)},
                          {"target_amount", av_amount(dg(d, "position_amount_2"))},
                          {"target_asset", av_addr(dg(d, "asset_2"))}});
@@ -983,7 +970,9 @@ void fill_tgbtc_new_key(const Value &d, Action &a) {
   Value cr = dg(d, "crippled");
   if (cr.t == VType::Bool && cr.boolean) a.type += "_fallback";
   a.source = av_addr(dg(d, "teleport_contract"));
-  a.data = mkdict({{"pubkey", dg(d, "pubkey")}, {"timestamp", dg(d, "timestamp")}});
+  Value::Fields f{{"pubkey", dg(d, "pubkey")}};
+  if (a.type != "tgbtc_new_key") f.emplace_back("timestamp", dg(d, "timestamp"));
+  a.data = mkdict(std::move(f));
   a.destination = av_addr(dg(d, "coordinator_contract"));
   a.destination_secondary = av_addr(dg(d, "pegout_address"));
   a.amount = av_amount(dg(d, "amount"));
@@ -1263,7 +1252,8 @@ void fill_nft_purchase(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "collection_address"));
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
-  f.emplace_back("is_purchase", Value::make_bool(true));
+  // The DNS purchase API has no is_purchase field.
+  if (a.type != "dns_purchase") f.emplace_back("is_purchase", Value::make_bool(true));
   f.emplace_back("price", av_amount(dg(d, "price")));
   f.emplace_back("nft_index", dg(d, "nft_index"));
   f.emplace_back("forward_amount", av_amount(dg(d, "forward_amount")));
@@ -1554,12 +1544,18 @@ static bool build_action_with_id(Block *b, const std::string &action_id, Action 
   a.success = !b->failed;
   a.action_id = action_id;
   std::set<std::string> ths;
+  const EventNode *root_tx_node = nullptr;
   std::int64_t maxlt = std::numeric_limits<std::int64_t>::min();
   std::int64_t minu = std::numeric_limits<std::int64_t>::max();
   std::int64_t maxu = std::numeric_limits<std::int64_t>::min();
   std::int64_t seqmax = std::numeric_limits<std::int64_t>::min();
   for (const EventNode *n : b->event_nodes) {
     ths.insert(n->tx_hash());
+    if (n->tx != nullptr &&
+        (root_tx_node == nullptr || n->tx->lt < root_tx_node->tx->lt ||
+         (n->tx->lt == root_tx_node->tx->lt && n->tx->hash < root_tx_node->tx->hash))) {
+      root_tx_node = n;
+    }
     std::int64_t tlt = n->tx != nullptr ? n->tx->lt : 0;
     maxlt = std::max(maxlt, tlt);
     minu = std::min(minu, node_utime(n));
@@ -1569,7 +1565,15 @@ static bool build_action_with_id(Block *b, const std::string &action_id, Action 
   if (b->initiating_event_node != nullptr) {
     ths.insert(b->initiating_event_node->tx_hash());
   }
-  a.tx_hashes.assign(ths.begin(), ths.end());
+  // The transaction that started the action comes first; the rest stay sorted.
+  a.tx_hashes.clear();
+  const EventNode *first_node = b->initiating_event_node != nullptr ? b->initiating_event_node : root_tx_node;
+  if (first_node != nullptr) {
+    const auto first_hash = first_node->tx_hash();
+    a.tx_hashes.push_back(first_hash);
+    ths.erase(first_hash);
+  }
+  a.tx_hashes.insert(a.tx_hashes.end(), ths.begin(), ths.end());
   a.start_lt = b->min_lt;
   a.end_lt = b->event_nodes.empty() ? 0 : maxlt;
   a.start_utime = b->event_nodes.empty() ? 0 : minu;

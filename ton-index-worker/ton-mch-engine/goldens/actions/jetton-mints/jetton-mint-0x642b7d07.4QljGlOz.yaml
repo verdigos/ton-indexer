@@ -43,8 +43,8 @@ actions:
     value: 87638000
     opcode: 0x82609bf6
     tx_hashes:
-      - 8kvpuGbFRD35iVaFQhAmV5L32Zm6Ss7wzaSU84wAAJ4=
       - YbRufoOZ9e5o82HiEn0CJYH3PYUMWaQqeFZ3Uaril90=
+      - 8kvpuGbFRD35iVaFQhAmV5L32Zm6Ss7wzaSU84wAAJ4=
     accounts:
       - 0:651E23AE980E09AD54CB040143580C6FD22640BEF27B418D0FB030D0794DB85D
       - 0:6D4470D275C9ABDC3F649E3CBA62036DD1C20542A1FDCC3FFD7962E552FE07C0
@@ -120,8 +120,8 @@ actions:
     value: 50000000
     opcode: null
     tx_hashes:
-      - G3Rql2ReHPqtppUAGvxPvKCkZWKIQCz9BnmyTbHVcMk=
       - ukFeyQQyOwVSBzQvUG5kyU34olUHJ9sSejYIy7ZbCa0=
+      - G3Rql2ReHPqtppUAGvxPvKCkZWKIQCz9BnmyTbHVcMk=
       - wizGTxEczcxqsISoGWywHNXj1eslbsGeurjjYsxbFOc=
       - xOnjtd8puU4Vk/yKzqgSElVCa0NXqud0VD8JnkS0p6Q=
     accounts:

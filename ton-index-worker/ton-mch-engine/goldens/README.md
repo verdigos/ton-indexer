@@ -44,7 +44,7 @@ actions:
       comment: null
       custom_payload: null
       ...
-    tx_hashes:                           # one per line, sorted
+    tx_hashes:                           # starting transaction first, then the rest sorted
       - EirR…
     accounts:
       - 0:16C2…
@@ -57,7 +57,11 @@ actions:
 
 Rows are sorted by anchor. The emulator Redis envelope stores the codec-prefixed
 payload bytes separately under its binary `payload` key; the action golden shows
-the decoded flat `data` map. A trace that classifies to nothing carries the
+the decoded flat `data` map. In encoded payloads, null fields and list elements
+are omitted recursively, except `legs` retains null placeholders before filled
+legs, trims trailing placeholders, and omits the key when all legs are empty.
+For classified actions, `tx_hashes` starts with the initiating transaction, or the root-level block's earliest transaction by `tx->lt`, followed by the remaining hashes sorted ascending.
+A trace that classifies to nothing carries the
 synthetic `unknown` row; a trace whose classification throws writes
 `failure: <reason>` followed by its basic-fallback rows (no corpus trace does).
 BOC-valued fields render as the cell hash.

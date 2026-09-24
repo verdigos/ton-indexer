@@ -24,10 +24,10 @@ actions:
       protocol: coffee
       vault_excesses: []
     tx_hashes:
+      - NVBb/A++g2M72byFHECct41iFyC7T53sbr6R11CltLw=
       - 7Q2jh6Vu1V8xU3DLaE/HmFnWLrIZSoOgubr8fxvlD4w=
       - 9SKtgdZgEcixMbdi/k2Rof+6osZc6vEJZwcOuE/hAis=
       - AwED1Yia9MYxOz4iEfB2xsNR1ErA1xMDCyFDMHRMI9U=
-      - NVBb/A++g2M72byFHECct41iFyC7T53sbr6R11CltLw=
     accounts:
       - 0:2C7F6B033DFA28FB42239D103B97F809041F63CA8E33A9F086FF520508223F41
       - 0:66D21112F25EDD14BBD3E21E6F3539550CBB537B15CE6F96C5F8C3832FD34E47
@@ -64,12 +64,12 @@ actions:
       tokens_minted: 6589203740
       vault_excesses: []
     tx_hashes:
+      - NVBb/A++g2M72byFHECct41iFyC7T53sbr6R11CltLw=
       - +VfyLVjrrukH4fa3dq6mEc5nGNUwqIhsLT8et+zoTqI=
       - CKid84T4pGznuuAVjVFzdnDP8d507ccKngLTCOFRsfo=
       - FdBjJ2kxYkCv4yYhiDFY0/5l3Xg+Y6dm46UW6hp0K18=
       - JPK6q+B9luIbhia1lmwRtsB1BvQ+hj5hxLZHxjBdfe4=
       - MGKB40A6dqHUgEP+FEhxT26mMclUC56OrY8uh5maRSI=
-      - NVBb/A++g2M72byFHECct41iFyC7T53sbr6R11CltLw=
       - Uk4BKAXR0yda2RGK9kCRcuCsdLjXq8yemQW59jJ1zJ8=
       - aRk7m95zK4d47g5+2or2TpUNohEpymjAQhLltgZbS5s=
       - hqDUqOMqO/oEXOofEycbIpobqQ1HxeSxkAUQlrmH8Mc=

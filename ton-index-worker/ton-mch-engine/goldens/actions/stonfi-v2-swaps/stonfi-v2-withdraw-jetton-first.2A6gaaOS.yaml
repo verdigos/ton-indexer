@@ -33,8 +33,8 @@ actions:
       protocol: stonfi_v2
       tokens_burnt: 5000000
     tx_hashes:
-      - H4zTbGFa3pHGFPYVwLcBBUtohx3MvEZ4jCeKSPmkcg8=
       - Ib2z1E8lOmcyvssFbaG1Mt7fXdmi3ExrE5DVyoVSwSo=
+      - H4zTbGFa3pHGFPYVwLcBBUtohx3MvEZ4jCeKSPmkcg8=
       - J4QHUqe/GxMZDlWxUDpvwHOfUjs9f+J5DJzflQ2rWDg=
       - Rv3kQjogY/f4Y0wlfYWoFUtA/t4q761bapKrGYCsf/Y=
       - TMuTL6NauNSLcza59doMbQedh74EhfhmWJ6YCPR27qo=

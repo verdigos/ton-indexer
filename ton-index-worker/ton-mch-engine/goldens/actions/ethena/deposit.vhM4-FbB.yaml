@@ -21,13 +21,13 @@ actions:
       protocol: ethena
       tokens_minted: 1994155249
     tx_hashes:
+      - vhM4+FbBKgC8khEg0MTKMvPx8MiBuEYbrqHgDjPFHcQ=
       - /aZsiwa2w2aagrKHzBu1uDTB2byStdSw+SJ3FKp8OPU=
       - 76mrjVj4YbcBeEBfMtceBSshcCZGC3BJuwt2fDJI5R8=
       - AL6epUvkbx6MoC63xltngA2ezFKvZp09RSxGabTE0vE=
       - IXJdWw9wN5aM4twzhqRd7Z8k3UoOLjDemw5X3YO1Oo4=
       - eJsNYIUxQvefL9NK7mFpmkZjZMi7/pdnWL2p3ve+SoQ=
       - jRQGPiaIhCkFPX9xz04X76tm4gXEZ7ctgi4eCLCsYaA=
-      - vhM4+FbBKgC8khEg0MTKMvPx8MiBuEYbrqHgDjPFHcQ=
     accounts:
       - 0:A11AE0F5BB47BB2945871F915A621FF281C2D786C746DA74873D71D6F2AAA7A5
       - 0:B2CD5D121486130C1E9E0354452AC7A2D5FD6EA1536481955520E59BD616622F

@@ -88,13 +88,13 @@ actions:
       protocol: tonco
       sender: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
     tx_hashes:
+      - eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=
       - 3JQXxo5GP/kiyX47pSLaCSjSpXN5M2umH3pnjh7Qkx8=
       - 3OelpBPvqf+9Q6ZZahruBfxD7wcx3lYl5ihh/hFthaI=
       - 6DDvrqlSfK0zhwiXV+EHZPnJaRyl1VswduhTqYycjhU=
       - NbtrAiFX+V9zk0Wo+ExQ6jfC++B6BhTXk1yW4xyYfsU=
       - OrTNPsdwAXuOpGJbDyVrhKJz4TWvjhM3tLFTFXHZCbw=
       - Q9eySM+28zBlY1BSb+ECgmWgetexow4qPws1nTDMbBA=
-      - eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=
       - swTaFXYaSTw8Wt8zPs7SyESQfN7WE80PuPjU8+rQKp0=
     accounts:
       - 0:059D423F35E1EF2A90F1C059FEE21ED173EF4B72FA4C4CC4D5BD9276DFBC04EF

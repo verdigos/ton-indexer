@@ -47,7 +47,6 @@ actions:
     value: null
     opcode: null
     data:
-      is_purchase: true
       nft_index: 44539844875053679214736801996276540153801342669507034858554041330399478546432
       payout_amount: 51478118866
       price: 51478118866

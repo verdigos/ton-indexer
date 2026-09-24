@@ -201,7 +201,7 @@ const std::vector<ActionField> &optional_fields() {
 
 // Number of unconditional keys below. ancestor_type and optional fields are
 // counted separately; fields unused by the Go consumer are not serialized.
-constexpr std::uint32_t kFixedKeys = 13;
+constexpr std::uint32_t kFixedKeys = 12;
 
 void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std::int64_t finality,
                  RedisActionSerializeStats &st) {
@@ -247,14 +247,7 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
   // (models.go:930), so it must be written.
   pack_key(pk, "trace_external_hash_norm");
   pack_text(pk, trace_key);
-  // parent_action_id is always present and nil for top-level rows.
   // ancestor_type is present only for child rows.
-  pack_key(pk, "parent_action_id");
-  if (a.parent_action_id.empty()) {
-    pk.pack_nil();
-  } else {
-    pack_text(pk, a.parent_action_id);
-  }
   if (!a.ancestor_type.empty()) {
     pack_key(pk, "ancestor_type");
     pk.pack_array(static_cast<std::uint32_t>(a.ancestor_type.size()));

@@ -54,9 +54,9 @@ actions:
       royalty_address: 0:68F3A076D3451A18FD41E05C71B4C020545D46B2757064E65825DED0C49BF02C
       royalty_fee_base: 100
     tx_hashes:
+      - M2rUrfJXfjW8Xsex9RY8vXo//9MZHdh+emPatSp2Ooc=
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - B82tGO0R8HCd4IG64UY+rlGuvcBid9PnIkDOnxpl6go=
-      - M2rUrfJXfjW8Xsex9RY8vXo//9MZHdh+emPatSp2Ooc=
       - W46k722EMnnO306ZzWRfYogrGKFF64IxtYcczgrzchw=
       - ZA1yftr44uPV8GkkiujWEyFz/HtZb0Ph8I52d4ElTVw=
       - n1pKUKXR3j8VevOcgOwb/62tG7gDNbZPuOQjhqhOvlM=
@@ -95,9 +95,9 @@ actions:
       query_id: 0
       response_destination: 0:9BA46D6AEB2F793FF5F3B8F53171E55CCDF32407A26C47A212E3F669A3AE7901
     tx_hashes:
+      - M2rUrfJXfjW8Xsex9RY8vXo//9MZHdh+emPatSp2Ooc=
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - B82tGO0R8HCd4IG64UY+rlGuvcBid9PnIkDOnxpl6go=
-      - M2rUrfJXfjW8Xsex9RY8vXo//9MZHdh+emPatSp2Ooc=
       - W46k722EMnnO306ZzWRfYogrGKFF64IxtYcczgrzchw=
     accounts:
       - 0:2187BD884C188AE7FE77DF32F2D5DC630F40C8B9FF199F5F4A5929676FA9B240

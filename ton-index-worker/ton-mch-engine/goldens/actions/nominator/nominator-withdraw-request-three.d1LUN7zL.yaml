@@ -48,8 +48,8 @@ actions:
     data:
       comment_encrypted: false
     tx_hashes:
-      - JiCLbT6eNqw6zvb5VYO75ZqZ6+A1D6Oln3hPjB8oc4k=
       - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+      - JiCLbT6eNqw6zvb5VYO75ZqZ6+A1D6Oln3hPjB8oc4k=
     accounts:
       - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
       - 0:D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0
@@ -104,8 +104,8 @@ actions:
     data:
       comment_encrypted: false
     tx_hashes:
-      - 47rCr+HlC+uvmQW3Eg/4jomo5uHppvjb4x7QohsZNrw=
       - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+      - 47rCr+HlC+uvmQW3Eg/4jomo5uHppvjb4x7QohsZNrw=
     accounts:
       - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
       - 0:D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2

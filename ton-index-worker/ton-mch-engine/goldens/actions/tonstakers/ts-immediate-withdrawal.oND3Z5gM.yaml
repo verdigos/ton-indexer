@@ -21,10 +21,10 @@ actions:
       protocol: liquid_staking
       tokens_burnt: 499933340
     tx_hashes:
+      - oND3Z5gMq1cKAe6TOJ5QAsqt+8/6wtG6X1hgkHP/Yhk=
       - +FFSJfobbwKHkj0Cz2W3St4R+F0Rs4IWKrGnHtW2Xu0=
       - /6tynZnn+8X2mn4MFgMRmGDWZfbMLxGyjXOoY/R0oi4=
       - mTMc5G1TOtZJJ77o77esiYo++zJt7Rh7t3JNqxbdtIk=
-      - oND3Z5gMq1cKAe6TOJ5QAsqt+8/6wtG6X1hgkHP/Yhk=
       - yKsoebYYAM+KTpI6S6Hgo7cz+t8ZbItv7qIdjW/nH0Y=
     accounts:
       - 0:0926C763841945D6B99A7FF960D0D3CE69A79B2E1D60E1B8C966BEB135557435

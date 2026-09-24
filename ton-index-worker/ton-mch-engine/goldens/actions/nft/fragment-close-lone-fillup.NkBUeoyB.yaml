@@ -27,8 +27,8 @@ actions:
       price: 120000000000
       query_id: 104277894000001
     tx_hashes:
-      - /FYwI51RMoyFQ1msQ1hNOSKZNFp6slvKkJpt6IIok5I=
       - NkBUeoyBHQRqKV1iVuVPFqhAhh3PUJCJB0BJcvYxPko=
+      - /FYwI51RMoyFQ1msQ1hNOSKZNFp6slvKkJpt6IIok5I=
       - oQvtmA+QwtxaaQdIzem8ODy0HeKXVZoVJTnzW2rrfmo=
     accounts:
       - 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B

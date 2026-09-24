@@ -17,8 +17,8 @@ actions:
     value: 141270757
     opcode: 0xdc5ddba1
     tx_hashes:
-      - TewbALxcbVsscemTRth9dwqmMlfZgWl+fDpMDB13p0Y=
       - wySevq5AjCMrndEj4T5q2xJLI8aa6LmeI+ARp/fxLEc=
+      - TewbALxcbVsscemTRth9dwqmMlfZgWl+fDpMDB13p0Y=
     accounts:
       - 0:0015CA5A9E755AC9D711FA6FC1994D1331A6310FCAB32683523D4F37FBFDA0FD
       - 0:005AC4561D4756B5958AEBB6FA91F18113F4A14A5877FFF72CA12B061703761B
@@ -59,9 +59,9 @@ actions:
       tokens_minted: 1414213562373095
       vault_excesses: []
     tx_hashes:
+      - 5rfO7FVucVaVGDuEtOK6pW7TN7iYvLdSQ0QoVAYRPXs=
       - +ELiuMQDU9+ZxX8J+ZVe1ZDJuQ4WArn4FQENaqstRU8=
       - 4tAnJYzSbb7VLo4eobpdgUShxmSwl+crFkrP5tQgdTg=
-      - 5rfO7FVucVaVGDuEtOK6pW7TN7iYvLdSQ0QoVAYRPXs=
       - 9jLYSDWyhB9nTrafP6r62ZGtYyhZIUWeo6WOpe2Icx8=
       - C5cANBcypzQ2l0zjrV5XgY5GMONL/XmsC06Ai50NkKo=
       - O08MDuhKjRvxnTUiiZMcGXt0BKovi3MKh8AUsFjqL/8=

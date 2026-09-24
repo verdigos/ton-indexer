@@ -17,8 +17,8 @@ actions:
     value: 40000000
     opcode: 0x178d4519
     tx_hashes:
-      - 4nDqS3SRwrmlY04qCoEx2J2Vcb8iBy9o0pP/uyHwdbQ=
       - JxultinQBQiJEM0Sa9iNKKU13PoG24nGcdnysUS+7g4=
+      - 4nDqS3SRwrmlY04qCoEx2J2Vcb8iBy9o0pP/uyHwdbQ=
     accounts:
       - 0:AFE292518AC8C439C149141AD470F119A0A879376AEC65D8DFD7EFAF97DEF7CF
       - 0:F791C89405D4F0D146E10320523604E730FBCB5B6493D3FC3BCE80D8B9A54280
@@ -44,8 +44,8 @@ actions:
     value: 40000000
     opcode: null
     tx_hashes:
-      - 4nDqS3SRwrmlY04qCoEx2J2Vcb8iBy9o0pP/uyHwdbQ=
       - I8W6RKYLE+NJPAComfUWhsG7/L5VvFxNEzizt5N8AAc=
+      - 4nDqS3SRwrmlY04qCoEx2J2Vcb8iBy9o0pP/uyHwdbQ=
       - JxultinQBQiJEM0Sa9iNKKU13PoG24nGcdnysUS+7g4=
     accounts:
       - 0:6F2346852E7C3641B6608CC3C22D176D447C615328A742E760EAC762A2123083

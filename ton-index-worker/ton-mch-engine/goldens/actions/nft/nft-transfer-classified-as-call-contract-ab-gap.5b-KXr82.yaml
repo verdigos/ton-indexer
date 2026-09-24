@@ -28,8 +28,8 @@ actions:
       royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
       royalty_amount: 499933333
     tx_hashes:
-      - 1whoASFA2pvkagxs2SOntt4XwO8HNALixgIX6ZSZs/o=
       - 5b+KXr82wUSLIHPSHkFaW791xTyN0Rmu5h0mFm/4IdQ=
+      - 1whoASFA2pvkagxs2SOntt4XwO8HNALixgIX6ZSZs/o=
       - AGWc7WLT1NKuICutt9x4dhIWx73DMbl5iv2ebSX6yqA=
       - oJNqSpS2sBjCUFq1PFiq3DPFL4F+WORY2cKuA9aCieU=
     accounts:

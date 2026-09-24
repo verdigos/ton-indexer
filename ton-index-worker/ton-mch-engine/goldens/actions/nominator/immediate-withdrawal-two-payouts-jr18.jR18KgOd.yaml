@@ -20,9 +20,9 @@ actions:
     data:
       protocol: nominator
     tx_hashes:
+      - jR18KgOd7Bmlhja1EmBRM/b+bPrdMuJwvsnfwhdYPiY=
       - EzPKY80NWHDsaJ0dYNAl4gGVYF33Xolml1qm8akwWIs=
       - iRGU3GQQXzbdnokGQKEQpWlJp4teDUpUJxuTaGPVdAo=
-      - jR18KgOd7Bmlhja1EmBRM/b+bPrdMuJwvsnfwhdYPiY=
       - oTTc1TMUtOscTbHYv2x3Nn/T8sTSw6wvGIXl+NcHh6A=
     accounts:
       - "-1:86EAF966B35A5DB101955021A482233EF3E95E98809E24FB573DF9150B107508"

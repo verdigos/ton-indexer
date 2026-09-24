@@ -79,6 +79,7 @@ actions:
         - target_amount: 100000000000
       protocol: dedust
     tx_hashes:
+      - xu061/cOVdxLMa4sn1JJXEK5XkBiPdCzEDRNI/wWKPs=
       - 2nCQhiwHPw6GdpgKvb9+mHSfcsAWxjr8IIWYfzklaaQ=
       - 3w4o6gwKmZgA0pGOEB32VkCECYC18cW/zTKYnCG6S1E=
       - BZmaD1nZMi6D9vhQ5ix9V/hNQaAIW+uCRD9rcTUNN7k=
@@ -86,7 +87,6 @@ actions:
       - jRsgidxTOGVAPOhVP8LeRx66UH/hlFBss4rKf9xZ2g8=
       - nddeCf5hvHYgiTs5lYMTz0WV7J98tmLBrfj2ZBB2K3c=
       - usVV77ulKdWfTJQZxLaYY4uImlma7WQIptIfnur3ml8=
-      - xu061/cOVdxLMa4sn1JJXEK5XkBiPdCzEDRNI/wWKPs=
     accounts:
       - 0:0A8167CEA36A89E004559C878D116BBB71A8D6C11FF26F15EF5FBCF06B289176
       - 0:13D14384CC8A549D0D6D71BB6754E73B16934669E0236624586C42AC2EFC0E56

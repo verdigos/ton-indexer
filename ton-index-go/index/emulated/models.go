@@ -229,7 +229,6 @@ type Action struct {
 	Success               bool                 `msgpack:"success"`
 	Finality              models.FinalityState `msgpack:"finality"`
 	AncestorType          []string             `msgpack:"ancestor_type"`
-	ParentActionId        *string              `msgpack:"parent_action_id"`
 	Accounts              []string             `msgpack:"accounts"`
 	Payload               []byte               `msgpack:"payload"`
 }

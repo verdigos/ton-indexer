@@ -73,7 +73,6 @@ actions:
     value: null
     opcode: null
     data:
-      is_purchase: true
       nft_index: 42
       payout_amount: 123
       price: 123

@@ -179,6 +179,7 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	}
 
 	data := map[string]interface{}{}
+	haveData := false
 	for group, value := range groups {
 		if group != actionPayloadGroup {
 			return fmt.Errorf("decode action payload: unexpected group %q", group)
@@ -188,6 +189,12 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 			return fmt.Errorf("decode action payload: group %q is not a map", group)
 		}
 		data = fields
+		haveData = true
+	}
+	// The encoder always writes the group (ActionPayload.cpp encode_action_payload), so a
+	// map without it is a truncated or foreign payload, not an action without details.
+	if !haveData {
+		return fmt.Errorf("decode action payload: missing group %q", actionPayloadGroup)
 	}
 
 	target := reflect.ValueOf(action).Elem()
@@ -266,6 +273,11 @@ func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interf
 		return fmt.Errorf("decode action payload field legs: expected array, got %T", value)
 	}
 	for index, item := range items {
+		// An empty leg is a placeholder: it keeps the slot its index gives it, so the
+		// legs after it stay in their own slots.
+		if item == nil {
+			continue
+		}
 		record, ok := item.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("decode action payload field legs: expected map, got %T", item)
@@ -274,21 +286,7 @@ func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interf
 			if memberValue == nil {
 				continue
 			}
-			field := reflect.Value{}
-			for _, prefix := range prefixes {
-				template := actionPayloadLegFieldNames[prefix][member]
-				if template == "" {
-					continue
-				}
-				index1 := index + 1
-				if base, ok := actionPayloadLegIndexBase[prefix]; ok {
-					index1 = index + base
-				}
-				if candidate := target.FieldByName(prefix + fmt.Sprintf(template, index1)); candidate.IsValid() {
-					field = candidate
-					break
-				}
-			}
+			field := resolvePayloadLegField(target, prefixes, index, member)
 			if !field.IsValid() {
 				continue
 			}
@@ -298,6 +296,25 @@ func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interf
 		}
 	}
 	return nil
+}
+
+// resolvePayloadLegField is the one resolution of a `legs[index].member` entry: the
+// member's indexed RawAction field for the first prefix that owns it.
+func resolvePayloadLegField(target reflect.Value, prefixes []string, index int, member string) reflect.Value {
+	for _, prefix := range prefixes {
+		template := actionPayloadLegFieldNames[prefix][member]
+		if template == "" {
+			continue
+		}
+		index1 := index + 1
+		if base, ok := actionPayloadLegIndexBase[prefix]; ok {
+			index1 = index + base
+		}
+		if candidate := target.FieldByName(prefix + fmt.Sprintf(template, index1)); candidate.IsValid() {
+			return candidate
+		}
+	}
+	return reflect.Value{}
 }
 
 func actionPayloadFieldName(prefix, path string) string {

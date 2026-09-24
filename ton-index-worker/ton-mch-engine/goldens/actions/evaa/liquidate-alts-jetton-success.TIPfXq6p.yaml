@@ -17,8 +17,8 @@ actions:
     value: 650336190
     opcode: 0x00000311
     tx_hashes:
-      - TM+N/X6oCWSzDDA2cvwbmmLZ2AbI51ppiGYkJtS7i+8=
       - xZiXM+BiEdrnGxJif4aDyemdIgRNMIIQ23A4fvP74xU=
+      - TM+N/X6oCWSzDDA2cvwbmmLZ2AbI51ppiGYkJtS7i+8=
     accounts:
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
       - 0:F1AAC825A254B945A9FAF7A3DDF25A4915595DD5EB21C002DA0ECB6E90C89B5F
@@ -108,8 +108,8 @@ actions:
       asset_id: "0x8be3365cabaa6a0f90d2e64f03fa78268c135fe0b0758b576b447e9b2068d75d"
       debt_amount: 187653
     tx_hashes:
-      - MauIcHQ42yVKBW/k3Pekd77t2deI7HABCaAG24uHvAY=
       - TIPfXq6pzI9BouyiGiiy04DBqreAzocYnqyyE/ydtWw=
+      - MauIcHQ42yVKBW/k3Pekd77t2deI7HABCaAG24uHvAY=
       - TM+N/X6oCWSzDDA2cvwbmmLZ2AbI51ppiGYkJtS7i+8=
       - U7w+heDW7v76IBgGB5FVwXJsC6FN903pEfEQtpTs7gA=
       - Uhk4FOBOl2T6O63cPSjf6cM7O3j9y7jPDDhWLz1gR8w=
@@ -200,8 +200,8 @@ actions:
       query_id: 1768400560034
       response_destination: 0:3D9E17EA59EEE0582A8808FF7655240C6311606F7D9F49BCE917C6CC027D974D
     tx_hashes:
-      - MauIcHQ42yVKBW/k3Pekd77t2deI7HABCaAG24uHvAY=
       - TM+N/X6oCWSzDDA2cvwbmmLZ2AbI51ppiGYkJtS7i+8=
+      - MauIcHQ42yVKBW/k3Pekd77t2deI7HABCaAG24uHvAY=
       - U7w+heDW7v76IBgGB5FVwXJsC6FN903pEfEQtpTs7gA=
       - Uhk4FOBOl2T6O63cPSjf6cM7O3j9y7jPDDhWLz1gR8w=
       - WeSPgTpgwfn/RZELBj/0G5TnaP8Vb+SyoFLJJL5fCOQ=
@@ -237,8 +237,8 @@ actions:
       comment: EVAA liquidation.
       comment_encrypted: false
     tx_hashes:
-      - jkMZE5ZNQfCGSUDeCo1XAE46w/64UcTnIviQnTxCoMI=
       - v+QyDSm85ti67zBVcj8aoONtZ8/4il2X2yt8KSn+Q9M=
+      - jkMZE5ZNQfCGSUDeCo1XAE46w/64UcTnIviQnTxCoMI=
     accounts:
       - 0:3DBC66C30CB303F3DCC38B850E30C6793858C68A26217075BD56730B331BAA19
       - 0:F1AAC825A254B945A9FAF7A3DDF25A4915595DD5EB21C002DA0ECB6E90C89B5F

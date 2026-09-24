@@ -493,6 +493,9 @@ Payload v2 stores protocol-specific action data as one flat keyed map.
 It has no per-protocol composite columns or group wrappers. Shared fields such as
 `source`, `destination`, `asset`, `amount` and `opcode` remain ordinary action fields;
 all other non-null action fields live directly under `data`.
+In encoded payloads, null fields and list elements are omitted recursively, except
+`legs` retains null placeholders before filled legs, trims trailing placeholders,
+and omits the key when all legs are empty.
 
 `fill_nft_transfer` is a worked example. The spec writes names such as:
 
@@ -556,6 +559,7 @@ A synthetic fixture prefixes its note with `synthetic: `; chain and API captures
 
 `goldens/actions/<group>/<slug>.<id8>.yaml` holds every action row the engine serializes for that fixture, exactly as production writes them.
 Rows are sorted by anchor, the ten directional and scalar columns are always present with nulls spelled out, the flat `data` map appears only when set, `opcode` is hex, `matcher` is absent on engine-made leaves, and a BOC-valued field renders as its cell hash.
+For classified actions, the `tx_hashes` row column starts with the initiating transaction, or the root-level block's earliest transaction by `tx->lt`, followed by the remaining hashes sorted ascending.
 
 Regenerate from the repository root:
 

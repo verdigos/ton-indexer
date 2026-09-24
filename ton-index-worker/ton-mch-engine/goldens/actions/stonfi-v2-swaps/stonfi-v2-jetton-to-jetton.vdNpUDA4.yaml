@@ -36,6 +36,7 @@ actions:
       protocol: stonfi_v2
       sender: 0:A9A7352D98648C83714846514BCE14E8A9B682D318E68F33A7D28EC7E0CF00B9
     tx_hashes:
+      - vdNpUDA43aIw6QlbcKMgi7q4S0MnJAVTfXVRqbAt5Tw=
       - E+RzlVxaAD3CPQowwZS/vwONdFWL3NUxsCel3gF2i4g=
       - G8yDvaMXXhqpaXyO3zmYeY2HjL1wB46zfbo2+aJfZoQ=
       - Pqj6vhrWT7mjgmfBfnseTYFzv8HA0GQJy8HEJKC1k1I=
@@ -43,7 +44,6 @@ actions:
       - Wa4YxMLpLWt6uGhRQ7FoPqvyguxM2h8JirkbAdOE+AQ=
       - ZcdxZZglum13ZqIJo3P61J0QRFas6NdXkB6lSVKo4tE=
       - m3w2wVCBQyO9S/NhbIBY31MRNgAvEUeig7C8ESkfq1k=
-      - vdNpUDA43aIw6QlbcKMgi7q4S0MnJAVTfXVRqbAt5Tw=
       - w5DUVj4e67NSOVv7DNjqi2GWGOQgTtnyMUm15iaxKS0=
       - wKpjUdtcCW2X/O3JHzaR65BquP745ZTKBCUJCe50e8A=
     accounts:

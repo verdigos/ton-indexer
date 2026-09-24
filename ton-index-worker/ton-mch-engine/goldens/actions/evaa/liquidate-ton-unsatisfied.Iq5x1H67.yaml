@@ -75,8 +75,8 @@ actions:
     value: 72187650774
     opcode: 0x000031f2
     tx_hashes:
-      - nnfW4eyjLWI3xGK+U8SKxbvcqSoL8/O7AbC9ogZf1xc=
       - tyxC9Aek4XOR4g82a2NT9RFeWjtjheEGLVpD18P6rrE=
+      - nnfW4eyjLWI3xGK+U8SKxbvcqSoL8/O7AbC9ogZf1xc=
     accounts:
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
       - 0:FF3F3A3F3050FC69D47A35BC8B974A894C1008D7EBB75C48035AFA8ABB172C19
@@ -104,8 +104,8 @@ actions:
     value: 718720000
     opcode: 0x0e000000
     tx_hashes:
-      - 8Y3roPeo23vw+A434D8ZZFcoJQ2dHhherjVSAokUHBY=
       - hXulmwq0hHXH/WQTvD2+IOp35ukVIgAk6FqDKc8qgrY=
+      - 8Y3roPeo23vw+A434D8ZZFcoJQ2dHhherjVSAokUHBY=
     accounts:
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
       - 0:6A6BF027093DB69B63F59C3CB26E5EB7B3429ACFC4D890A0FFB505F63844B30B
@@ -138,8 +138,8 @@ actions:
       debt_amount: 71521844040
       fail_reason: not_liquidatable
     tx_hashes:
-      - 8Y3roPeo23vw+A434D8ZZFcoJQ2dHhherjVSAokUHBY=
       - Iq5x1H67TD8ExK7BujNojqa/t6oAdBMPsCa44S0bw2M=
+      - 8Y3roPeo23vw+A434D8ZZFcoJQ2dHhherjVSAokUHBY=
       - hXulmwq0hHXH/WQTvD2+IOp35ukVIgAk6FqDKc8qgrY=
       - nnfW4eyjLWI3xGK+U8SKxbvcqSoL8/O7AbC9ogZf1xc=
       - tyxC9Aek4XOR4g82a2NT9RFeWjtjheEGLVpD18P6rrE=

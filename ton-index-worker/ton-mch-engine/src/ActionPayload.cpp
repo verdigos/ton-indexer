@@ -24,7 +24,7 @@ void pack_binary(Packer &packer, const std::string &value) {
   packer.pack_bin_body(value.data(), static_cast<std::uint32_t>(value.size()));
 }
 
-void pack_value(Packer &packer, const Value &value);
+void pack_value(Packer &packer, const Value &value, bool positional_legs = false);
 
 bool omitted(const Value &value) {
   return value.t == VType::Null || value.t == VType::Block ||
@@ -44,11 +44,12 @@ void pack_fields(Packer &packer, const Value::Fields &fields) {
   for (const auto &[key, value] : fields) {
     if (omitted(value)) continue;
     pack_string(packer, key);
-    pack_value(packer, value);
+    // Positional legs need nil placeholders for empty earlier slots.
+    pack_value(packer, value, key == "legs");
   }
 }
 
-void pack_value(Packer &packer, const Value &value) {
+void pack_value(Packer &packer, const Value &value, bool positional_legs) {
   switch (value.t) {
     case VType::Null:
     case VType::Block:
@@ -88,11 +89,11 @@ void pack_value(Packer &packer, const Value &value) {
     case VType::List: {
       std::uint32_t size = 0;
       for (const auto &item : *value.items) {
-        if (!omitted(item)) ++size;
+        if (!omitted(item) || (positional_legs && item.t == VType::Null)) ++size;
       }
       packer.pack_array(size);
       for (const auto &item : *value.items) {
-        if (!omitted(item)) pack_value(packer, item);
+        if (!omitted(item) || (positional_legs && item.t == VType::Null)) pack_value(packer, item);
       }
       return;
     }

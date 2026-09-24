@@ -36,10 +36,10 @@ actions:
       protocol: stonfi_v2
       sender: 0:F03785B1D4978B1A00133F66A97DDDED84B28C1311C47915167AD63CA9187E56
     tx_hashes:
+      - CD5IIyWGj3nbuAyIEgmeMGJ28UdC4lMHqRRYcxdLraE=
       - +p4y70lr32NABsRLQxcCvNI+vbpMe0IPzULHN22vxnE=
       - 3zInmaI7ViGDZi9m6I04wKJek7r3VEyc1QqVegaemBw=
       - 6jYVpY/YBs8DIMPdJXLoTkveQDGlSK51UNFnAuvbhqw=
-      - CD5IIyWGj3nbuAyIEgmeMGJ28UdC4lMHqRRYcxdLraE=
       - FFfj4RJDrnS9xktbQs9DpE2qv27vbtDwFE6t2fHBHTo=
       - KGf2L/6BIMWtDxOpzcxeJkRpQcg5GDfwSeWgnC3TDWM=
       - L9T5EBw4x+nY8XjUsTBD18CO4tM8WmNDFSvmF6mhMpc=
@@ -93,8 +93,8 @@ actions:
       protocol: coffee
       sender: 0:3D264E3CB401B01DC7D1CFC232470D185A3EBA63D933E738617F9942B9294C4E
     tx_hashes:
-      - HiSiS0GxQwXqu+hJ3+0i4CXofesgZGZa7IT/3oQvfxg=
       - L9T5EBw4x+nY8XjUsTBD18CO4tM8WmNDFSvmF6mhMpc=
+      - HiSiS0GxQwXqu+hJ3+0i4CXofesgZGZa7IT/3oQvfxg=
       - VkpKahxFHVl675Sl/Xiz8gFn+5hCftM6W4WgYDWRkfw=
       - g9h0XST1XssjI4R6fNoADAyOLTYOw1Oifqe6SeAuLHg=
       - gdcJZBWBAhQ5+iiGriprAYvChM6rqJDFLdLR1+Sa1uw=

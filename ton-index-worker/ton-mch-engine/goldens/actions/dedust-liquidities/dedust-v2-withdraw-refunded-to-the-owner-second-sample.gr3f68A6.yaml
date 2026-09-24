@@ -49,10 +49,10 @@ actions:
       protocol: dedust_v2
       tokens_burnt: 328633534503099
     tx_hashes:
+      - gr3f68A6xHUJI3qtHGaK3GqK2MxE86NK6vOYPQM4Rz4=
       - 9Pj3kcRU7DtLg2NQ+dCqhAAMPk2m3o+f9TUphoXZero=
       - HYCCq569PMgmOXFV9q2hzfgFIDDxdgbn6dNtDdbvA54=
       - MnaYoyS6ln3T8EfAYWLmiXSA37f6NhulKvaHkT8XuTg=
-      - gr3f68A6xHUJI3qtHGaK3GqK2MxE86NK6vOYPQM4Rz4=
       - sryElQRHNSvv+gKB4/4py+1mTl9DoyouFYtZd0blrHk=
     accounts:
       - 0:6DB3F3C56D83D71DAC31C4B0444B6E5C41748CFF942B260E94F8BEA486E9A858

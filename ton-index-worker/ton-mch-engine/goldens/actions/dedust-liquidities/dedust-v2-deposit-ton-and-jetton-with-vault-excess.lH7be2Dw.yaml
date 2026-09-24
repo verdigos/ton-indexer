@@ -60,6 +60,7 @@ actions:
           asset: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
         - amount: 1
     tx_hashes:
+      - lH7be2DwnwVSo6D3ZZL0xAI7F+vNk4bZ7KXCDpO4Zfo=
       - BHJsFslupF9LNPzXEkS564jvNA1U+KBnTv9k0WpA/Zk=
       - CxI9H7M6qGyUFewfJv7ZUS9Clgn9RqLbz98czXfpfHs=
       - LT6eJrdlJNG3wc2jGhrMbJiDCpWJ4/+nMay0f70XpOE=
@@ -73,7 +74,6 @@ actions:
       - Y544GkuIedNmUlu78Y6KoJ/kDcKA15V+PScQFn3aPLM=
       - cTdIrlc//6IFIUx5CYrZCY/r/KQAUhT9OJrAtKF51Mk=
       - gpiDg252UnkstsWxYubxTekTcTJRJkUNlUMiNLnikXc=
-      - lH7be2DwnwVSo6D3ZZL0xAI7F+vNk4bZ7KXCDpO4Zfo=
       - njDAO2AwO/pQOHdY/ptUtebEM1q26WWKBm8ImkTXwjw=
       - r0xDHKpSxn2wAkh+6w9rIIvhC5+FbhZ27Y9ad1b0eqg=
     accounts:

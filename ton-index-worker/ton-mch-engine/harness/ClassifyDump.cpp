@@ -74,8 +74,8 @@ std::string render_action(const Action &a, const std::string &matcher, const std
   auto scalar = [&](const char *k, const std::string &text) {
     out += std::string("    ") + k + ": " + text + "\n";
   };
-  auto strings = [&](const char *k, std::vector<std::string> v) {
-    std::sort(v.begin(), v.end());
+  auto strings = [&](const char *k, std::vector<std::string> v, bool sorted = true) {
+    if (sorted) std::sort(v.begin(), v.end());
     if (v.empty()) {
       scalar(k, "[]");
       return;
@@ -112,7 +112,7 @@ std::string render_action(const Action &a, const std::string &matcher, const std
   for (const auto &kv : fields) {  // composites + extra, sorted, present only
     if (!kv.second->is_null()) render_yaml_field(kv.first, *kv.second, 4, out);
   }
-  strings("tx_hashes", a.tx_hashes);
+  strings("tx_hashes", a.tx_hashes, false);
   strings("accounts", a.accounts);
   scalar("start_lt", std::to_string(a.start_lt));
   scalar("end_lt", std::to_string(a.end_lt));

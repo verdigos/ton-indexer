@@ -17,8 +17,8 @@ actions:
     value: 340000000
     opcode: 0x0168d4b7
     tx_hashes:
-      - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
       - k4j3bwj6FjSeLcdN8t4usf2Dq4qWpHkNDm2WH8/qeq4=
+      - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
     accounts:
       - 0:1BEC198536F26D764F5B26CF305F44EFF1DE28204F09581E51FF938E435CD220
       - 0:3EEAEF410E152045D1888349A6D59DBFA1D854950C255FD83E35D95E411BC347
@@ -78,9 +78,9 @@ actions:
     data:
       exit_code: 46
     tx_hashes:
+      - k4j3bwj6FjSeLcdN8t4usf2Dq4qWpHkNDm2WH8/qeq4=
       - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
       - 2O1uY3l4qOwa4F0R+umaoeU/bns8MMRq3JTa3ouHSi4=
-      - k4j3bwj6FjSeLcdN8t4usf2Dq4qWpHkNDm2WH8/qeq4=
     accounts:
       - 0:1BEC198536F26D764F5B26CF305F44EFF1DE28204F09581E51FF938E435CD220
       - 0:3EEAEF410E152045D1888349A6D59DBFA1D854950C255FD83E35D95E411BC347

@@ -98,8 +98,8 @@ actions:
     data:
       comment_encrypted: false
     tx_hashes:
-      - 4ZXCgz56MQBJxn0VMGU3Ypgpu7Xr3kg39YnTS68sunc=
       - Ou+hXwfHtNeTs97mBY3LVCmlnsoySA7hJXeoZSfOAao=
+      - 4ZXCgz56MQBJxn0VMGU3Ypgpu7Xr3kg39YnTS68sunc=
     accounts:
       - 0:52A3A107CA90CF372EA89360B4D13A57681297DB55A81A1491090AA636E2EBA2
     start_lt: 75914987000002
