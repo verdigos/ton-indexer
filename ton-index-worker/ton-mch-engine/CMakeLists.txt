@@ -270,6 +270,7 @@ add_dependencies(mch-fixtures mch_generate_sources)
 # Split in two so the emulator-free side (converter / interfaces / actor) stays
 # linkable without emulator_static.
 add_library(mch-classification-runtime STATIC
+    src/ClassifyAndSerialize.cpp
     src/emu/EmuTraceConvert.cpp
     src/DetectorInterfaceAdapter.cpp
     src/emu/EmuClassifierActor.cpp

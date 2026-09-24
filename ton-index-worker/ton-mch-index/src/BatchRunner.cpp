@@ -5,9 +5,7 @@
 #include <cstdio>
 
 #include "BlockInterfacesDetector.h"
-#include "RedisActionSerialize.h"
-#include "CelldbTier2Lookup.h"
-#include "emu/EmuTypes.h"
+#include "ClassifyAndSerialize.h"
 
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/base64.h"
@@ -220,21 +218,21 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
 
 void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs,
                                  const ParsedBlockPtr &parsed_block) {
-  AllShardStates shard_states;
+  mch::EmuTraceView view;
+  view.trace_id = trace_key;
+  view.nodes.push_back(mch::EmuTxRef{.finality = mch::EmuFinality::finalized});
   for (const auto &sb : parsed_block->mc_block_.shard_blocks_) {
-    shard_states.push_back(sb.block_state);
+    view.shard_states.push_back(sb.block_state);
   }
-  mch::CelldbTier2Lookup tier2(&shard_states, parsed_block->mc_block_.config_);
-  mch::TieredLookupSource::Tier2Hook hook;
-  if (tier2_enabled_) {
-    hook = [&tier2](const std::string &kind, const std::vector<mch::Value> &args) {
-      return tier2.fetch(kind, args);
-    };
-  }
+  view.config = parsed_block->mc_block_.config_;
   auto &tier1_map = tier1_completion_only_ ? parsed_block->account_interfaces_ : account_interfaces_;
-  mch::TieredLookupSource src(&tier1_map, std::move(hook));
-  auto classified = mch::classify_schema_trace(*prep_, trace_key, txs, src);
-  const auto &stats = src.stats();
+  auto run = mch::classify_and_serialize(
+      *prep_, txs, view, tier1_map,
+      {.tier2_enabled = tier2_enabled_,
+       .authoritative_tier1 = true,
+       .serialize_failure_rows = false});
+  auto &classified = run.classified;
+  const auto &stats = run.lookup_stats;
   lookup_stats_.tier1_hits += stats.tier1_hits;
   lookup_stats_.tier2_hits += stats.tier2_hits;
   for (const auto &[kind, count] : stats.tier2_hits_by_kind) {
@@ -259,12 +257,6 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
 
   total_actions_emitted_ += classified.rows.size();
 
-  mch::EmuTraceView view;
-  view.trace_id = trace_key;
-  view.nodes.push_back(mch::EmuTxRef{.finality = mch::EmuFinality::finalized});
-  mch::RedisActionSerializeStats ser_stats;
-  const std::string actions_blob = mch::serialize_redis_actions(classified.rows, view, &ser_stats);
-
   std::vector<std::string> tx_hash_b64;
   tx_hash_b64.reserve(txs.size());
   for (const auto &tx : txs) {
@@ -276,7 +268,7 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   td::JsonBuilder jb;
   auto obj = jb.enter_object();
   obj("trace_key", trace_key);
-  obj("actions_b64", td::base64_encode(actions_blob));
+  obj("actions_b64", td::base64_encode(run.actions_blob));
   obj("tx_hashes", td::json_array([&](auto &arr) {
         for (const auto &hash : tx_hash_b64) {
           arr << hash;
