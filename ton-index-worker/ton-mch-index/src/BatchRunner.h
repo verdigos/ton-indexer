@@ -26,7 +26,7 @@ class BatchRunner : public td::actor::Actor {
               td::actor::ActorId<TraceAssembler> trace_assembler,
               std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
               std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
-              bool tier2_enabled, bool emit_tick_tock, bool tier1_completion_only,
+              bool tier2_enabled, bool emit_tick_tock,
               std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher);
 
   void start_up() override;
@@ -38,6 +38,7 @@ class BatchRunner : public td::actor::Actor {
   void seqno_traces_assembled(std::uint32_t seqno, ParsedBlockPtr parsed_block);
   void seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr parsed_block);
   void classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs,
+                      const mch::TieredLookupSource::InterfaceMap &tier1_map,
                       const ParsedBlockPtr &parsed_block);
   void fail(std::uint32_t seqno, const char *stage, td::Status error);
   void finish();
@@ -54,7 +55,6 @@ class BatchRunner : public td::actor::Actor {
   std::uint32_t current_seqno_;
   bool tier2_enabled_;
   bool emit_tick_tock_;
-  bool tier1_completion_only_;
   std::size_t tick_tock_skipped_{0};
   // Wall-clock accumulators per stage (seconds).
   double stage_started_{0};
@@ -63,9 +63,11 @@ class BatchRunner : public td::actor::Actor {
   std::shared_ptr<std::atomic_int> exit_code_;
   std::shared_ptr<td::Destructor> watcher_;
 
-  std::unordered_map<td::Bits256, std::vector<schema::Transaction>, Bits256Hasher> transactions_by_trace_;
-
-  std::unordered_map<block::StdAddress, std::vector<schema::BlockchainInterfaceV2>> account_interfaces_;
+  struct TracePayload {
+    std::vector<schema::Transaction> txs;
+    mch::TieredLookupSource::InterfaceMap memo;
+  };
+  std::unordered_map<td::Bits256, TracePayload, Bits256Hasher> payloads_by_trace_;
 
   std::uint64_t total_blocks_{0};
   std::uint64_t total_transactions_{0};

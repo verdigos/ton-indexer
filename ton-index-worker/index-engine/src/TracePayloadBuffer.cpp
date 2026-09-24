@@ -1,4 +1,5 @@
 #include "TracePayloadBuffer.h"
+#include "Classify.h"
 
 #include <algorithm>
 #include <utility>
@@ -31,24 +32,8 @@ std::vector<ClassifyInput> TracePayloadBuffer::add_block(std::uint32_t mc_seqno,
       }
       entry.txs.push_back(tx);
       ++counters_.buffered_txs;
-      auto detected = block.account_interfaces_.find(tx.account);
-      if (detected == block.account_interfaces_.end()) {
-        continue;
-      }
-      auto [slot, inserted] = entry.memo.try_emplace(tx.account);
-      if (inserted) {
+      if (merge_trace_interface_memo(entry.memo, tx, block.account_interfaces_)) {
         ++counters_.buffered_memo_accounts;
-      }
-      auto &memo = slot->second;
-      for (const auto &iface : detected->second) {
-        auto existing = std::find_if(memo.begin(), memo.end(), [&](const auto &record) {
-          return record.index() == iface.index();
-        });
-        if (existing == memo.end()) {
-          memo.push_back(iface);
-        } else {
-          *existing = iface;
-        }
       }
     }
   }

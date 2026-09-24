@@ -41,7 +41,7 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
                          td::actor::ActorId<TraceAssembler> trace_assembler,
                          std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
                          std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
-                         bool tier2_enabled, bool emit_tick_tock, bool tier1_completion_only,
+                         bool tier2_enabled, bool emit_tick_tock,
                          std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher)
     : db_scanner_(db_scanner)
     , parse_manager_(parse_manager)
@@ -54,7 +54,6 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
     , current_seqno_(read_start)
     , tier2_enabled_(tier2_enabled)
     , emit_tick_tock_(emit_tick_tock)
-    , tier1_completion_only_(tier1_completion_only)
     , exit_code_(std::move(exit_code))
     , watcher_(std::move(watcher)) {
 }
@@ -161,28 +160,24 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
   stage_started_ = now_s();
   LOG(DEBUG) << "Interfaces processed for seqno " << seqno;
 
-  if (!tier1_completion_only_) {
-    for (auto &kv : parsed_block->account_interfaces_) {
-      account_interfaces_[kv.first] = std::move(kv.second);
-    }
-  }
-
   total_blocks_ += parsed_block->blocks_.size();
   for (const auto &block : parsed_block->blocks_) {
     total_transactions_ += block.transactions.size();
     for (const auto &transaction : block.transactions) {
-      transactions_by_trace_[transaction.trace_id].push_back(transaction);
+      auto &payload = payloads_by_trace_[transaction.trace_id];
+      payload.txs.push_back(transaction);
+      mch::merge_trace_interface_memo(payload.memo, transaction, parsed_block->account_interfaces_);
     }
   }
-  peak_accumulator_size_ = std::max(peak_accumulator_size_, transactions_by_trace_.size());
+  peak_accumulator_size_ = std::max(peak_accumulator_size_, payloads_by_trace_.size());
 
   for (const auto &trace : parsed_block->traces_) {
     if (trace.state == schema::Trace::State::complete) {
-      auto it = transactions_by_trace_.find(trace.trace_id);
-      std::vector<schema::Transaction> txs;
-      if (it != transactions_by_trace_.end()) {
-        txs = std::move(it->second);
-        transactions_by_trace_.erase(it);
+      auto it = payloads_by_trace_.find(trace.trace_id);
+      TracePayload payload;
+      if (it != payloads_by_trace_.end()) {
+        payload = std::move(it->second);
+        payloads_by_trace_.erase(it);
       }
       if (trace.mc_seqno_end >= static_cast<std::int32_t>(seqno_from_) &&
           trace.mc_seqno_end <= static_cast<std::int32_t>(seqno_to_)) {
@@ -196,15 +191,16 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
         const std::string trace_key = td::base64_encode(output_hash.as_slice());
         LOG(INFO) << "Selected complete trace " << trace_key
                   << " at masterchain seqno " << trace.mc_seqno_end;
-        std::stable_sort(txs.begin(), txs.end(),
+        std::stable_sort(payload.txs.begin(), payload.txs.end(),
                          [](const auto &left, const auto &right) { return left.lt < right.lt; });
         const double classify_started = now_s();
-        classify_trace(trace_key, std::move(txs), parsed_block);
+        classify_trace(trace_key, std::move(payload.txs), payload.memo, parsed_block);
         t_classify_ += now_s() - classify_started;
       } else {
         ++complete_out_of_range_;
       }
     } else if (trace.state == schema::Trace::State::broken) {
+      payloads_by_trace_.erase(trace.trace_id);
       ++broken_;
     }
   }
@@ -219,6 +215,7 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
 }
 
 void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs,
+                                 const mch::TieredLookupSource::InterfaceMap &tier1_map,
                                  const ParsedBlockPtr &parsed_block) {
   mch::EmuTraceView view;
   view.trace_id = trace_key;
@@ -227,7 +224,6 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
     view.shard_states.push_back(sb.block_state);
   }
   view.config = parsed_block->mc_block_.config_;
-  auto &tier1_map = tier1_completion_only_ ? parsed_block->account_interfaces_ : account_interfaces_;
   auto run = mch::classify(*prep_, trace_key, txs, tier1_map,
                            tier2_enabled_ ? &view.shard_states : nullptr, view.config);
   auto &classified = run.classified;
@@ -290,7 +286,7 @@ void BatchRunner::finish() {
 
   const auto prewarm_seqnos = static_cast<std::uint64_t>(seqno_from_) - read_start_;
   const auto range_seqnos = static_cast<std::uint64_t>(seqno_to_) - seqno_from_ + 1;
-  const auto pending_at_eof = transactions_by_trace_.size();
+  const auto pending_at_eof = payloads_by_trace_.size();
 
   std::string tier2_hits_by_kind;
   for (const auto &[kind, count] : lookup_stats_.tier2_hits_by_kind) {
@@ -331,7 +327,6 @@ void BatchRunner::finish() {
           << ",engine_fault=" << failures(mch::FailureCategory::engine_fault)
           << ",malformed_trace=" << failures(mch::FailureCategory::malformed_trace) << "}"
           << "; actions emitted=" << total_actions_emitted_
-          << "; account interfaces=" << account_interfaces_.size()
           << "; lookups{tier1_hits=" << lookup_stats_.tier1_hits
           << ",tier2_hits=" << lookup_stats_.tier2_hits << ",misses=" << lookup_stats_.misses
           << ",misses_by_kind={" << misses_by_kind << "}}"

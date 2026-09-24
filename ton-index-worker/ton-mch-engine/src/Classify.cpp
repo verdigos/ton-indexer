@@ -1,5 +1,6 @@
 #include "Classify.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace mch {
@@ -23,6 +24,28 @@ TieredLookupSource::StableAddressSet compute_status_stable_accounts(
 }
 
 }  // namespace
+
+bool merge_trace_interface_memo(TieredLookupSource::InterfaceMap &memo,
+                                const schema::Transaction &tx,
+                                const TieredLookupSource::InterfaceMap &block_interfaces) {
+  auto detected = block_interfaces.find(tx.account);
+  if (detected == block_interfaces.end()) {
+    return false;
+  }
+  auto [slot, inserted] = memo.try_emplace(tx.account);
+  auto &records = slot->second;
+  for (const auto &iface : detected->second) {
+    auto existing = std::find_if(records.begin(), records.end(), [&](const auto &record) {
+      return record.index() == iface.index();
+    });
+    if (existing == records.end()) {
+      records.push_back(iface);
+    } else {
+      *existing = iface;
+    }
+  }
+  return inserted;
+}
 
 ClassifyRun classify(
     const MchEnginePrep &prep, const std::string &trace_id,
