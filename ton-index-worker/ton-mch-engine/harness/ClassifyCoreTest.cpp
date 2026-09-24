@@ -178,7 +178,8 @@ void test_payload_encode_failure_skips_one_action() {
   auto bad = classify_schema_trace(prep, "payload-bad", {tx}, source);
   check("payload_failure/outcome", bad.outcome == TraceOutcome::classified);
   check("payload_failure/reason", bad.failure_reason.find("response_destination expects W:HEX address: bad-address") != std::string::npos);
-  check("payload_failure/no_rows", bad.rows.empty());
+  check("payload_failure/unknown_row", bad.rows.size() == 1 &&
+        bad.rows.front().type == "unknown" && bad.unknown_row);
   check("payload_failure/skipped_one", bad.skipped_payload_actions == 1);
 
   schema::Transaction child = tx;

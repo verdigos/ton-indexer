@@ -551,7 +551,7 @@ The three shapes that earn their place:
 ```
 
 ```mch
-    # NFT lookup miss: the DNS event remains and omits collection_address.
+    # NFT item lookup miss keeps the bid row with null item index and collection.
 ```
 
 ```mch

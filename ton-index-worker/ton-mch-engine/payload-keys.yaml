@@ -554,7 +554,7 @@ keys:
   uses: DEX
 - id: 111
   name: tick_spacing
-  type: uint
+  type: string
   shape: integer_string
   uses: Tonco
 - id: 112

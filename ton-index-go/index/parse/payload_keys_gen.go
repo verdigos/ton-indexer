@@ -132,7 +132,7 @@ var payloadKeys = [256]payloadKeyInfo{
 	108: {Name: "target_amount", Type: payloadTypeUint, Retired: false},
 	109: {Name: "target_asset", Type: payloadTypeAddress, Retired: false},
 	110: {Name: "tick_lower", Type: payloadTypeString, Retired: false},
-	111: {Name: "tick_spacing", Type: payloadTypeUint, Retired: false},
+	111: {Name: "tick_spacing", Type: payloadTypeString, Retired: false},
 	112: {Name: "tick_upper", Type: payloadTypeString, Retired: false},
 	113: {Name: "timestamp", Type: payloadTypeString, Retired: false},
 	114: {Name: "tokens_burnt", Type: payloadTypeUint, Retired: false},

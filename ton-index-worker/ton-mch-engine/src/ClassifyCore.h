@@ -202,7 +202,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
 // Engine exceptions become terminal outcomes with no rows. Payload validation
 // skips only that action and retains a failure reason. Rescue
 // construction precedes classification and may throw on allocation failure.
-// History unavailability overrides the outcome while retaining computed rows.
+// Tier-2 read errors are lookup misses (logged once per address); they never change the outcome.
 // `prep` is process-lifetime const and shareable across threads.
 // The interface map behind `src` is shareable iff immutable.
 // `src` and its Tier2Hook capture are for one classify call on one thread only.

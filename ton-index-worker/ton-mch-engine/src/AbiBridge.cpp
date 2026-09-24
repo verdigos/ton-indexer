@@ -306,6 +306,32 @@ td::Result<Value> abi_parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &b
   return td::Status::Error("evaa fail excess: unknown opcode");
 }
 
+template <class T>
+td::Result<Value> abi_parse_evaa_liquidate_master_exact(const td::Ref<vm::Cell> &body) {
+  if (body.is_null()) {
+    return td::Status::Error("abi bridge: null body cell");
+  }
+  bool special = false;
+  vm::CellSlice cs = vm::load_cell_slice_special(body, special);
+  if (special) {
+    return td::Status::Error("abi bridge: exotic cell not supported");
+  }
+  TRY_RESULT(parsed, T::from_slice(cs));
+  if (cs.size() != 0) {
+    return td::Status::Error("abi bridge: EVAA liquidation master has trailing inline bits");
+  }
+  TRY_RESULT(av, parsed.to_abi_value());
+  return abi_value_to_mch(av);
+}
+
+td::Result<Value> abi_parse_evaa_liquidate_master_v7(const td::Ref<vm::Cell> &body) {
+  return abi_parse_evaa_liquidate_master_exact<evaa::EvaaLiquidateMasterV7>(body);
+}
+
+td::Result<Value> abi_parse_evaa_liquidate_master(const td::Ref<vm::Cell> &body) {
+  return abi_parse_evaa_liquidate_master_exact<evaa::EvaaLiquidateMaster>(body);
+}
+
 td::Result<Value> abi_parse_evaa_liquidate_unsatisfied(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(parsed, decode_abi_body<evaa::EvaaLiquidateUnsatisfied>(body));
   const auto reason = [&]() {
@@ -642,8 +668,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"EvaaWithdrawCollateralized", &abi_parse_body<evaa::EvaaWithdrawCollateralized>},
       {"EvaaWithdrawFailExcess", &abi_parse_evaa_withdraw_fail_excess},
       {"EvaaSupplyJettonForward", &abi_parse_body<evaa_forward::EvaaSupplyJettonForward>},
-      {"EvaaLiquidateMaster", &abi_parse_body<evaa::EvaaLiquidateMaster>},
-      {"EvaaLiquidateMasterV7", &abi_parse_body<evaa::EvaaLiquidateMasterV7>},
+      {"EvaaLiquidateMaster", &abi_parse_evaa_liquidate_master},
+      {"EvaaLiquidateMasterV7", &abi_parse_evaa_liquidate_master_v7},
       {"EvaaLiquidateSatisfied", &abi_parse_body<evaa::EvaaLiquidateSatisfied>},
       {"EvaaLiquidateUnsatisfied", &abi_parse_evaa_liquidate_unsatisfied},
       {"EvaaLiquidateJettonForward", &abi_parse_body<evaa_forward::EvaaLiquidateJettonForward>},

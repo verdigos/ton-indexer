@@ -619,7 +619,8 @@ SchemaClassifyResult classify_schema_trace(
       names.insert(action.matcher_name);
     }
     result.matcher_names.assign(names.begin(), names.end());
-    if (classified.unknown_trace) {
+    if (classified.unknown_trace ||
+        (!classified.failure && result.rows.empty() && result.skipped_payload_actions > 0)) {
       result.rows.push_back(create_unknown_action(ctx.trace));
       result.unknown_row = true;
     }

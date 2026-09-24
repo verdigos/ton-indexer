@@ -202,7 +202,7 @@ matcher evaa_liquidate_ton {
     let success = satisfied_success != null
     let s = satisfied_success.body.info.ref
     let v7 = parse? master as EvaaLiquidateMasterV7
-    # A v7 body names the liquidator; a mismatch with the sender means the new layout.
+    # A parsed v7 body is accepted only with zero trailing inline bits and a matching sender.
     reject when v7 != null and account(v7.liquidator_address) != master.msg.source
     reject when v7 == null and master.body == null
     reject when success and satisfied_success.body == null

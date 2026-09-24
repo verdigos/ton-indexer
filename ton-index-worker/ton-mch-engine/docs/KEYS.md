@@ -131,7 +131,7 @@ remaining hashes sorted ascending.
 | 108 | `target_amount` | uint | integer_string | DEX legs |
 | 109 | `target_asset` | address | ton_address | DEX legs |
 | 110 | `tick_lower` | string | integer_string | DEX |
-| 111 | `tick_spacing` | uint | integer_string | Tonco |
+| 111 | `tick_spacing` | string | integer_string | Tonco |
 | 112 | `tick_upper` | string | integer_string | DEX |
 | 113 | `timestamp` | string | integer_string | tgBTC fallback actions |
 | 114 | `tokens_burnt` | uint | integer_string | DEX and staking |
