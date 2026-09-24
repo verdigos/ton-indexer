@@ -75,7 +75,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    cocoon_unregister_proxy_data:
+    data:
       query_id: 0
       seqno: 1
     tx_hashes:

@@ -18,10 +18,8 @@ actions:
     amount: null
     value: null
     opcode: null
-    change_dns_record_data:
-      flags: null
+    data:
       key: 0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
-      value_schema: null
     tx_hashes:
       - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
       - zschLenripMM09j8QPwj4JSRqSOSiAPztimDu2x9j7o=

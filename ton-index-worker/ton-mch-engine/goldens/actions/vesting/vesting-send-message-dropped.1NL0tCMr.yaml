@@ -75,7 +75,7 @@ actions:
     amount: 138886000000000
     value: null
     opcode: null
-    vesting_send_message_data:
+    data:
       message_boc: cellhash:6728C5BB19FD90BFDEF6D2D1AC4D4739DDF2B3AF66D77C962944BEDFBFC82D75
       query_id: 0
     tx_hashes:

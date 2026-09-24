@@ -174,12 +174,9 @@ actions:
     amount: 900000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 7
       response_destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
     tx_hashes:
@@ -212,12 +209,9 @@ actions:
     amount: 7000000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 7
       response_destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
     tx_hashes:

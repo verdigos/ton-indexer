@@ -162,13 +162,10 @@ actions:
     amount: 145312016910
     value: null
     opcode: null
-    evaa_withdraw_data:
+    data:
       asset_id: "0x1a4219fe5e60d63af2a3cc7dce6fec69b45c6b5718497a6148e7c232ac87bd8a"
-      fail_reason: null
       is_ton: true
       master: 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
-      master_jetton_wallet: null
-      recipient_jetton_wallet: null
     tx_hashes:
       - +Ow+V1XJF0cgtq9IShbmSek3R1z70ZWUn7fSEHbl5fA=
       - 1sycFWI13i+2UoUmReZCLCN4ceh1KHyaNYqRXitx9gU=
@@ -201,9 +198,9 @@ actions:
     amount: null
     value: 22913961
     opcode: null
-    ton_transfer_data:
-      content: EVAA withdraw.
-      encrypted: false
+    data:
+      comment: EVAA withdraw.
+      comment_encrypted: false
     tx_hashes:
       - C5iB2HxSOz/grASi6Ru4Rr7ejvUnwz6WWA3CI/T3X0c=
       - e3/LQHgV89BGjBlSJTTj+d3vCsYS1kopdJ0kw/iNJZs=

@@ -76,22 +76,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
-      forward_payload: null
-      is_purchase: null
-      marketplace_address: null
-      nft_item_index: null
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
-      query_id: null
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
+    data:
     tx_hashes:
       - CwwXuGiOfnfzlLDoCfyn3U5BBFLiN1iUCe+OVeUxVuM=
       - Ea1vL27uy7O6rs//hVnN/xFoMyPCS7ifeSlz8++a658=

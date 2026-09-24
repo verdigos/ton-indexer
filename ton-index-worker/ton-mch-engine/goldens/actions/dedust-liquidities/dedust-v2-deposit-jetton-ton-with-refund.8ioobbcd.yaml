@@ -43,24 +43,21 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 2044642517
-      amount2: 999999999
-      asset1: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      asset2: null
-      dex: dedust_v2
-      lp_tokens_minted: 1429909967
-      target_amount_1: 2044642518
-      target_amount_2: 1000000000
-      target_asset_1: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      target_asset_2: null
-      user_jetton_wallet_1: 0:8E4499C900841D7583D9559A2F1F0BA229330240C156A198B57611D5F1017C02
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 2044642517
+          asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+          target_amount: 2044642518
+          target_asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+          user_jetton_wallet: 0:8E4499C900841D7583D9559A2F1F0BA229330240C156A198B57611D5F1017C02
+        - amount: 999999999
+          target_amount: 1000000000
+      protocol: dedust_v2
+      tokens_minted: 1429909967
       vault_excesses:
         - amount: 1
           asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
         - amount: 1
-          asset: null
     tx_hashes:
       - 4LPZ8mQB5ZEYMX9LPPaNtSe0vWBCT5ek2p3FCuL62so=
       - 5YYDmitBjdD+/XnoUISTSI+pzzJbyqwpC5jbXnuPm7k=

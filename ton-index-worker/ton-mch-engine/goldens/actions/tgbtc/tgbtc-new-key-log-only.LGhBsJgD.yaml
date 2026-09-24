@@ -46,7 +46,7 @@ actions:
     amount: 425489053588
     value: null
     opcode: null
-    extra:
+    data:
       pubkey: 382e9d762046f4bb5cde2ce1b7780cb499b5394972163930cf88bc55463acb70
     tx_hashes:
       - vr2hCjND7/K23ZNSEbIjJ2CtkT62RwLBdeRVF773bb8=

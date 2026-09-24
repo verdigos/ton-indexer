@@ -147,7 +147,7 @@ type RawAction struct {
 	VestingSendMessageMessageBoc                         *string
 	VestingAddWhitelistQueryId                           *string
 	VestingAddWhitelistAccountsAdded                     []AccountAddress
-	EvaaSupplySenderJettonWallet                         *AccountAddress
+	EvaaSupplySenderJettonWallet                         *AccountAddress // no payload key; kept for the frozen RawAction JSON
 	EvaaSupplyRecipientJettonWallet                      *AccountAddress
 	EvaaSupplyMasterJettonWallet                         *AccountAddress
 	EvaaSupplyMaster                                     *AccountAddress
@@ -161,7 +161,7 @@ type RawAction struct {
 	EvaaLiquidateFailReason                              *string
 	EvaaLiquidateDebtAmount                              *string
 	EvaaLiquidateAssetId                                 *string
-	JvaultClaimClaimedJettons                            []AccountAddress
+	JvaultClaimClaimedJettons                            []RawActionJvaultClaimReward // carries claimed_rewards
 	JvaultClaimClaimedAmounts                            []string
 	JvaultStakePeriod                                    *int64
 	JvaultStakeMintedStakeJettons                        *string
@@ -234,9 +234,9 @@ type RawAction struct {
 	CocoonGrantRefundNewTokensUsed            *string
 	CocoonGrantRefundExpectedAddress          *string
 	CocoonClientIncreaseStakeQueryId          *string
-	CocoonClientIncreaseStakeNewStake         *string
+	CocoonClientIncreaseStakeNewStake         *string // no payload key; kept for the frozen RawAction JSON
 	CocoonClientWithdrawQueryId               *string
-	CocoonClientWithdrawWithdrawAmount        *string
+	CocoonClientWithdrawWithdrawAmount        *string // no payload key; kept for the frozen RawAction JSON
 
 	Extra map[string]interface{}
 
@@ -288,6 +288,13 @@ func (p *RawActionVaultExcessEntry) ScanIndex(i int) any {
 	default:
 		panic("invalid index")
 	}
+}
+
+// RawActionJvaultClaimReward is one entry of the jvault claim payload's
+// claimed_rewards list; the length-mismatch rule lives in the payload writer.
+type RawActionJvaultClaimReward struct {
+	Asset  *AccountAddress
+	Amount *string
 }
 
 type ActionDetailsCallContract struct {

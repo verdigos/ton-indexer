@@ -122,15 +122,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 1500000000000
-      amount2: 75000000000000000
-      asset1: null
-      asset2: 0:BBE4DC3E84EBEE9DBA0D931E974FC3785B8594BE00D223A68B4AB223E96406F1
-      dex: stonfi_v2
-      lp_tokens_minted: 335410196623967
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:F4F0EAE079B0997EC9735074423C3093F3C439B82191EC7925D1262CA0D40B07
+    data:
+      legs:
+        - amount: 1500000000000
+        - amount: 75000000000000000
+          asset: 0:BBE4DC3E84EBEE9DBA0D931E974FC3785B8594BE00D223A68B4AB223E96406F1
+          user_jetton_wallet: 0:F4F0EAE079B0997EC9735074423C3093F3C439B82191EC7925D1262CA0D40B07
+      protocol: stonfi_v2
+      tokens_minted: 335410196623967
     tx_hashes:
       - 0kG3VXymrKd9eqVklq9M8jAMxNAvBzekf1WBhRfDnAA=
       - 0lRILbpzdLrHgd8zJi2yKgAJcunVJeMq4SAkYnKYdlQ=

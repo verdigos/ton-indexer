@@ -18,8 +18,8 @@ actions:
     amount: null
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
     accounts:
@@ -45,9 +45,8 @@ actions:
     amount: null
     value: 1300
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - JiCLbT6eNqw6zvb5VYO75ZqZ6+A1D6Oln3hPjB8oc4k=
       - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
@@ -74,9 +73,8 @@ actions:
     amount: null
     value: 1700
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
       - NbRLMN3A9yXgvA0yHVo7oJ1my4gIqqrJw0hzMuGRrsY=
@@ -103,9 +101,8 @@ actions:
     amount: null
     value: 1900
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 47rCr+HlC+uvmQW3Eg/4jomo5uHppvjb4x7QohsZNrw=
       - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=

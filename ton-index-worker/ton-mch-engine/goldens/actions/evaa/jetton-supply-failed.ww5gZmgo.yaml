@@ -75,7 +75,7 @@ actions:
     amount: 1500000000
     value: null
     opcode: null
-    evaa_supply_data:
+    data:
       asset_id: "0xb387968236197958ca4ac55e9b5be38e688c7631af84c86756431f49a878ef33"
       is_ton: false
       master: 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
@@ -115,14 +115,11 @@ actions:
     amount: 1500000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 290000000
       forward_payload: cellhash:D1F41BE9C0A195A87204764B10D47CFB4AB5285FB8170E9F93515C99105D01FE
-      is_encrypted_comment: false
       query_id: 0
-      response_destination: null
     tx_hashes:
       - AWHhhBGXarvozpiFytZY4RllOqsPOb7Updv1hZZzD1Q=
       - F3vnuuc6aTxuh3cv8NCeKnQmr7R0g3HzcID4swSClDw=
@@ -157,12 +154,10 @@ actions:
     amount: 1500000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
+    data:
+      comment_encrypted: false
       custom_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       forward_amount: 1
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:87A94BE9FF96ADED4166DDFBC9B124B88B8820B40EDE3321270BE6774E341CD3
     tx_hashes:

@@ -1,151 +1,142 @@
 # Action payload key registry
 
-Codec 1 stores one msgpack map with plain string contract names.
+Codec 1 stores one msgpack map with plain string contract names. The payload
+has one outer `data` key whose value is the flat protocol map; the Redis row
+keeps these codec-prefixed bytes in its binary `payload` field. Row columns
+such as `source`, `destination`, `asset`, `amount` and `opcode` are not payload
+keys when they occur at the row level. The 124 rows below are the union of all
+per-stored-type key sets; absent keys are omitted.
 
-| Key | JSON kinds across uses | Action types using it |
+| Key | Shape | Uses |
 |---|---|---:|
-| `accounts_added` | array | 1 |
-| `amount` | integer_string | 2 |
-| `amount1` | integer_string | 5 |
-| `amount2` | integer_string | 5 |
-| `amount_in` | integer_string | 1 |
-| `amount_out` | integer_string | 1 |
-| `approvals_num` | integer_string | 1 |
-| `asset` | ton_address | 2 |
-| `asset1` | ton_address | 5 |
-| `asset2` | ton_address | 5 |
-| `asset_id` | string | 3 |
-| `asset_in` | ton_address | 1 |
-| `asset_out` | ton_address | 1 |
-| `btc_txid` | string | 2 |
-| `channel` | ton_address | 2 |
-| `claimed_amounts` | array | 1 |
-| `claimed_jettons` | array | 1 |
-| `comment` | string | 3 |
-| `comment_data` | object | 1 |
-| `comment_encrypted` | boolean | 3 |
-| `creator_index` | integer_string | 1 |
-| `custom_payload` | bytes_base64 | 16 |
-| `data` | object | 57 |
-| `debt_amount` | integer_string | 1 |
-| `destination` | ton_address | 1 |
-| `destination_jetton_wallet` | ton_address | 1 |
-| `dex` | string | 5 |
-| `dex_incoming_transfer` | object | 1 |
-| `dex_jetton_wallet_1` | ton_address | 4 |
-| `dex_jetton_wallet_2` | ton_address | 4 |
-| `dex_outgoing_transfer` | object | 1 |
-| `dex_wallet_1` | ton_address | 3 |
-| `dex_wallet_2` | ton_address | 3 |
-| `dst_eid` | integer_string | 4 |
-| `dst_oapp` | string | 4 |
-| `dvn` | ton_address | 1 |
-| `endpoint` | ton_address | 2 |
-| `exit_code` | integer_string | 1 |
-| `expected_address` | string | 2 |
-| `expiration_date` | integer_string | 2 |
-| `extra` | object | 85 |
-| `fail_reason` | string | 2 |
-| `flags` | integer_string | 2 |
-| `forward_amount` | integer_string | 16 |
-| `forward_payload` | bytes_base64 | 16 |
-| `full_price` | integer_string | 5 |
-| `guid` | string | 4 |
-| `initial_price_x96` | integer_string | 1 |
-| `initiator_1` | ton_address | 1 |
-| `initiator_2` | ton_address | 1 |
-| `is_created_by_signer` | boolean | 1 |
-| `is_purchase` | boolean | 15 |
-| `is_refund` | boolean | 3 |
-| `is_signed_by_creator` | boolean | 1 |
-| `is_ton` | boolean | 2 |
-| `key` | string | 2 |
-| `listing` | object | 5 |
-| `lp_fee_base` | integer_string | 1 |
-| `lp_fee_current` | integer_string | 1 |
-| `lp_tokens_burnt` | integer_string | 3 |
-| `lp_tokens_minted` | integer_string | 2 |
-| `marketplace_address` | ton_address | 15 |
-| `marketplace_fee` | integer_string | 5 |
-| `marketplace_fee_address` | ton_address | 5 |
-| `master` | ton_address | 2 |
-| `master_jetton_wallet` | ton_address | 2 |
-| `max_bid` | integer_string | 5 |
-| `message` | string | 4 |
-| `message_boc` | bytes_base64 | 1 |
-| `min_bid` | integer_string | 5 |
-| `min_out_amount` | integer_string | 1 |
-| `minted_stake_jettons` | integer_string | 1 |
-| `mp_fee_base` | integer_string | 5 |
-| `mp_fee_factor` | integer_string | 5 |
-| `msglib` | string | 2 |
-| `msglib_manager` | string | 2 |
-| `native_fee` | integer_string | 2 |
-| `new_secret_hash` | string | 1 |
-| `new_stake` | integer_string | 1 |
-| `new_tokens` | integer_string | 1 |
-| `new_tokens_used` | integer_string | 2 |
-| `nft_address` | ton_address | 6 |
-| `nft_index` | integer_string | 22 |
-| `nonce` | integer_string | 6 |
-| `order_boc` | bytes_base64 | 2 |
-| `order_seqno` | integer_string | 2 |
-| `packet` | object | 4 |
-| `parent_gasless_action` | hash_base64 | 85 |
-| `payout_amount` | integer_string | 15 |
-| `payout_comment` | string | 15 |
-| `payout_comment_encoded` | boolean | 15 |
-| `payout_comment_encrypted` | boolean | 15 |
-| `payout_type` | string | 1 |
-| `peer_swaps` | array | 1 |
-| `period` | integer_string | 1 |
-| `points` | integer_string | 1 |
-| `pool_active` | boolean | 1 |
-| `pool_creator_contract` | ton_address | 1 |
-| `price` | integer_string | 15 |
-| `protocol_fee` | integer_string | 1 |
-| `provided_asset` | ton_address | 1 |
-| `provider` | string | 3 |
-| `proxy` | ton_address | 1 |
-| `pubkey` | string | 3 |
-| `query_id` | integer_string | 32 |
-| `real_prev_owner` | ton_address | 15 |
-| `recipient_jetton_wallet` | ton_address | 2 |
-| `record_value` | string | 2 |
-| `response_destination` | ton_address | 16 |
-| `royalty_address` | ton_address | 5 |
-| `royalty_amount` | integer_string | 15 |
-| `royalty_fee_base` | integer_string | 5 |
-| `send_request_id` | integer_string | 2 |
-| `sender` | ton_address | 1 |
-| `sender_jetton_wallet` | ton_address | 2 |
-| `seqno` | integer_string | 1 |
-| `signer_index` | integer_string | 1 |
-| `signers_hash` | hash_base64 | 1 |
-| `source` | ton_address | 1 |
-| `source_jetton_wallet` | ton_address | 1 |
-| `src_eid` | integer_string | 4 |
-| `src_oapp` | string | 4 |
-| `stake_wallet` | ton_address | 1 |
-| `status` | string | 1 |
-| `target_amount_1` | integer_string | 1 |
-| `target_amount_2` | integer_string | 1 |
-| `target_asset_1` | ton_address | 1 |
-| `target_asset_2` | ton_address | 1 |
-| `tick_lower` | integer_string | 4 |
-| `tick_spacing` | integer_string | 1 |
-| `tick_upper` | integer_string | 4 |
-| `tokens_burnt` | integer_string | 3 |
-| `tokens_minted` | integer_string | 3 |
-| `ts_nft` | ton_address | 3 |
-| `uln` | ton_address | 3 |
-| `uln_connection` | ton_address | 1 |
-| `user_jetton_wallet_1` | ton_address | 4 |
-| `user_jetton_wallet_2` | ton_address | 4 |
-| `value_schema` | string | 2 |
-| `vault_excesses` | array | 1 |
-| `via_wallet` | boolean | 1 |
-| `withdraw_amount` | integer_string | 1 |
-| `worker_state` | integer_string | 1 |
-| `worker_tokens` | integer_string | 1 |
-| `zro_fee` | integer_string | 2 |
+| `accounts_added` | array | vesting |
+| `amount` | integer_string | nested legs |
+| `amount_in` | integer_string | jetton swap |
+| `amount_out` | integer_string | jetton swap |
+| `approvals_num` | integer_string | multisig execute |
+| `asset` | ton_address | nested transfers and records |
+| `asset_id` | string | EVAA |
+| `asset_in` | ton_address | jetton swap |
+| `asset_out` | ton_address | jetton swap |
+| `btc_txid` | string | tgBTC |
+| `channel` | ton_address | LayerZero |
+| `claimed_rewards` | array | JVault |
+| `comment` | string | transfers, auction outbid |
+| `comment_encrypted` | boolean | transfers |
+| `custom_payload` | bytes_base64 | NFT and jetton transfers |
+| `debt_amount` | integer_string | EVAA |
+| `destination` | ton_address | nested swap transfers |
+| `destination_jetton_wallet` | ton_address | nested swap transfers |
+| `dex_incoming_transfer` | object | jetton swap |
+| `dex_jetton_wallet` | ton_address | DEX legs |
+| `dex_outgoing_transfer` | object | jetton swap |
+| `dex_wallet` | ton_address | DEX legs |
+| `dst_eid` | integer_string | LayerZero |
+| `dst_oapp` | string | LayerZero |
+| `dvn` | ton_address | LayerZero |
+| `endpoint` | ton_address | LayerZero |
+| `exit_code` | integer_string | JVault |
+| `expected_address` | string | Cocoon |
+| `expiration_date` | integer_string | multisig |
+| `fail_reason` | string | EVAA |
+| `flags` | integer_string | DNS |
+| `forward_amount` | integer_string | NFT and jetton transfers |
+| `forward_payload` | bytes_base64 | NFT and jetton transfers |
+| `full_price` | integer_string | NFT sales |
+| `guid` | string | LayerZero |
+| `initial_price_x96` | integer_string | Tonco |
+| `initiator` | ton_address | Coffee legs |
+| `is_created_by_signer` | boolean | multisig |
+| `is_purchase` | boolean | NFT |
+| `is_refund` | boolean | DEX claims and withdrawals |
+| `is_signed_by_creator` | boolean | multisig |
+| `is_ton` | boolean | EVAA |
+| `key` | string | DNS |
+| `legs` | array | DEX, Coffee, Tonco |
+| `lp_fee_base` | integer_string | Tonco |
+| `lp_fee_current` | integer_string | Tonco |
+| `marketplace_address` | ton_address | NFT markets |
+| `marketplace_fee` | integer_string | NFT sales |
+| `marketplace_fee_address` | ton_address | NFT markets |
+| `master` | ton_address | EVAA |
+| `master_jetton_wallet` | ton_address | EVAA |
+| `max_bid` | integer_string | NFT auctions |
+| `message` | string | LayerZero |
+| `message_boc` | bytes_base64 | vesting |
+| `min_bid` | integer_string | NFT auctions |
+| `min_out_amount` | integer_string | jetton swap |
+| `mp_fee_base` | integer_string | NFT auctions |
+| `mp_fee_factor` | integer_string | NFT auctions |
+| `msglib` | string | LayerZero |
+| `msglib_connection` | ton_address | LayerZero |
+| `msglib_manager` | string | LayerZero |
+| `native_fee` | integer_string | LayerZero |
+| `new_secret_hash` | string | Cocoon |
+| `new_tokens` | integer_string | Cocoon |
+| `new_tokens_used` | integer_string | Cocoon |
+| `nft_address` | ton_address | NFT, DEX, staking |
+| `nft_index` | integer_string | NFT, DEX, Coffee |
+| `nonce` | integer_string | LayerZero and Cocoon |
+| `order_boc` | bytes_base64 | multisig |
+| `order_seqno` | integer_string | multisig |
+| `parent_gasless_action` | hash_base64 | all action types when present |
+| `payout_amount` | integer_string | NFT |
+| `payout_comment` | string | NFT |
+| `payout_comment_encoded` | boolean | NFT |
+| `payout_comment_encrypted` | boolean | NFT |
+| `payout_type` | string | Cocoon |
+| `peer_swaps` | array | jetton swap |
+| `period` | integer_string | JVault |
+| `points` | integer_string | Coffee |
+| `pool_active` | boolean | Tonco |
+| `pool_first` | ton_address | Coffee |
+| `pool_second` | ton_address | Coffee |
+| `price` | integer_string | NFT |
+| `protocol` | string | DEX and staking |
+| `protocol_fee` | integer_string | Tonco |
+| `provided_asset` | ton_address | Coffee |
+| `proxy` | ton_address | LayerZero |
+| `pubkey` | string | tgBTC |
+| `query_id` | integer_string | protocol actions, DNS release |
+| `real_prev_owner` | ton_address | NFT |
+| `recipient_jetton_wallet` | ton_address | EVAA |
+| `record_value` | string | DNS |
+| `response_destination` | ton_address | NFT and jetton transfers |
+| `royalty_address` | ton_address | NFT markets |
+| `royalty_amount` | integer_string | NFT markets |
+| `royalty_fee_base` | integer_string | NFT auctions |
+| `send_request_id` | integer_string | LayerZero |
+| `sender` | ton_address | jetton swap |
+| `seqno` | integer_string | Cocoon |
+| `signer_index` | integer_string | multisig |
+| `signers_hash` | hash_base64 | multisig |
+| `source` | ton_address | nested swap transfers |
+| `source_jetton_wallet` | ton_address | jetton swap |
+| `src_eid` | integer_string | LayerZero |
+| `src_oapp` | string | LayerZero |
+| `stake_wallet` | ton_address | JVault |
+| `status` | string | LayerZero |
+| `target_amount` | integer_string | DEX legs |
+| `target_asset` | ton_address | DEX legs |
+| `tick_lower` | integer_string | DEX |
+| `tick_spacing` | integer_string | Tonco |
+| `tick_upper` | integer_string | DEX |
+| `tokens_burnt` | integer_string | DEX and staking |
+| `tokens_minted` | integer_string | DEX and staking |
+| `timestamp` | integer_string | tgBTC |
+| `uln` | ton_address | LayerZero |
+| `uln_connection` | ton_address | LayerZero |
+| `user_jetton_wallet` | ton_address | DEX legs |
+| `value_schema` | string | DNS |
+| `vault_excesses` | array | DEX |
+| `via_wallet` | boolean | Cocoon |
+| `worker_state` | integer_string | Cocoon |
+| `worker_tokens` | integer_string | Cocoon |
+| `zro_fee` | integer_string | LayerZero |
+
+Nested record members (`asset`, `amount`, wallet fields, and the target fields)
+are scoped to their containing `legs`, transfer, peer swap, or excess record.
+Null fields are omitted. `parent_gasless_action` is added by the engine when a
+row is produced from a gasless request.
+
+`dns_release` permits both `query_id` and `nft_index` in its flat data map.

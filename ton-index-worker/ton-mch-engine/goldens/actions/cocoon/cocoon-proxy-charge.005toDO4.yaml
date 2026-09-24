@@ -104,7 +104,7 @@ actions:
     amount: 0
     value: null
     opcode: null
-    cocoon_proxy_charge_data:
+    data:
       expected_address: 260;8da2c03aaf0c2beb208f6828c3547d4a86e19a98f1bfaaba09bcd727438138bfc
       new_tokens_used: 9225483487327049292
       query_id: 3340233008295500229

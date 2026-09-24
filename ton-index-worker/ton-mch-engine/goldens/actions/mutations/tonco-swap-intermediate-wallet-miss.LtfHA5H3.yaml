@@ -225,12 +225,10 @@ actions:
     amount: 10000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 1000000000
       forward_payload: cellhash:66D361DC63ED5276442DC02E3424C6FFF5A214B279DCCF236FACE49DB3F8A3B7
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:E39C30B5790D4AB456435CD2E7DA12C7CDB2043D020DD6C400CE951F78204B5A
     tx_hashes:
@@ -265,12 +263,9 @@ actions:
     amount: 541070180798
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:E39C30B5790D4AB456435CD2E7DA12C7CDB2043D020DD6C400CE951F78204B5A
     tx_hashes:

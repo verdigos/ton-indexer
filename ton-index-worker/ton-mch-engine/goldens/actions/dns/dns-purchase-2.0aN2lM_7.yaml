@@ -101,22 +101,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
-      forward_payload: null
+    data:
       is_purchase: true
-      marketplace_address: null
-      nft_item_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
+      nft_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
       payout_amount: 8981124331
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
       price: 8981124331
       query_id: 8549106353659686877
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
     tx_hashes:
       - /jy0XsBEa95hjhtcrwlqNvBdJ9C/C14H6pdfomOl5eI=
       - Fn2rIzPsYa72HLTKerUB3Mt+HHt7daCiWf49BjhIh8g=
@@ -145,20 +135,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
+    data:
       full_price: 500000000000
-      marketplace_fee: null
-      marketplace_fee_address: 0:BEE7A3D7B8C06F9552032C3880A56A74B702AD8B224F42BFB1AC1C33BD719080
-      max_bid: null
-      min_bid: null
-      mp_fee_base: null
-      mp_fee_factor: null
-      nft_item_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
-      royalty_address: 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
-      royalty_amount: null
-      royalty_fee_base: null
-    nft_transfer_data:
       marketplace_address: 0:39D63083E48F46452FF8A04CD0D3733A90C8BE299AA5951B62741759B2C17E0E
+      marketplace_fee_address: 0:BEE7A3D7B8C06F9552032C3880A56A74B702AD8B224F42BFB1AC1C33BD719080
+      nft_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
+      royalty_address: 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
     tx_hashes:
       - 0aN2lM/7jGXPgg4Dg4wCRqm2ClpeVUWmjG2lzOOfyZw=
       - 3oPuBMkb8N+kDcY4r1oiJWIt3WkdglFAzoiJlxdqYEQ=
@@ -193,25 +175,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 200000000
       forward_payload: cellhash:30C5AE63D2C1A674F08883C899EC7C36DBC8913F25B5D07019A287AEF1B5E224
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
       query_id: 8549106353659686877
-      real_prev_owner: null
       response_destination: 0:11F70D0E9D8A34A10AF6BDD003BC9B0843DDCC41AB1D321772BF00131997074F
-      royalty_amount: null
     tx_hashes:
       - 0aN2lM/7jGXPgg4Dg4wCRqm2ClpeVUWmjG2lzOOfyZw=
       - 3oPuBMkb8N+kDcY4r1oiJWIt3WkdglFAzoiJlxdqYEQ=
@@ -245,25 +215,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 0
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
       query_id: 8549106353659686877
-      real_prev_owner: null
       response_destination: 0:11F70D0E9D8A34A10AF6BDD003BC9B0843DDCC41AB1D321772BF00131997074F
-      royalty_amount: null
     tx_hashes:
       - EnhPhEokuCl62CbtuKjoZGYXizL7ZeQgA9ps/Sne/eE=
       - VKEfLBnSzeFSxjYD/9vpNPkjaFNWYgSmKlqX6dj7DCw=

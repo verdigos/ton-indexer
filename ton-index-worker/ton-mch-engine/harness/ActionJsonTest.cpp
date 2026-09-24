@@ -133,10 +133,10 @@ void check_action(const Action &action, const ActionRowContext &ctx, const Ddl &
   for (const auto *name : {"trace_id", "action_id", "start_lt", "end_lt", "start_utime", "end_utime",
                            "mc_seqno_end", "trace_end_lt", "trace_external_hash", "trace_external_hash_norm",
                            "trace_end_utime", "trace_mc_seqno_end", "type", "success", "tx_hashes",
-                           "parent_action_id", "ancestor_type", "value_extra_currencies", "extra"}) {
+                           "parent_action_id", "ancestor_type", "value_extra_currencies", "data"}) {
     require(jfield(row, td::Slice(name)) != nullptr, action.action_id + "." + name, "missing row field");
   }
-  require(jfield(row, "extra")->type() == JsonType::Object, action.action_id + ".extra", "expected object");
+  require(jfield(row, "data")->type() == JsonType::Object, action.action_id + ".data", "expected object");
   const auto *currencies = jfield(row, "value_extra_currencies");
   require(currencies->type() == JsonType::Object, action.action_id + ".value_extra_currencies", "expected object");
   require(currencies->get_object().field_count() == action.value_extra_currencies.size(),
@@ -237,23 +237,23 @@ int run_actions_json_test() {
     action.value_extra_currencies = {{239, "1000"}, {240, "5"}};
     action.accounts = {"0:" + std::string(64, 'a'), "0:" + std::string(64, 'A')};
     check_action(action, context, ddl);
-    action.ton_transfer_data = Value::make_dict({{"content", Value::make_str(std::string("a\0b", 3))}});
+    action.data = Value::make_dict({{"comment", Value::make_str(std::string("a\0b", 3))}});
     auto comment_json = action_row_json(action, context);
     require(comment_json.find("\\u0000") == std::string::npos,
-            action.action_id + ".ton_transfer_data.content", "JSON contains escaped NUL");
+            action.action_id + ".data.comment", "JSON contains escaped NUL");
     auto comment_row = parse(comment_json, action.action_id);
-    const auto *transfer = jfield(comment_row, "ton_transfer_data");
-    require(transfer != nullptr && jstr(*transfer, "content") == "ab",
-            action.action_id + ".ton_transfer_data.content", "NUL must be stripped");
-    action.extra = Value::make_dict({{"parent_gasless_action", Value::make_str(context.trace_id)}});
+    const auto *data = jfield(comment_row, "data");
+    require(data != nullptr && jstr(*data, "comment") == "ab",
+            action.action_id + ".data.comment", "NUL must be stripped");
+    action.data = Value::make_dict({{"parent_gasless_action", Value::make_str(context.trace_id)}});
     auto extra_json = action_row_json(action, context);
     auto extra_row = parse(extra_json, action.action_id);
-    const auto *extra = jfield(extra_row, "extra");
+    const auto *data_row = jfield(extra_row, "data");
     const auto &fields = extra_row.get_object().field_values_;
-    require(extra != nullptr && extra->type() == JsonType::Object &&
-                jstr(*extra, "parent_gasless_action") == context.trace_id &&
-                std::count_if(fields.begin(), fields.end(), [](const auto &field) { return field.first == "extra"; }) == 1,
-            action.action_id + ".extra", "populated extra must round-trip exactly once");
+    require(data_row != nullptr && data_row->type() == JsonType::Object &&
+                jstr(*data_row, "parent_gasless_action") == context.trace_id &&
+                std::count_if(fields.begin(), fields.end(), [](const auto &field) { return field.first == "data"; }) == 1,
+            action.action_id + ".data", "populated data must round-trip exactly once");
     std::printf("PASS actions_json: %zu fixtures, %zu actions, extra currencies\n",
                 fixtures->get_object().field_count(), row_count);
     return 0;

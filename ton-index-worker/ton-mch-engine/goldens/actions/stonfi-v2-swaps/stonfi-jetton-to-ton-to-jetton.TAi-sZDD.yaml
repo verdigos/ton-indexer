@@ -17,8 +17,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi_v2
+    data:
       dex_incoming_transfer:
         amount: 25000000000000
         asset: 0:F7AF5A0255C6AB5D5EF210DC3A3D00B663B61DDBD7A7CAC784225011442E3E1E
@@ -33,16 +32,14 @@ actions:
         destination_jetton_wallet: 0:3CDEFB26426F5C4DB9BEE24B047530829A9F377CD3165CFD0ACEB9702DF8751B
         source: 0:92E1411AE546892F33B2C8A89EA90390D8FF4CFBB917A643B91E73F706FDB9D1
         source_jetton_wallet: 0:922D627D7D8EDBD00E4E23BDB0C54A76EE5E1F46573A1AF4417857FA3E23E91F
-      min_out_amount: null
       peer_swaps:
         - amount_in: 25000000000000
           amount_out: 6977305247
           asset_in: 0:F7AF5A0255C6AB5D5EF210DC3A3D00B663B61DDBD7A7CAC784225011442E3E1E
-          asset_out: null
         - amount_in: 6977305247
           amount_out: 19694057
-          asset_in: null
           asset_out: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+      protocol: stonfi_v2
       sender: 0:2D1A0D65A1C24D1119FEA0AB21ADE97358CE1CBDADE3D74AE82BC8DECA2DF51F
     tx_hashes:
       - /8VOGoMMSiCk6eK4TlD8hldSmXZNReHVMPtRZ/7NFnY=
@@ -95,12 +92,10 @@ actions:
     amount: 218750000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:8164E93CDF38CF747482E342B7F8ECED79576933452FB06E1676C5A1F20BD0C9
-      is_encrypted_comment: false
       query_id: 15984897114412869898
       response_destination: 0:2D1A0D65A1C24D1119FEA0AB21ADE97358CE1CBDADE3D74AE82BC8DECA2DF51F
     tx_hashes:

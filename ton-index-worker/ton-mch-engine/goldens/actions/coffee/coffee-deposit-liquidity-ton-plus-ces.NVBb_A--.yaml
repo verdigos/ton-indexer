@@ -17,19 +17,11 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 3129892658
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: coffee
-      lp_tokens_minted: null
-      target_amount_1: null
-      target_amount_2: null
-      target_asset_1: null
-      target_asset_2: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 3129892658
+        - target_asset: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
+      protocol: coffee
       vault_excesses: []
     tx_hashes:
       - 7Q2jh6Vu1V8xU3DLaE/HmFnWLrIZSoOgubr8fxvlD4w=
@@ -62,19 +54,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: null
-      amount2: 13876673279
-      asset1: null
-      asset2: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
-      dex: coffee
-      lp_tokens_minted: 6589203740
-      target_amount_1: null
-      target_amount_2: null
-      target_asset_1: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
-      target_asset_2: null
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:8EA33875123015261EF940102531A1E0B760216E9C0B295A399524475A3D1082
+    data:
+      legs:
+        - target_asset: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
+        - amount: 13876673279
+          asset: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
+          user_jetton_wallet: 0:8EA33875123015261EF940102531A1E0B760216E9C0B295A399524475A3D1082
+      protocol: coffee
+      tokens_minted: 6589203740
       vault_excesses: []
     tx_hashes:
       - +VfyLVjrrukH4fa3dq6mEc5nGNUwqIhsLT8et+zoTqI=

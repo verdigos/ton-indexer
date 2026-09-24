@@ -133,12 +133,11 @@ actions:
     amount: 7919563
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: Claim staking rewards
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:C1A0F6F3BDCEEA31756ABBF389B1C3B2F65461D149D32726D90FDAEAA27B7471
-      is_encrypted_comment: false
       query_id: 1724742998050577044
       response_destination: 0:D94FCAE73C2E76C960834E0F5E739B0AD28D42EB9EE1C6A1BD5E0E7FE8257CCF
     tx_hashes:
@@ -176,11 +175,10 @@ actions:
     amount: null
     value: null
     opcode: null
-    jvault_claim_data:
-      claimed_amounts:
-        - 7919563
-      claimed_jettons:
-        - 0:A048BDFAAC1F51AEAE2C1100CF5F1C1D1D316AD4E013A4030F7E2DF2A4ADE68D
+    data:
+      claimed_rewards:
+        - amount: 7919563
+          asset: 0:A048BDFAAC1F51AEAE2C1100CF5F1C1D1D316AD4E013A4030F7E2DF2A4ADE68D
     tx_hashes:
       - 5HArE56qKFtuwZGRqKTqUAo6VlBVWhaT6OCsA6vYt7Q=
       - 8Ou2g38Cv3f8+sRAHIkUscGxRR0UvdYyI5uZb7tjCas=

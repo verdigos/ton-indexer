@@ -162,20 +162,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_withdraw_liquidity_data:
-      amount1: 0
-      amount2: 1450955367659
-      asset1_out: null
-      asset2_out: null
-      dex: dedust_v2
-      dex_jetton_wallet_1: null
-      dex_jetton_wallet_2: null
-      dex_wallet_1: null
-      dex_wallet_2: 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
+    data:
       is_refund: false
-      lp_tokens_burnt: null
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+      legs:
+        - amount: 0
+        - amount: 1450955367659
+          dex_wallet: 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
+      protocol: dedust_v2
     tx_hashes:
       - 846TnKmLxd4Otdbr4cMnvoqFJmzDT09IFTrGC9bpmes=
       - DzJ2RY+SCh5w+YFoxVQdr0tQL5BkFZ5ExnBMNq9TNlQ=

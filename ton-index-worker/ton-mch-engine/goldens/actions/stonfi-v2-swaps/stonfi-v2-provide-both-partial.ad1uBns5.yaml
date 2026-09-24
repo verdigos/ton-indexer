@@ -18,15 +18,10 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 7000000000
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: stonfi_v2
-      lp_tokens_minted: null
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 7000000000
+      protocol: stonfi_v2
     tx_hashes:
       - 5m6tdOBWomKH2kF1I33fiYMJ9ZDqJX2yedo+JpqPm0M=
       - IF1jDUKYQslWxNtFYQfhIFIfLBbwwAowg7c+736iy9Y=

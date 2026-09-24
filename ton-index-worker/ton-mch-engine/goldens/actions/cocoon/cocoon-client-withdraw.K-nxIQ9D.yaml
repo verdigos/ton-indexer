@@ -133,9 +133,8 @@ actions:
     amount: 999985640
     value: null
     opcode: null
-    cocoon_client_withdraw_data:
+    data:
       query_id: 374934315680212459
-      withdraw_amount: 999985640
     tx_hashes:
       - AKBa6rWIVZHFZIKEAJ51MUpVGV2sXu/EMAfT1l4scT4=
       - K+nxIQ9D2cc51j/BfU2nurITZia3POGyoZkiSeP9qqI=

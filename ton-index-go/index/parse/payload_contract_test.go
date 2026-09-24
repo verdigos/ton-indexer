@@ -16,7 +16,7 @@ import (
 
 const contractRows = 1220
 
-var contractPath = flag.String("payload-contract-file", "testdata/payload_contract_43a9298a_dab89b4.jsonl.gz", "API contract baseline")
+var contractPath = flag.String("payload-contract-file", "testdata/payload_contract.jsonl.gz", "API contract baseline")
 
 type payloadContractRow struct {
 	actionPayloadFixture
@@ -58,19 +58,22 @@ func TestPayloadContract(t *testing.T) {
 			if len(row.API) == 0 {
 				t.Fatal("missing API JSON")
 			}
-			raw := decodeWireAction(t, row.Wire)
-			if string(raw.ActionId) != row.ActionID || raw.Type != row.Type {
-				t.Fatalf("wire identity = %s/%s", raw.ActionId, raw.Type)
+			wire := decodeWireAction(t, row.Wire)
+			if string(wire.ActionId) != row.ActionID || wire.Type != row.Type {
+				t.Fatalf("wire identity = %s/%s", wire.ActionId, wire.Type)
 			}
-			clearPayloadFields(raw)
+			// The emulator row and the DB column carry the same payload bytes.
+			assertWirePayload(t, row.Wire, row.Payload)
+			raw := *wire
+			clearPayloadFields(&raw)
 			payload, err := hex.DecodeString(row.Payload)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := parse.DecodeActionPayload(payload, raw); err != nil {
+			if err := parse.DecodeActionPayload(payload, &raw); err != nil {
 				t.Fatal(err)
 			}
-			action, err := parse.ParseRawAction(raw)
+			action, err := parse.ParseRawAction(&raw)
 			if err != nil {
 				t.Fatal(err)
 			}

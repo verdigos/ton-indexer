@@ -42,9 +42,8 @@ actions:
     amount: null
     value: 826216366
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 7TzDaLymWJrNqfbSDGbYncS0/DXqrSCL5rAfcnqs+00=
       - sS0j8bD7JQj7389dsGXLdNUisE6I1ApyvdPM1gkODVc=

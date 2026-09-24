@@ -104,10 +104,9 @@ actions:
     amount: 283827261184
     value: null
     opcode: null
-    evaa_liquidate_data:
+    data:
       asset_id: "0x8be3365cabaa6a0f90d2e64f03fa78268c135fe0b0758b576b447e9b2068d75d"
       debt_amount: 187653
-      fail_reason: null
     tx_hashes:
       - MauIcHQ42yVKBW/k3Pekd77t2deI7HABCaAG24uHvAY=
       - TIPfXq6pzI9BouyiGiiy04DBqreAzocYnqyyE/ydtWw=
@@ -152,12 +151,10 @@ actions:
     amount: 191483
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 800000000
       forward_payload: cellhash:B1386129A356D0D8ED90FF072A8A740D387F0AC8B173FA92904BC1476119F7FD
-      is_encrypted_comment: false
       query_id: 1768400560034
       response_destination: 0:3D9E17EA59EEE0582A8808FF7655240C6311606F7D9F49BCE917C6CC027D974D
     tx_hashes:
@@ -195,12 +192,11 @@ actions:
     amount: 283827261184
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
+    data:
+      comment_encrypted: false
       custom_payload: cellhash:AD51964DAB7C0043879CB32FC13A755A03354D421AE2E647CFDB767CFF843836
       forward_amount: 492837370
       forward_payload: cellhash:AD51964DAB7C0043879CB32FC13A755A03354D421AE2E647CFDB767CFF843836
-      is_encrypted_comment: false
       query_id: 1768400560034
       response_destination: 0:3D9E17EA59EEE0582A8808FF7655240C6311606F7D9F49BCE917C6CC027D974D
     tx_hashes:
@@ -237,9 +233,9 @@ actions:
     amount: null
     value: 21321610
     opcode: null
-    ton_transfer_data:
-      content: EVAA liquidation.
-      encrypted: false
+    data:
+      comment: EVAA liquidation.
+      comment_encrypted: false
     tx_hashes:
       - jkMZE5ZNQfCGSUDeCo1XAE46w/64UcTnIviQnTxCoMI=
       - v+QyDSm85ti67zBVcj8aoONtZ8/4il2X2yt8KSn+Q9M=

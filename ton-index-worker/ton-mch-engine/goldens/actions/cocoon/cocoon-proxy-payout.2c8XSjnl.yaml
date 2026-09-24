@@ -104,7 +104,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    cocoon_proxy_payout_data:
+    data:
       query_id: 12731543016903973642
     tx_hashes:
       - +XieAoUd1LYjV+4sjZO2O6XNwUnnmztyqWjgGVEKK0A=

@@ -47,10 +47,10 @@ actions:
     amount: null
     value: null
     opcode: null
-    change_dns_record_data:
+    data:
       flags: 0
       key: e8d44050873dba865aa7c170ab4cce64d90839a34dcfd6cf71d14e0205443b1b
-      value: 0:356FEA3F0FE8AEBC321331733E015F2689BC109E0EC5FC00F56C800F212CCD9D
+      record_value: 0:356FEA3F0FE8AEBC321331733E015F2689BC109E0EC5FC00F56C800F212CCD9D
       value_schema: DNSSmcAddress
     tx_hashes:
       - MCv1dU2InQwPfgQCpgjEVVqBkIyp4yWMqI+R5+cT+jk=
@@ -79,22 +79,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
-      forward_payload: null
+    data:
       is_purchase: true
-      marketplace_address: null
-      nft_item_index: "82899230775707250421146995319980817948487508470169133424046727078785474261254"
+      nft_index: "82899230775707250421146995319980817948487508470169133424046727078785474261254"
       payout_amount: 48997105636
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
       price: 48997105636
       query_id: 0
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
     tx_hashes:
       - 5CQHBqQTk+VV2BDp2YfALm0gub98O7IecqdKGTblzfw=
       - o5wq5wJtCwrg86udml0mwRtI8wKdVFGmbxKxopjK0+M=

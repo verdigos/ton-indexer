@@ -69,48 +69,6 @@ std::string value_json(const Value &v) {
   return jb.string_builder().as_cslice().str();
 }
 
-#define MCH_PAYLOAD_FIELDS(X) \
-  X(ton_transfer_data) \
-  X(jetton_transfer_data) \
-  X(jetton_swap_data) \
-  X(nft_transfer_data) \
-  X(nft_listing_data) \
-  X(nft_mint_data) \
-  X(dex_deposit_liquidity_data) \
-  X(dex_withdraw_liquidity_data) \
-  X(staking_data) \
-  X(evaa_supply_data) \
-  X(evaa_withdraw_data) \
-  X(evaa_liquidate_data) \
-  X(vesting_send_message_data) \
-  X(vesting_add_whitelist_data) \
-  X(tonco_deploy_pool_data) \
-  X(multisig_create_order_data) \
-  X(multisig_approve_data) \
-  X(multisig_execute_data) \
-  X(cocoon_worker_payout_data) \
-  X(cocoon_proxy_payout_data) \
-  X(cocoon_proxy_charge_data) \
-  X(cocoon_client_top_up_data) \
-  X(cocoon_register_proxy_data) \
-  X(cocoon_unregister_proxy_data) \
-  X(cocoon_client_register_data) \
-  X(cocoon_client_change_secret_hash_data) \
-  X(cocoon_client_request_refund_data) \
-  X(cocoon_grant_refund_data) \
-  X(cocoon_client_increase_stake_data) \
-  X(cocoon_client_withdraw_data) \
-  X(layerzero_packet_data) \
-  X(layerzero_send_data) \
-  X(layerzero_dvn_verify_data) \
-  X(jvault_stake_data) \
-  X(jvault_claim_data) \
-  X(change_dns_record_data) \
-  X(coffee_create_pool_data) \
-  X(coffee_staking_deposit_data) \
-  X(coffee_staking_withdraw_data) \
-  X(extra)
-
 std::string action_row_json_impl(const Action &a, const ActionRowContext &ctx, bool legacy) {
   td::JsonBuilder jb;
   {
@@ -152,10 +110,7 @@ std::string action_row_json_impl(const Action &a, const ActionRowContext &ctx, b
     MCH_JSON_ENVELOPE(opcode)
 #undef MCH_JSON_ENVELOPE
     if (legacy) {
-#define MCH_JSON_FIELD(name) if (!omitted(a.name)) row(#name, td::JsonRaw(value_json(a.name)));
-      MCH_PAYLOAD_FIELDS(MCH_JSON_FIELD)
-#undef MCH_JSON_FIELD
-      if (omitted(a.extra)) row("extra", td::JsonRaw("{}"));
+      row("data", td::JsonRaw(omitted(a.data) ? "{}" : value_json(a.data)));
     } else {
       row("payload", "\\x" + td::hex_encode(encode_action_payload(a)));
     }
@@ -184,15 +139,7 @@ std::string action_row_json(const Action &a, const ActionRowContext &ctx) {
 }
 
 std::string action_legacy_details_json(const Action &a) {
-  td::JsonBuilder jb;
-  {
-    auto row = jb.enter_object();
-#define MCH_JSON_FIELD(name) if (!omitted(a.name)) row(#name, td::JsonRaw(value_json(a.name)));
-    MCH_PAYLOAD_FIELDS(MCH_JSON_FIELD)
-#undef MCH_JSON_FIELD
-    if (omitted(a.extra)) row("extra", td::JsonRaw("{}"));
-  }
-  return jb.string_builder().as_cslice().str();
+  return omitted(a.data) ? "{}" : value_json(a.data);
 }
 
 std::string action_account_rows_json(const Action &a, const ActionRowContext &ctx) {
@@ -223,7 +170,5 @@ std::string action_rows_json(const std::vector<Action> &rows, const ActionRowCon
   }
   return jb.string_builder().as_cslice().str();
 }
-
-#undef MCH_PAYLOAD_FIELDS
 
 }  // namespace mch

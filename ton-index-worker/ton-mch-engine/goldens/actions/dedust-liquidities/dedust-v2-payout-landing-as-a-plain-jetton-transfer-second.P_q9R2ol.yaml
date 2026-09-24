@@ -96,12 +96,9 @@ actions:
     amount: 30000000000000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:62BC8F4A6DADD8A2391916C4296A54DE085702C8D5F5392F9879DEBBF76D1353
     tx_hashes:

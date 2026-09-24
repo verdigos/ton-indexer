@@ -69,22 +69,19 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 46543920065588
-      amount2: 151756020744
-      asset1: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
-      asset2: null
-      dex: dedust_v2
-      lp_tokens_minted: 2657690739975
-      target_amount_1: 46543920065588
-      target_amount_2: 151756020745
-      target_asset_1: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
-      target_asset_2: null
-      user_jetton_wallet_1: 0:FDF41673C4E371BCA254E621BD92BA7EC5089DF1D5D719E31114AB46AA6BFA2C
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 46543920065588
+          asset: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
+          target_amount: 46543920065588
+          target_asset: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
+          user_jetton_wallet: 0:FDF41673C4E371BCA254E621BD92BA7EC5089DF1D5D719E31114AB46AA6BFA2C
+        - amount: 151756020744
+          target_amount: 151756020745
+      protocol: dedust_v2
+      tokens_minted: 2657690739975
       vault_excesses:
         - amount: 1
-          asset: null
     tx_hashes:
       - 1b+XtXQ8ziXUb9IKzbQ3L/Ak8w1UxHL2wvKPtUGgpgg=
       - 5c/5VsOBwL1r1n3J3EHQ3Bxl4oE06vqczrtiro/LNSA=

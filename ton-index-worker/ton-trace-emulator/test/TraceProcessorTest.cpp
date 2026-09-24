@@ -14,12 +14,20 @@
 
 namespace {
 
+const std::string kFirstPayload{"\x01\x80\0first", 8};
+const std::string kSecondPayload{"\x01\x80\0second", 9};
+
+void pack_binary(msgpack::packer<msgpack::sbuffer>& packer, const std::string& value) {
+  packer.pack_bin(static_cast<std::uint32_t>(value.size()));
+  packer.pack_bin_body(value.data(), static_cast<std::uint32_t>(value.size()));
+}
+
 std::string actions_blob(std::uint8_t finality, const std::string& suffix = {}) {
   msgpack::sbuffer buffer;
   msgpack::packer<msgpack::sbuffer> packer(&buffer);
   packer.pack_array(2);
 
-  packer.pack_map(4);
+  packer.pack_map(5);
   packer.pack(std::string("action_id"));
   packer.pack(std::string("first") + suffix);
   packer.pack(std::string("finality"));
@@ -28,8 +36,10 @@ std::string actions_blob(std::uint8_t finality, const std::string& suffix = {}) 
   packer.pack(true);
   packer.pack(std::string("amount"));
   packer.pack(std::uint64_t{17});
+  packer.pack(std::string("payload"));
+  pack_binary(packer, kFirstPayload);
 
-  packer.pack_map(4);
+  packer.pack_map(5);
   packer.pack(std::string("action_id"));
   packer.pack(std::string("second") + suffix);
   packer.pack(std::string("finality"));
@@ -38,6 +48,8 @@ std::string actions_blob(std::uint8_t finality, const std::string& suffix = {}) 
   packer.pack(false);
   packer.pack(std::string("amount"));
   packer.pack(std::uint64_t{29});
+  packer.pack(std::string("payload"));
+  pack_binary(packer, kSecondPayload);
 
   return {buffer.data(), buffer.size()};
 }
@@ -51,6 +63,11 @@ const msgpack::object& map_field(const msgpack::object& row, std::string_view na
     }
   }
   UNREACHABLE();
+}
+
+bool is_binary(const msgpack::object& value, const std::string& expected) {
+  return value.type == msgpack::type::BIN && value.via.bin.size == expected.size() &&
+         std::string_view(value.via.bin.ptr, value.via.bin.size) == expected;
 }
 
 std::optional<std::string> redis_field(const RedisWritePlan& plan, std::string_view name) {
@@ -1103,10 +1120,12 @@ TEST(TraceProcessor, promotion_rewrites_all_action_finalities_and_keeps_content)
   ASSERT_TRUE(map_field(rows.via.array.ptr[0], "success").as<bool>());
   ASSERT_EQ(std::uint64_t{17}, map_field(rows.via.array.ptr[0], "amount").as<std::uint64_t>());
   ASSERT_EQ(std::uint64_t{2}, map_field(rows.via.array.ptr[0], "finality").as<std::uint64_t>());
+  ASSERT_TRUE(is_binary(map_field(rows.via.array.ptr[0], "payload"), kFirstPayload));
   ASSERT_EQ(std::string("second"), map_field(rows.via.array.ptr[1], "action_id").as<std::string>());
   ASSERT_TRUE(!map_field(rows.via.array.ptr[1], "success").as<bool>());
   ASSERT_EQ(std::uint64_t{29}, map_field(rows.via.array.ptr[1], "amount").as<std::uint64_t>());
   ASSERT_EQ(std::uint64_t{2}, map_field(rows.via.array.ptr[1], "finality").as<std::uint64_t>());
+  ASSERT_TRUE(is_binary(map_field(rows.via.array.ptr[1], "payload"), kSecondPayload));
 }
 
 TEST(TraceProcessor, promotion_without_actions_writes_no_action_fields) {

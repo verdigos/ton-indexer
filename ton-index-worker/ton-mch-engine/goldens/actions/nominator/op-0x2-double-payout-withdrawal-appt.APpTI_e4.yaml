@@ -69,8 +69,8 @@ actions:
     amount: 1349623120732929
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - 8ToiWZyJ2SHT27rd7BvbUbzFVGsyZ6VbezOlDHNWMVY=
       - BGY9j0qPl6M9MY+mUepKFMEMPhY5bIazY2WqcCVLLXY=
@@ -98,8 +98,8 @@ actions:
     amount: 9829610000
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - 39bbiyc6qrAiBFOVvAY5sNsANNWS8UGqZ/x749usk0c=
       - BGY9j0qPl6M9MY+mUepKFMEMPhY5bIazY2WqcCVLLXY=

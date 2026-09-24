@@ -44,24 +44,21 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 4867482854
-      amount2: 311334565016609
-      asset1: null
-      asset2: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
-      dex: dedust_v2
-      lp_tokens_minted: 1231022199765
-      target_amount_1: 4867482855
-      target_amount_2: 311334565044060
-      target_asset_1: null
-      target_asset_2: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:1F96163ADB8E8CB22481F7B67843AD5C32139E1E04A780627EE862821515D5C6
+    data:
+      legs:
+        - amount: 4867482854
+          target_amount: 4867482855
+        - amount: 311334565016609
+          asset: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
+          target_amount: 311334565044060
+          target_asset: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
+          user_jetton_wallet: 0:1F96163ADB8E8CB22481F7B67843AD5C32139E1E04A780627EE862821515D5C6
+      protocol: dedust_v2
+      tokens_minted: 1231022199765
       vault_excesses:
         - amount: 27451
           asset: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
         - amount: 1
-          asset: null
     tx_hashes:
       - BHJsFslupF9LNPzXEkS564jvNA1U+KBnTv9k0WpA/Zk=
       - CxI9H7M6qGyUFewfJv7ZUS9Clgn9RqLbz98czXfpfHs=

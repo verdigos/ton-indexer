@@ -133,7 +133,7 @@ actions:
     amount: 0
     value: null
     opcode: null
-    evaa_liquidate_data:
+    data:
       asset_id: "0x8be3365cabaa6a0f90d2e64f03fa78268c135fe0b0758b576b447e9b2068d75d"
       debt_amount: 71521844040
       fail_reason: not_liquidatable

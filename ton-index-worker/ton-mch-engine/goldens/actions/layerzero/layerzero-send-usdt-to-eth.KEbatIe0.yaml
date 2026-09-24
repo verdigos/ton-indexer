@@ -284,12 +284,10 @@ actions:
     amount: 10000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 1170162108
       forward_payload: cellhash:F1179122A667983DCBAB9D75CDA8F47D05708CF5ED92A322F997E06F22FA6F8E
-      is_encrypted_comment: false
       query_id: 69
       response_destination: 0:4884FB969A34FB7CFF95A26B935AC784F09356BF6ABB4187EC550D486709CC93
     tx_hashes:
@@ -327,21 +325,20 @@ actions:
     amount: null
     value: null
     opcode: null
-    layerzero_packet_data:
+    data:
+      channel: 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309
       dst_eid: 30101
       dst_oapp: "0x811ed79db9d34e83bdb73df6c3e07961cfb0d5c0"
+      endpoint: 0:0B0C4E7F053C490B93640B75945F70D8477758D562A0B64E295C7587B34A231C
       guid: "0xa0b6fa1485a8e904d1bf5c702f99936ceb8ab32730b2cd501071dc92456da7cb"
       message: "0x00020000000000000000000000000378cca455f3befef687f9f7668b13eaa03f007c000000000000270d"
-      nonce: 517
-      src_eid: 30343
-      src_oapp: "0x170725394aa56136fbd27d0ce31d8a98e0f8ae72a4d2379b5dde83e211a2d5fa"
-    layerzero_send_data:
-      channel: 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309
-      endpoint: 0:0B0C4E7F053C490B93640B75945F70D8477758D562A0B64E295C7587B34A231C
       msglib: "0xf59d60c2b3724c1662c9af5223d532d540e2214462424a85aaa4e841844a1bc"
       msglib_manager: "0x150645746e25be5486eb3b2f5d98b44c6b324697c48d495d059f96fc9d3ec368"
       native_fee: 170162108
+      nonce: 517
       send_request_id: 531
+      src_eid: 30343
+      src_oapp: "0x170725394aa56136fbd27d0ce31d8a98e0f8ae72a4d2379b5dde83e211a2d5fa"
       uln: 0:0F59D60C2B3724C1662C9AF5223D532D540E2214462424A85AAA4E841844A1BC
       zro_fee: 0
     tx_hashes:
@@ -395,21 +392,20 @@ actions:
     amount: 10000
     value: null
     opcode: null
-    layerzero_packet_data:
+    data:
+      channel: 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309
       dst_eid: 30101
       dst_oapp: "0x811ed79db9d34e83bdb73df6c3e07961cfb0d5c0"
+      endpoint: 0:0B0C4E7F053C490B93640B75945F70D8477758D562A0B64E295C7587B34A231C
       guid: "0xa0b6fa1485a8e904d1bf5c702f99936ceb8ab32730b2cd501071dc92456da7cb"
       message: "0x00020000000000000000000000000378cca455f3befef687f9f7668b13eaa03f007c000000000000270d"
-      nonce: 517
-      src_eid: 30343
-      src_oapp: "0x170725394aa56136fbd27d0ce31d8a98e0f8ae72a4d2379b5dde83e211a2d5fa"
-    layerzero_send_data:
-      channel: 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309
-      endpoint: 0:0B0C4E7F053C490B93640B75945F70D8477758D562A0B64E295C7587B34A231C
       msglib: "0xf59d60c2b3724c1662c9af5223d532d540e2214462424a85aaa4e841844a1bc"
       msglib_manager: "0x150645746e25be5486eb3b2f5d98b44c6b324697c48d495d059f96fc9d3ec368"
       native_fee: 170162108
+      nonce: 517
       send_request_id: 531
+      src_eid: 30343
+      src_oapp: "0x170725394aa56136fbd27d0ce31d8a98e0f8ae72a4d2379b5dde83e211a2d5fa"
       uln: 0:0F59D60C2B3724C1662C9AF5223D532D540E2214462424A85AAA4E841844A1BC
       zro_fee: 0
     tx_hashes:
@@ -466,9 +462,8 @@ actions:
     amount: null
     value: 114813566
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 0zO57txVL5u6gvWHFKjPJ+kiYs7h2Sdy270WPLO4E7Y=
       - A2nqhVTR1vFSA45De40pDJ8HXEsdf94tb0fNWbnu4QE=
@@ -499,9 +494,8 @@ actions:
     amount: null
     value: 1684773
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - A2nqhVTR1vFSA45De40pDJ8HXEsdf94tb0fNWbnu4QE=
       - i/lS56yO50VFt9xg75QwnPWnTs4So7T/+a+vlfreukE=
@@ -532,9 +526,8 @@ actions:
     amount: null
     value: 26952398
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - A2nqhVTR1vFSA45De40pDJ8HXEsdf94tb0fNWbnu4QE=
       - IuJAwEkm/MQbrjHd7VPaQ5H2BvFOaAGtJVNG1goo9z4=
@@ -565,9 +558,8 @@ actions:
     amount: null
     value: 26711371
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - A2nqhVTR1vFSA45De40pDJ8HXEsdf94tb0fNWbnu4QE=
       - uFbmYKenWLPpR5xVZO9Q3gd8S9iNObnDlxMklfHQxfE=
@@ -598,9 +590,8 @@ actions:
     amount: null
     value: 836672001
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - JFDd2pflQRe/n4YwG9uMnO9s/8E/J3F+WlO8i/wPiDg=
       - br2lgsl1rKnOWjVJVRHBrASCu/gYNccysbOtsVrGL3c=

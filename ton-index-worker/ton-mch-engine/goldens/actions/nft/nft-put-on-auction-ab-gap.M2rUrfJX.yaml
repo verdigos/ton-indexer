@@ -43,20 +43,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      full_price: null
-      marketplace_fee: null
+    data:
+      marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       marketplace_fee_address: 0:BEE7A3D7B8C06F9552032C3880A56A74B702AD8B224F42BFB1AC1C33BD719080
       max_bid: 0
       min_bid: 30000000000
       mp_fee_base: 100
       mp_fee_factor: 2
-      nft_item_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
+      nft_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
       royalty_address: 0:68F3A076D3451A18FD41E05C71B4C020545D46B2757064E65825DED0C49BF02C
-      royalty_amount: null
       royalty_fee_base: 100
-    nft_transfer_data:
-      marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
     tx_hashes:
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - B82tGO0R8HCd4IG64UY+rlGuvcBid9PnIkDOnxpl6go=
@@ -91,25 +87,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 200000000
       forward_payload: cellhash:D31F5F3D199B31C755B1E3586DB1497C7167F125D5581C3D248D541BF0989D18
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
       query_id: 0
-      real_prev_owner: null
       response_destination: 0:9BA46D6AEB2F793FF5F3B8F53171E55CCDF32407A26C47A212E3F669A3AE7901
-      royalty_amount: null
     tx_hashes:
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - B82tGO0R8HCd4IG64UY+rlGuvcBid9PnIkDOnxpl6go=
@@ -143,25 +127,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 0
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
       query_id: 0
-      real_prev_owner: null
       response_destination: 0:9BA46D6AEB2F793FF5F3B8F53171E55CCDF32407A26C47A212E3F669A3AE7901
-      royalty_amount: null
     tx_hashes:
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - ZA1yftr44uPV8GkkiujWEyFz/HtZb0Ph8I52d4ElTVw=
@@ -194,9 +166,9 @@ actions:
     amount: null
     value: 20000000
     opcode: null
-    ton_transfer_data:
-      content: deploy
-      encrypted: false
+    data:
+      comment: deploy
+      comment_encrypted: false
     tx_hashes:
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - n1pKUKXR3j8VevOcgOwb/62tG7gDNbZPuOQjhqhOvlM=

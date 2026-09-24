@@ -18,7 +18,7 @@ actions:
     amount: null
     value: 5000000
     opcode: null
-    extra:
+    data:
       parent_gasless_action: b5cLv1FsgTThSFHBjzqJteDep4FS/Xe+Wp3w1XvRtRc=
     tx_hashes:
       - 0XU5v5zYu0IYjsLX1pXc77isPyzQhEcOJoRjRrAuHtE=

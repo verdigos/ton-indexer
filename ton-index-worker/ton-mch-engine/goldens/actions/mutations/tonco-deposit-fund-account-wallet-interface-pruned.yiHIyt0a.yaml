@@ -278,12 +278,11 @@ actions:
     amount: 29999999998
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: ""
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 0
       forward_payload: cellhash:3FE93897158698E4D473B74414D7493716B0FC3A70310934873F0019DAACCAB4
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:400FC42F5A69D0B901DCDF210E4FC03D6FB6DF4DF785EF76D997E3A0DDE9511C
     tx_hashes:
@@ -314,12 +313,11 @@ actions:
     amount: 57085786
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: ""
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 0
       forward_payload: cellhash:3FE93897158698E4D473B74414D7493716B0FC3A70310934873F0019DAACCAB4
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:400FC42F5A69D0B901DCDF210E4FC03D6FB6DF4DF785EF76D997E3A0DDE9511C
     tx_hashes:
@@ -353,8 +351,8 @@ actions:
     amount: null
     value: null
     opcode: 0xd5ecca2a
-    nft_mint_data:
-      nft_item_index: 3086
+    data:
+      nft_index: 3086
     tx_hashes:
       - EEg5MQDZN/PLB4O0RQYBwzZAK7uEMc24/bdKbqipWWw=
       - tUt2Ylm2B/luXafVyneQiIOqdoctF7Wy0/D34igTua4=
@@ -382,23 +380,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 3029999999827
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: tonco
-      lp_tokens_minted: null
-      nft_address: null
-      nft_index: null
-      target_amount_1: 2999999999829
-      target_amount_2: 5708578661
-      target_asset_1: null
-      target_asset_2: null
+    data:
+      legs:
+        - amount: 3029999999827
+          target_amount: 2999999999829
+        - target_amount: 5708578661
+      protocol: tonco
       tick_lower: -57180
       tick_upper: -52980
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
       vault_excesses: []
     tx_hashes:
       - 0GW2kNF4nRhw5xA3b5E35+EhF9H25H3Nvm5MJJo2VD0=

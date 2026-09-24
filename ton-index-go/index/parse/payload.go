@@ -16,92 +16,148 @@ import (
 
 const actionPayloadCodecMsgpack = 1
 
-var actionDataPrefixes = map[string]string{
-	"auction_bid":                      "NFTTransfer",
-	"auction_outbid":                   "NFTTransfer",
-	"change_dns":                       "ChangeDNSRecord",
-	"cocoon_client_change_secret_hash": "CocoonClientChangeSecretHash",
-	"cocoon_client_increase_stake":     "CocoonClientIncreaseStake",
-	"cocoon_client_register":           "CocoonClientRegister",
-	"cocoon_client_request_refund":     "CocoonClientRequestRefund",
-	"cocoon_client_top_up":             "CocoonClientTopUp",
-	"cocoon_client_withdraw":           "CocoonClientWithdraw",
-	"cocoon_grant_refund":              "CocoonGrantRefund",
-	"cocoon_proxy_charge":              "CocoonProxyCharge",
-	"cocoon_proxy_payout":              "CocoonProxyPayout",
-	"cocoon_register_proxy":            "CocoonRegisterProxy",
-	"cocoon_unregister_proxy":          "CocoonUnregisterProxy",
-	"cocoon_worker_payout":             "CocoonWorkerPayout",
-	"coffee_create_pool":               "CoffeeCreatePool",
-	"coffee_staking_deposit":           "CoffeeStakingDeposit",
-	"coffee_staking_withdraw":          "CoffeeStakingWithdraw",
-	"dedust_v2_claim_fees":             "DexWithdrawLiquidityData",
-	"dedust_v2_claim_reward":           "DexWithdrawLiquidityData",
-	"delete_dns":                       "ChangeDNSRecord",
-	"dex_deposit_liquidity":            "DexDepositLiquidityData",
-	"dex_withdraw_liquidity":           "DexWithdrawLiquidityData",
-	"dns_purchase":                     "NFTTransfer",
-	"dns_release":                      "NFTTransfer",
-	"evaa_liquidate":                   "EvaaLiquidate",
-	"evaa_supply":                      "EvaaSupply",
-	"evaa_withdraw":                    "EvaaWithdraw",
-	"jetton_swap":                      "JettonSwap",
-	"jetton_transfer":                  "JettonTransfer",
-	"jvault_claim":                     "JvaultClaim",
-	"jvault_stake":                     "JvaultStake",
-	"layerzero_dvn_verify":             "LayerzeroDvnVerify",
-	"layerzero_send":                   "LayerzeroSend",
-	"layerzero_send_tokens":            "LayerzeroSend",
-	"multisig_approve":                 "MultisigApprove",
-	"multisig_create_order":            "MultisigCreateOrder",
-	"multisig_execute":                 "MultisigExecute",
-	"nft_cancel_auction":               "NFTTransfer",
-	"nft_cancel_sale":                  "NFTTransfer",
-	"nft_discovery":                    "NFTTransfer",
-	"nft_finish_auction":               "NFTTransfer",
-	"nft_mint":                         "NFTMint",
-	"nft_purchase":                     "NFTTransfer",
-	"nft_put_on_auction":               "NFTTransfer",
-	"nft_put_on_sale":                  "NFTTransfer",
-	"nft_transfer":                     "NFTTransfer",
-	"nft_update_sale":                  "NFTTransfer",
-	"stake_deposit":                    "StakingData",
-	"stake_withdrawal":                 "StakingData",
-	"stake_withdrawal_request":         "StakingData",
-	"teleitem_cancel_auction":          "NFTTransfer",
-	"teleitem_start_auction":           "NFTTransfer",
-	"ton_transfer":                     "TonTransfer",
-	"tonco_deploy_pool":                "ToncoDeployPool",
-	"vesting_add_whitelist":            "VestingAddWhitelist",
-	"vesting_send_message":             "VestingSendMessage",
+const actionPayloadGroup = "data"
+
+// actionDataPrefixes lists the RawAction field prefixes the flat `data` map of a
+// stored type resolves against, in priority order. A key takes the first prefix
+// that owns the field, so a type whose payload mixes families (LayerZero packet
+// plus send/commit fields, NFT transfer plus listing fields) reads one map.
+var actionDataPrefixes = map[string][]string{
+	"auction_bid":                      {"NFTTransfer"},
+	"auction_outbid":                   {"TonTransfer", "NFTTransfer"},
+	"change_dns":                       {"ChangeDNSRecord"},
+	"cocoon_client_change_secret_hash": {"CocoonClientChangeSecretHash"},
+	"cocoon_client_increase_stake":     {"CocoonClientIncreaseStake"},
+	"cocoon_client_register":           {"CocoonClientRegister"},
+	"cocoon_client_request_refund":     {"CocoonClientRequestRefund"},
+	"cocoon_client_top_up":             {"CocoonClientTopUp"},
+	"cocoon_client_withdraw":           {"CocoonClientWithdraw"},
+	"cocoon_grant_refund":              {"CocoonGrantRefund"},
+	"cocoon_proxy_charge":              {"CocoonProxyCharge"},
+	"cocoon_proxy_payout":              {"CocoonProxyPayout"},
+	"cocoon_register_proxy":            {"CocoonRegisterProxy"},
+	"cocoon_unregister_proxy":          {"CocoonUnregisterProxy"},
+	"cocoon_worker_payout":             {"CocoonWorkerPayout"},
+	"coffee_create_pool":               {"CoffeeCreatePool"},
+	"coffee_create_pool_creator":       {"CoffeeCreatePool"},
+	"coffee_staking_deposit":           {"CoffeeStakingDeposit"},
+	"coffee_staking_withdraw":          {"CoffeeStakingWithdraw"},
+	"dedust_v2_claim_fees":             {"DexWithdrawLiquidityData"},
+	"dedust_v2_claim_reward":           {"DexWithdrawLiquidityData"},
+	"delete_dns":                       {"ChangeDNSRecord"},
+	"dex_deposit_liquidity":            {"DexDepositLiquidityData"},
+	"dex_withdraw_liquidity":           {"DexWithdrawLiquidityData"},
+	"dns_purchase":                     {"NFTTransfer"},
+	"dns_release":                      {"NFTTransfer"},
+	"evaa_liquidate":                   {"EvaaLiquidate"},
+	"evaa_supply":                      {"EvaaSupply"},
+	"evaa_withdraw":                    {"EvaaWithdraw"},
+	"jetton_swap":                      {"JettonSwap"},
+	"jetton_transfer":                  {"JettonTransfer"},
+	"jvault_claim":                     {"JvaultClaim"},
+	"jvault_stake":                     {"JvaultStake"},
+	"jvault_unstake":                   {"Jvault"},
+	"jvault_unstake_request":           {"Jvault"},
+	"layerzero_commit_packet":          {"LayerzeroPacket"},
+	"layerzero_dvn_verify":             {"LayerzeroDvnVerify"},
+	"layerzero_receive":                {"LayerzeroPacket"},
+	"layerzero_send":                   {"LayerzeroSend", "LayerzeroPacket"},
+	"layerzero_send_tokens":            {"LayerzeroSend", "LayerzeroPacket"},
+	"multisig_approve":                 {"MultisigApprove"},
+	"multisig_create_order":            {"MultisigCreateOrder"},
+	"multisig_execute":                 {"MultisigExecute"},
+	"nft_cancel_auction":               {"NFTTransfer"},
+	"nft_cancel_sale":                  {"NFTTransfer"},
+	"nft_discovery":                    {"NFTTransfer"},
+	"nft_finish_auction":               {"NFTTransfer"},
+	"nft_mint":                         {"NFTMint"},
+	"nft_purchase":                     {"NFTTransfer"},
+	"nft_put_on_auction":               {"NFTListing", "NFTTransfer"},
+	"nft_put_on_sale":                  {"NFTListing", "NFTTransfer"},
+	"nft_transfer":                     {"NFTTransfer", "NFTListing"},
+	"nft_update_sale":                  {"NFTListing", "NFTTransfer"},
+	"stake_deposit":                    {"StakingData"},
+	"stake_withdrawal":                 {"StakingData"},
+	"stake_withdrawal_request":         {"StakingData"},
+	"teleitem_cancel_auction":          {"NFTTransfer"},
+	"teleitem_start_auction":           {"NFTListing", "NFTTransfer"},
+	"ton_transfer":                     {"TonTransfer"},
+	"tonco_deploy_pool":                {"ToncoDeployPool"},
+	"vesting_add_whitelist":            {"VestingAddWhitelist"},
+	"vesting_send_message":             {"VestingSendMessage"},
+}
+
+// actionPayloadExtraKeys are engine-owned payload keys. They carry the engine's
+// metadata (former `extra` group) rather than a typed detail field, so they land in
+// RawAction.Extra where the API reads them through extraString.
+var actionPayloadExtraKeys = map[string]bool{
+	"parent_gasless_action": true,
+	"btc_txid":              true,
+	"pubkey":                true,
+	"timestamp":             true,
+}
+
+// actionPayloadLegFieldNames expands one `legs[i]` record member into the indexed
+// RawAction field of the stored type's prefix (%d is the 1-based leg index).
+var actionPayloadLegFieldNames = map[string]map[string]string{
+	"CoffeeCreatePool": {
+		"amount": "Amount%d", "initiator": "Initiator%d",
+	},
+	"DexDepositLiquidityData": {
+		"amount": "Amount%d", "asset": "Asset%d", "user_jetton_wallet": "UserJettonWallet%d",
+		"target_asset": "TargetAsset%d", "target_amount": "TargetAmount%d",
+	},
+	"DexWithdrawLiquidityData": {
+		"amount": "Amount%d", "asset": "Asset%dOut", "user_jetton_wallet": "UserJettonWallet%d",
+		"dex_jetton_wallet": "DexJettonWallet%d", "dex_wallet": "DexWallet%d",
+	},
+	"ToncoDeployPool": {
+		"asset": "Jetton%dMinter", "dex_jetton_wallet": "Jetton%dRouterWallet",
+	},
+}
+
+// actionPayloadLegIndexBase maps a prefix whose legs are numbered from 0 (Tonco's
+// jetton0/jetton1) instead of the payload's 1-based suffix order.
+var actionPayloadLegIndexBase = map[string]int{
+	"ToncoDeployPool": 0,
 }
 
 var actionPayloadFieldNames = map[string]string{
-	"ChangeDNSRecord.record_value":         "Value",
-	"CoffeeStakingDeposit.nft_address":     "MintedItemAddress",
-	"CoffeeStakingDeposit.nft_index":       "MintedItemIndex",
-	"CoffeeStakingWithdraw.nft_address":    "NftAddress",
-	"CoffeeStakingWithdraw.nft_index":      "NftIndex",
-	"DexWithdrawLiquidityData.asset1":      "Asset1Out",
-	"DexWithdrawLiquidityData.asset2":      "Asset2Out",
-	"DexWithdrawLiquidityData.nft_address": "BurnedNFTAddress",
-	"DexWithdrawLiquidityData.nft_index":   "BurnedNFTIndex",
-	"JettonTransfer.comment_encrypted":     "IsEncryptedComment",
-	"NFTListing.mp_fee_base":               "MarketplaceFeeBase",
-	"NFTListing.mp_fee_factor":             "MarketplaceFeeFactor",
-	"NFTListing.nft_index":                 "NFTItemIndex",
-	"NFTMint.nft_index":                    "NFTItemIndex",
-	"NFTTransfer.nft_index":                "NFTItemIndex",
-	"StakingData.ts_nft":                   "TsNft",
-	"TonTransfer.comment":                  "Content",
-	"TonTransfer.comment_encrypted":        "Encrypted",
-	"ToncoDeployPool.asset1":               "Jetton0Minter",
-	"ToncoDeployPool.asset2":               "Jetton1Minter",
-	"ToncoDeployPool.dex_jetton_wallet_1":  "Jetton0RouterWallet",
-	"ToncoDeployPool.dex_jetton_wallet_2":  "Jetton1RouterWallet",
+	"ChangeDNSRecord.record_value":   "Value",
+	"CoffeeCreatePool.tokens_minted": "LpTokensMinted",
+	// The moved row columns land in the envelope fields the frozen API already read
+	// (registry odd moves); the values now come from the payload instead of the row.
+	"CoffeeCreatePool.pool_first":           ".Asset2",
+	"CoffeeCreatePool.pool_second":          ".Asset2Secondary",
+	"Jvault.exit_code":                      ".Opcode",
+	"LayerzeroPacket.channel":               ".Asset",
+	"LayerzeroPacket.msglib_connection":     ".AssetSecondary",
+	"JvaultClaim.claimed_rewards":           "ClaimedJettons",
+	"CoffeeStakingDeposit.nft_address":      "MintedItemAddress",
+	"CoffeeStakingDeposit.nft_index":        "MintedItemIndex",
+	"CoffeeStakingWithdraw.nft_address":     "NftAddress",
+	"CoffeeStakingWithdraw.nft_index":       "NftIndex",
+	"DexDepositLiquidityData.protocol":      "Dex",
+	"DexDepositLiquidityData.tokens_minted": "LpTokensMinted",
+	"DexWithdrawLiquidityData.nft_address":  "BurnedNFTAddress",
+	"DexWithdrawLiquidityData.nft_index":    "BurnedNFTIndex",
+	"DexWithdrawLiquidityData.protocol":     "Dex",
+	"DexWithdrawLiquidityData.tokens_burnt": "LpTokensBurnt",
+	"JettonSwap.protocol":                   "Dex",
+	"JettonTransfer.comment_encrypted":      "IsEncryptedComment",
+	"MultisigCreateOrder.signer_index":      "CreatorIndex",
+	"NFTListing.mp_fee_base":                "MarketplaceFeeBase",
+	"NFTListing.mp_fee_factor":              "MarketplaceFeeFactor",
+	"NFTListing.nft_index":                  "NFTItemIndex",
+	"NFTMint.nft_index":                     "NFTItemIndex",
+	"NFTTransfer.nft_index":                 "NFTItemIndex",
+	"StakingData.nft_address":               "TsNft",
+	"StakingData.protocol":                  "Provider",
+	"TonTransfer.comment":                   "Content",
+	"TonTransfer.comment_encrypted":         "Encrypted",
 }
 
-// DecodeActionPayload applies payload details to an action whose Type is set.
+// DecodeActionPayload applies the flat payload's details to an action whose Type is set.
 func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	if len(payload) == 0 {
 		return fmt.Errorf("empty action payload")
@@ -122,61 +178,123 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 		return fmt.Errorf("decode action payload: trailing data")
 	}
 
-	target := reflect.ValueOf(action).Elem()
+	data := map[string]interface{}{}
 	for group, value := range groups {
-		if group == "extra" {
-			m, ok := value.(map[string]interface{})
-			if ok {
-				action.Extra = normalizePayloadMap(m)
-			}
-			continue
+		if group != actionPayloadGroup {
+			return fmt.Errorf("decode action payload: unexpected group %q", group)
 		}
-		prefix := actionPayloadPrefix(action.Type, group)
-		m, ok := value.(map[string]interface{})
-		if prefix == "" || !ok {
-			continue
+		fields, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("decode action payload: group %q is not a map", group)
 		}
-		if err := fillActionPayload(target, prefix, "", m); err != nil {
-			return err
-		}
+		data = fields
+	}
+
+	target := reflect.ValueOf(action).Elem()
+	prefixes := actionDataPrefixes[action.Type]
+	if err := fillActionPayload(target, action, prefixes, "", data); err != nil {
+		return err
 	}
 	return nil
 }
 
-func actionPayloadPrefix(actionType, group string) string {
-	switch group {
-	case "data":
-		return actionDataPrefixes[actionType]
-	case "listing":
-		return "NFTListing"
-	case "packet":
-		return "LayerzeroPacket"
-	case "comment_data":
-		return "TonTransfer"
-	default:
-		return ""
-	}
-}
-
-func fillActionPayload(target reflect.Value, prefix, parent string, values map[string]interface{}) error {
+func fillActionPayload(target reflect.Value, action *models.RawAction, prefixes []string, parent string, values map[string]interface{}) error {
 	for key, value := range values {
 		path := key
 		if parent != "" {
 			path = parent + "." + key
 		}
+		// A null value is an absent key: the payload drops null placeholders and the
+		// destination field stays at its zero value either way.
+		if value == nil {
+			continue
+		}
 		if nested, ok := value.(map[string]interface{}); ok {
-			if err := fillActionPayload(target, prefix, path, nested); err != nil {
+			if err := fillActionPayload(target, action, prefixes, path, nested); err != nil {
 				return err
 			}
 			continue
 		}
-		name := prefix + actionPayloadFieldName(prefix, path)
-		field := target.FieldByName(name)
+		if parent == "" {
+			if actionPayloadExtraKeys[key] {
+				if action.Extra == nil {
+					action.Extra = map[string]interface{}{}
+				}
+				action.Extra[key] = normalizePayloadValue(value)
+				continue
+			}
+			if key == "legs" {
+				if err := fillActionPayloadLegs(target, prefixes, value); err != nil {
+					return err
+				}
+				continue
+			}
+		}
+		field := resolvePayloadField(target, prefixes, path)
 		if !field.IsValid() {
 			continue
 		}
 		if err := setPayloadValue(field, value); err != nil {
 			return fmt.Errorf("decode action payload field %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+func resolvePayloadField(target reflect.Value, prefixes []string, path string) reflect.Value {
+	for _, prefix := range prefixes {
+		name := actionPayloadFieldName(prefix, path)
+		// A leading dot names a RawAction field directly: the moved row columns decode
+		// into the envelope fields the frozen API already reads.
+		if strings.HasPrefix(name, ".") {
+			name = name[1:]
+		} else {
+			name = prefix + name
+		}
+		if candidate := target.FieldByName(name); candidate.IsValid() {
+			return candidate
+		}
+	}
+	return reflect.Value{}
+}
+
+// fillActionPayloadLegs expands the legs list into the type's indexed fields
+// (leg 0 -> suffix 1, leg 1 -> suffix 2, the order the positional payload keys had).
+func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interface{}) error {
+	items, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("decode action payload field legs: expected array, got %T", value)
+	}
+	for index, item := range items {
+		record, ok := item.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("decode action payload field legs: expected map, got %T", item)
+		}
+		for member, memberValue := range record {
+			if memberValue == nil {
+				continue
+			}
+			field := reflect.Value{}
+			for _, prefix := range prefixes {
+				template := actionPayloadLegFieldNames[prefix][member]
+				if template == "" {
+					continue
+				}
+				index1 := index + 1
+				if base, ok := actionPayloadLegIndexBase[prefix]; ok {
+					index1 = index + base
+				}
+				if candidate := target.FieldByName(prefix + fmt.Sprintf(template, index1)); candidate.IsValid() {
+					field = candidate
+					break
+				}
+			}
+			if !field.IsValid() {
+				continue
+			}
+			if err := setPayloadValue(field, memberValue); err != nil {
+				return fmt.Errorf("decode action payload field legs[%d].%s: %w", index, member, err)
+			}
 		}
 	}
 	return nil
@@ -290,17 +408,21 @@ func setPayloadValue(target reflect.Value, value interface{}) error {
 	return nil
 }
 
+func normalizePayloadValue(value interface{}) interface{} {
+	switch value := value.(type) {
+	case []byte:
+		return base64.StdEncoding.EncodeToString(value)
+	case map[string]interface{}:
+		return normalizePayloadMap(value)
+	default:
+		return value
+	}
+}
+
 func normalizePayloadMap(values map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{}, len(values))
 	for key, value := range values {
-		switch value := value.(type) {
-		case []byte:
-			result[key] = base64.StdEncoding.EncodeToString(value)
-		case map[string]interface{}:
-			result[key] = normalizePayloadMap(value)
-		default:
-			result[key] = value
-		}
+		result[key] = normalizePayloadValue(value)
 	}
 	return result
 }

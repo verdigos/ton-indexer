@@ -489,8 +489,10 @@ A matcher's `out` block fills the produced block's `data` map.
 `ton-index-worker/ton-mch-engine/src/ActionBuild.cpp` maps each supported btype to a fill function that builds an `Action` row.
 Unsupported btypes are skipped along with their children.
 
-Payload v2 stores protocol-specific action data as a keyed payload map.
-It has no per-protocol composite columns; shared fields such as `source`, `destination`, `asset`, `amount` and `opcode` remain ordinary action fields.
+Payload v2 stores protocol-specific action data as one flat keyed map.
+It has no per-protocol composite columns or group wrappers. Shared fields such as
+`source`, `destination`, `asset`, `amount` and `opcode` remain ordinary action fields;
+all other non-null action fields live directly under `data`.
 
 `fill_nft_transfer` is a worked example. The spec writes names such as:
 
@@ -504,10 +506,14 @@ It has no per-protocol composite columns; shared fields such as `source`, `desti
 ```
 
 Payload key names are listed in `ton-index-worker/ton-mch-engine/docs/KEYS.md`.
-When adding an action field to payload v2, register its key there; this changes the payload contract and does not require a DDL migration.
+When adding an action field to payload v2, register its canonical flat key there; this
+changes the payload contract and does not require a DDL migration.
 
-The emulator path encodes the same rows as msgpack.
-Integers that may exceed signed 64 bits are decimal strings, keyed by field name at every map depth, while bounded fields such as opcodes, flags and times stay native integers.
+The emulator path writes the same codec-prefixed payload bytes as the batch database
+writer under each Redis action row's binary `payload` field. It emits no `*_data`,
+`listing`, `packet`, `comment_data` or `extra` row fields. Integers that may exceed
+signed 64 bits are decimal strings, keyed by field name at every map depth, while
+bounded fields such as opcodes, flags and times stay native integers.
 
 ## 10. Comment rules for specs
 
@@ -549,7 +555,7 @@ Build one from a hash with `venv/bin/python -m tests.utils.api_fixture <trace_ha
 A synthetic fixture prefixes its note with `synthetic: `; chain and API captures carry no label.
 
 `goldens/actions/<group>/<slug>.<id8>.yaml` holds every action row the engine serializes for that fixture, exactly as production writes them.
-Rows are sorted by anchor, the ten directional and scalar columns are always present with nulls spelled out, composites appear only when set with their nested nulls explicit, `opcode` is hex, `matcher` is absent on engine-made leaves, and a BOC-valued field renders as its cell hash.
+Rows are sorted by anchor, the ten directional and scalar columns are always present with nulls spelled out, the flat `data` map appears only when set, `opcode` is hex, `matcher` is absent on engine-made leaves, and a BOC-valued field renders as its cell hash.
 
 Regenerate from the repository root:
 

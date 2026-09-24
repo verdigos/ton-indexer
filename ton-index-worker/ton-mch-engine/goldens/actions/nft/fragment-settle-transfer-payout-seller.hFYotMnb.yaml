@@ -70,24 +70,15 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: 0:CF01D60CC8924D3C34C54A5787B9175BCD8D45D9ADA91371F93318DF2B76EBDB
-      royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
+    data:
       forward_payload: cellhash:75FD71EC954E2F5D90A71AF260BD5BBA8304B3317EF37D4E35C3BDDA25E5A6E6
       is_purchase: true
-      marketplace_address: null
-      nft_item_index: "53633955073287565867731672480849533865439820536360006364677515640351333243842"
+      marketplace_fee_address: 0:CF01D60CC8924D3C34C54A5787B9175BCD8D45D9ADA91371F93318DF2B76EBDB
+      nft_index: "53633955073287565867731672480849533865439820536360006364677515640351333243842"
       payout_amount: 5699311122
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
       price: 6000000001
       query_id: 104108001000006
-      real_prev_owner: null
-      response_destination: null
+      royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
       royalty_amount: 299933333
     tx_hashes:
       - TVAjwqu+qj/yvOXWOheF6OyBLimJUPeX7xIDQQkq4ng=
@@ -121,25 +112,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: "53633955073287565867731672480849533865439820536360006364677515640351333243842"
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: "53633955073287565867731672480849533865439820536360006364677515640351333243842"
       query_id: 8549106350925367477
-      real_prev_owner: null
       response_destination: 0:EDF2F4B87138F8B4E5FDF17D0C4F93BC25AA0124B7F8720835861DB8F914F3FA
-      royalty_amount: null
     tx_hashes:
       - Ta72v7VYDjEzrtTZMeEmMeS+9WjTSYq6Eqj0+uY5IDA=
       - Vjzt0JvpKyhFiqW7MdGfpwR7w3wb1MvbqmFn8fr34sA=
@@ -170,9 +149,8 @@ actions:
     amount: null
     value: 100000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - BiS4HvjR+nVXJXnuw/oShmNR3xntOrFfVK8yF3tFnzY=
       - hFYotMnbSPFhY3v2kBCY3D2r73wSBamx/cqeKMViKrA=

@@ -17,8 +17,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi
+    data:
       dex_incoming_transfer:
         amount: 1000000000
         asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
@@ -30,11 +29,9 @@ actions:
         amount: 325487694953
         asset: 0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C
         destination: 0:1007AD6C70F8F159342BE66A8845294FDAF0F14C8539295DBE2AFB5FA7D70FB7
-        destination_jetton_wallet: null
         source: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
-        source_jetton_wallet: null
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi
       sender: 0:49E60973E9A8F252D986DDB49895A0D7419A077891E4CA6B66D4664ED06AB8DC
     tx_hashes:
       - +LJ7Qa77hEXs1XsyQJPfxnOVLWvcsLG5SCU5uFW30hY=

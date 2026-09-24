@@ -17,8 +17,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi
+    data:
       dex_incoming_transfer:
         amount: 690431808125
         asset: 0:2F956143C461769579BAEF2E32CC2D7BC18283F40D20BB03E432CD603AC33FFC
@@ -30,11 +29,9 @@ actions:
         amount: 392421171
         asset: 0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C
         destination: 0:C248509A3B07AB5BFEFCC27E2C773B955CBF1ED303D73CDF1F4E2CB1F4303F34
-        destination_jetton_wallet: null
         source: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
-        source_jetton_wallet: null
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi
       sender: 0:C248509A3B07AB5BFEFCC27E2C773B955CBF1ED303D73CDF1F4E2CB1F4303F34
     tx_hashes:
       - 4PNVGQkZJUWAiiPq3rIekA9O5+HLaXmYmP30iixAefA=
@@ -73,9 +70,9 @@ actions:
     amount: null
     value: 3962962
     opcode: null
-    ton_transfer_data:
-      content: BlumTradingBotFee#1744126683617
-      encrypted: false
+    data:
+      comment: BlumTradingBotFee#1744126683617
+      comment_encrypted: false
     tx_hashes:
       - 4PNVGQkZJUWAiiPq3rIekA9O5+HLaXmYmP30iixAefA=
       - yh6uJr5+24q+8tB4zKc8qzAv4IY3QajerfY542tYvJw=

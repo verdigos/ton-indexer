@@ -17,8 +17,8 @@ actions:
     amount: 6750000000000
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - 1DtgStJMB5JNE8vxQD2SYG1E4DO3a6nsUQlA2y+y/E4=
       - tN+F5GF7lE++eSnUrZGHbOKDTMPRGL0D0YjQz3wuMk0=

@@ -361,13 +361,14 @@ actions:
     amount: 2345368713954
     value: null
     opcode: null
-    coffee_create_pool_data:
-      amount_1: 2345368713954
-      amount_2: 171205371318
-      initiator_1: 0:A15CA5461477CC4B92CF5BCCC137097270CADC692B5443DB7D74C0BF7E285363
-      initiator_2: 0:A15CA5461477CC4B92CF5BCCC137097270CADC692B5443DB7D74C0BF7E285363
-      lp_tokens_minted: 633671618650
+    data:
+      legs:
+        - amount: 2345368713954
+          initiator: 0:A15CA5461477CC4B92CF5BCCC137097270CADC692B5443DB7D74C0BF7E285363
+        - amount: 171205371318
+          initiator: 0:A15CA5461477CC4B92CF5BCCC137097270CADC692B5443DB7D74C0BF7E285363
       provided_asset: 0:67D4C65E197C2FAB68ADBADF4116E82D29200327152B6C8055F265009E8D2A7F
+      tokens_minted: 633671618650
     tx_hashes:
       - 0sluQqvKoN5pdFFCZjm2GuBPsIaSwXA9XQjltI77D2w=
       - 8WPJWZT7NjQl5MrdGE6Dv1CPBirwO1pv99uah+s6OeM=
@@ -409,10 +410,12 @@ actions:
     asset: null
     asset_secondary: null
     asset2: null
-    asset2_secondary: 0:67D4C65E197C2FAB68ADBADF4116E82D29200327152B6C8055F265009E8D2A7F
+    asset2_secondary: null
     amount: 171205371318
     value: null
     opcode: null
+    data:
+      pool_second: 0:67D4C65E197C2FAB68ADBADF4116E82D29200327152B6C8055F265009E8D2A7F
     tx_hashes:
       - DF1D0ptlBrLr+1L4y+wsprQE98PmJhcUgRVpb1a5aqA=
       - HdLX+Kdu9xBCbpdf/3SGdN3D57v4tLfYKISsRSCZEaA=
@@ -441,10 +444,12 @@ actions:
     asset: 0:67D4C65E197C2FAB68ADBADF4116E82D29200327152B6C8055F265009E8D2A7F
     asset_secondary: null
     asset2: null
-    asset2_secondary: 0:67D4C65E197C2FAB68ADBADF4116E82D29200327152B6C8055F265009E8D2A7F
+    asset2_secondary: null
     amount: 2345368713954
     value: null
     opcode: null
+    data:
+      pool_second: 0:67D4C65E197C2FAB68ADBADF4116E82D29200327152B6C8055F265009E8D2A7F
     tx_hashes:
       - HdLX+Kdu9xBCbpdf/3SGdN3D57v4tLfYKISsRSCZEaA=
       - HfjidxHZ5a3n/6VI2uXjnxP63LV9HEDglefItX4+jSw=
@@ -613,12 +618,10 @@ actions:
     amount: 2345368713954
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 90000000
       forward_payload: cellhash:1DD396A1CBBEAF548CF2C16F7082B906726CE9B61D764B2F98D0F68F61142EA9
-      is_encrypted_comment: false
       query_id: 21
       response_destination: 0:3E4650563C85FEE7F2D676DADBF2715B363EEDF4E0E1A5D2E76B7480278E4685
     tx_hashes:

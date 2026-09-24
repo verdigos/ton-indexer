@@ -278,12 +278,11 @@ actions:
     amount: 270658541048
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: Jettons unstaked
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:96063A56325A2FB4AECA225F75FDB24F005BDD94319DC8986EDEA46D5F6EF651
-      is_encrypted_comment: false
       query_id: 1736465439105755384
       response_destination: 0:317CD3B4473DC95A98D046FD58F0DB3D5FE456A61909C37BFD202C00B35B47D9
     tx_hashes:
@@ -321,6 +320,7 @@ actions:
     amount: 300731712275
     value: null
     opcode: null
+    data:
     tx_hashes:
       - +HUfDBJHtN7jSOSqnW4QKSBoajDZDTnMuxbLkQIiLtI=
       - 0zWHyC6dNm1HQ5cOSoihGIv/qwuxJY2HC6tMWkjJYkc=
@@ -366,9 +366,9 @@ actions:
     amount: null
     value: 299600000
     opcode: null
-    ton_transfer_data:
-      content: Unstake fee
-      encrypted: false
+    data:
+      comment: Unstake fee
+      comment_encrypted: false
     tx_hashes:
       - +HUfDBJHtN7jSOSqnW4QKSBoajDZDTnMuxbLkQIiLtI=
       - 31tF8j0DrPTC8VH6Mdx01cvFAVSIFK1fAlI7kfxjUZk=

@@ -18,8 +18,8 @@ actions:
     amount: null
     value: 200000000000
     opcode: null
-    nft_transfer_data:
-      nft_item_index: "103205048864196202534626650489469139563965072634045376376929179833429460361999"
+    data:
+      nft_index: "103205048864196202534626650489469139563965072634045376376929179833429460361999"
     tx_hashes:
       - BO8nQf+fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=
       - btrOsckPHJy3MKNZxF2y9NFcPEyPfLIg7VhdDD64fb4=
@@ -47,9 +47,7 @@ actions:
     amount: 10000000000
     value: null
     opcode: null
-    nft_transfer_data:
-    ton_transfer_data:
-      content: null
+    data:
     tx_hashes:
       - btrOsckPHJy3MKNZxF2y9NFcPEyPfLIg7VhdDD64fb4=
       - wX5K7v+5q+Stw5QeLQj+a+v9J0GFPx9zVivcToXqGQA=

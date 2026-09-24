@@ -133,12 +133,10 @@ actions:
     amount: 1638000000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 340000000
       forward_payload: cellhash:257E0DAE7C3F99807F9CE92EC6E3454216C071E12FC139C9826763899FBE98D4
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:BF6A2B365AF62AC72AD9100C28ECAFD761EB2822E1264E0FB48AE135BF77DACE
     tx_hashes:
@@ -176,12 +174,11 @@ actions:
     amount: 1638000000000
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: Stake was unsuccessful
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:8ADACF78AB09B67687D09F921BD310CE52680F962011218B0AEC1843DB8277F3
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:BF6A2B365AF62AC72AD9100C28ECAFD761EB2822E1264E0FB48AE135BF77DACE
     tx_hashes:
@@ -219,7 +216,7 @@ actions:
     amount: 1638000000000
     value: null
     opcode: null
-    jvault_stake_data:
+    data:
       period: 2592000
       stake_wallet: 0:84DE3BCB1566A2700345DE26DF54CCEA0963D5CC2CDA9C2E52B2AAC8489096AE
     tx_hashes:

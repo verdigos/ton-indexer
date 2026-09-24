@@ -74,9 +74,9 @@ actions:
     amount: null
     value: 100000000000
     opcode: null
-    ton_transfer_data:
-      content: Deposit
-      encrypted: false
+    data:
+      comment: Deposit
+      comment_encrypted: false
     tx_hashes:
       - pzL/MHHuv9QbtzTwuyXOWaAGIYssge1uQN5u0tvE38E=
       - s2TCbu7I/2pxgpVHSKEmCHJp8DmmujA04SzUqvEMcUw=
@@ -103,9 +103,9 @@ actions:
     amount: null
     value: 98652000
     opcode: null
-    ton_transfer_data:
-      content: Stake 99.800000000 accepted
-      encrypted: false
+    data:
+      comment: Stake 99.800000000 accepted
+      comment_encrypted: false
     tx_hashes:
       - or/tPE9nOYsX9H089qiSCgreKnw2Iypx320HGNhY7os=
       - pzL/MHHuv9QbtzTwuyXOWaAGIYssge1uQN5u0tvE38E=
@@ -133,7 +133,7 @@ actions:
     amount: 100000000000
     value: null
     opcode: null
-    vesting_send_message_data:
+    data:
       message_boc: cellhash:CB4DAEDD56B7472389D5D2F3BB1B8CB5037494EC999A1DC7C48D3080A2217441
       query_id: 0
     tx_hashes:

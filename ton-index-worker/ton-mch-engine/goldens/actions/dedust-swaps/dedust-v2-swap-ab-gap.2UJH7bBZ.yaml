@@ -43,8 +43,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: dedust_v2
+    data:
       dex_incoming_transfer:
         amount: 1102473983246166
         asset: 0:2652D2278EC66D9C946988E3B21E89898879ADD8B4DAAEDD358A0324D148E395
@@ -54,13 +53,11 @@ actions:
         source_jetton_wallet: 0:BBDD7D8113A0CF632B8C426ACADE785A014F0302D97B7BF236AABE525CC9E2F8
       dex_outgoing_transfer:
         amount: 9756908657
-        asset: null
         destination: 0:BB3564AD1DB8F91D6776CDDA08E78E1E7BC99939F1C55349D049AB1F8754359C
-        destination_jetton_wallet: null
         source: 0:8426D499F780FAADCE875CDFF1B181646008AC993665D3CC7E63440BB883D6EA
-        source_jetton_wallet: null
       min_out_amount: 9296408132
       peer_swaps: []
+      protocol: dedust_v2
       sender: 0:BB3564AD1DB8F91D6776CDDA08E78E1E7BC99939F1C55349D049AB1F8754359C
     tx_hashes:
       - +ouQF4BHoBJ8ZomM2ZVahHH/VLi88UIbFDqSB66vwo4=

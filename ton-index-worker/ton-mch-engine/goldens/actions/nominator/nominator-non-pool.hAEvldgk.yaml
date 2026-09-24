@@ -17,9 +17,8 @@ actions:
     amount: null
     value: 5000000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - hIZf2Ow5dr+oQQO1003QWvysZkVW8rJNGMp/PQhf5F0=
       - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
@@ -46,9 +45,8 @@ actions:
     amount: null
     value: 7000000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 4IPtEj6m2M0JetHSFP55c7FpiRtcpU6TSvjlckIKAT8=
       - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=

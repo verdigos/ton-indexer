@@ -179,7 +179,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_approve_data:
+    data:
       exit_code: 0
       signer_index: -1
     tx_hashes:
@@ -214,7 +214,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_execute_data:
+    data:
       approvals_num: 1
       expiration_date: 1788095979
       order_boc: cellhash:05D617F2BBC4A85AA0E6509712757DBF0D961023FDABF7EC637FE0C100B303EA
@@ -252,9 +252,9 @@ actions:
     amount: null
     value: 100000000
     opcode: null
-    ton_transfer_data:
-      content: approve
-      encrypted: false
+    data:
+      comment: approve
+      comment_encrypted: false
     tx_hashes:
       - Yy3geQheW9dpn72WlfpGNXhJuUo89K1kN978NSXKC3Q=
       - oN0zmyAm2HKIwSTaTdo45Mu4tgvHf7uFSBwIvv0gEig=

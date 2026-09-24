@@ -18,22 +18,19 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5109
+      nft_index: 5109
       payout_amount: 4250000000
-      payout_comment: null
       payout_comment_encoded: false
       payout_comment_encrypted: false
       price: 5000000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - 0D3/StRoG4wNv4rFdgY4KuxWJDQrcww78+eSvSQxp+k=
       - 2vDr72vgorLQ2qFyi7Jk1K/L10S5hXp28wrHbI4durc=
@@ -67,22 +64,19 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5153
+      nft_index: 5153
       payout_amount: 4675000000
-      payout_comment: null
       payout_comment_encoded: false
       payout_comment_encrypted: false
       price: 5500000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - ATC2UPb2ArXHw0IQofZOWr+H/7Ztf0qu4yxXybCA3nY=
       - LhC12xRKM/2Q+mlxgPyuYCCPn9NWFUk4VVH48Q6g2ZQ=
@@ -116,22 +110,19 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5108
+      nft_index: 5108
       payout_amount: 4250000000
-      payout_comment: null
       payout_comment_encoded: false
       payout_comment_encrypted: false
       price: 5000000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - 4GI3B4AWWJhVZw69XmdZ1sxvH16MwkrgNS5gxdt1RvU=
       - E8TWGhefQ5gMOK1T3AXDmC0ZcmlkjzS3qyU4RlUNJ9k=
@@ -165,22 +156,19 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5157
+      nft_index: 5157
       payout_amount: 4675000000
-      payout_comment: null
       payout_comment_encoded: false
       payout_comment_encrypted: false
       price: 5500000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - BHANKJE+gbQ4s6nCR6ilcyGaPPbOPAcDf4Y7Dn9CDd4=
       - JGs+JjlspbiG2KOCW7N6JkICWaJxUI9NkkhI8I72K5Q=
@@ -214,25 +202,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5109
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5109
       price: 5000000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - 2vDr72vgorLQ2qFyi7Jk1K/L10S5hXp28wrHbI4durc=
       - 9D3D3d6ejTBF+G7rhmnMKsceRfItJshiMuzVymELfJY=
@@ -267,25 +246,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5153
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5153
       price: 5500000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - ATC2UPb2ArXHw0IQofZOWr+H/7Ztf0qu4yxXybCA3nY=
       - Q9q9bM88apOvXVJyfoTa4tpWT4g6ITXDF0jeaCFyD9E=
@@ -320,25 +290,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5108
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5108
       price: 5000000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - 4GI3B4AWWJhVZw69XmdZ1sxvH16MwkrgNS5gxdt1RvU=
       - E8TWGhefQ5gMOK1T3AXDmC0ZcmlkjzS3qyU4RlUNJ9k=
@@ -373,25 +334,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5157
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5157
       price: 5500000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - BHANKJE+gbQ4s6nCR6ilcyGaPPbOPAcDf4Y7Dn9CDd4=
       - JGs+JjlspbiG2KOCW7N6JkICWaJxUI9NkkhI8I72K5Q=
@@ -425,9 +377,8 @@ actions:
     amount: null
     value: 4250000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 0D3/StRoG4wNv4rFdgY4KuxWJDQrcww78+eSvSQxp+k=
       - FUnvHFhSKpTJm6Sxzr0WQcEso4Jvz+GJw9MiU1sSxZY=
@@ -457,9 +408,8 @@ actions:
     amount: null
     value: 250000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - FUnvHFhSKpTJm6Sxzr0WQcEso4Jvz+GJw9MiU1sSxZY=
       - wuj7U8UaQC9DkC9n7LLucYf4EIC3ymK8rVT/LCEmRVs=
@@ -486,9 +436,8 @@ actions:
     amount: null
     value: 4675000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - LhC12xRKM/2Q+mlxgPyuYCCPn9NWFUk4VVH48Q6g2ZQ=
       - mZIb9tXs1dNH7emeFFZZd3huHMSboxhm4bp+RQ9GpWs=
@@ -518,9 +467,8 @@ actions:
     amount: null
     value: 275000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - ZQrfjlqDwCxvGwUuJFZ+ddNs1PFJmHMh0/w8hoe+O58=
       - mZIb9tXs1dNH7emeFFZZd3huHMSboxhm4bp+RQ9GpWs=
@@ -547,9 +495,8 @@ actions:
     amount: null
     value: 4250000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - E8TWGhefQ5gMOK1T3AXDmC0ZcmlkjzS3qyU4RlUNJ9k=
       - EVbHMFvut05SFzKQ/6Ow5EyRQSQvpHOi9qxXE7a6IFU=
@@ -579,9 +526,8 @@ actions:
     amount: null
     value: 500000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 2d7ijRvJkKjBNd7POL1UZ0GIEXi0y4Ckr5tSnWkeTZQ=
       - FUnvHFhSKpTJm6Sxzr0WQcEso4Jvz+GJw9MiU1sSxZY=
@@ -608,9 +554,8 @@ actions:
     amount: null
     value: 550000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - TVEEpxLGYEnZdDZJ725gw4yOUgWnjbXPpRByi3SprP4=
       - mZIb9tXs1dNH7emeFFZZd3huHMSboxhm4bp+RQ9GpWs=
@@ -637,9 +582,8 @@ actions:
     amount: null
     value: 4675000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - PkXhTaJBqBQ4gM85S7HXnPt31Oa5N6cI9Ab9LE+P/bQ=
       - T3WXOtaVw88c0LaVEBMku1osPfMFl9JAjW/oGybChNw=
@@ -669,9 +613,8 @@ actions:
     amount: null
     value: 250000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - E8TWGhefQ5gMOK1T3AXDmC0ZcmlkjzS3qyU4RlUNJ9k=
       - mezW+wSVsJ58wQ2SiiqEl+vFPp8VH8hoS1SnlBuo50s=
@@ -698,9 +641,8 @@ actions:
     amount: null
     value: 275000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 3A85JOsv058IFL/xKrlpFsKqS+DSfxZcRVeUGp9eRpY=
       - PkXhTaJBqBQ4gM85S7HXnPt31Oa5N6cI9Ab9LE+P/bQ=
@@ -727,9 +669,8 @@ actions:
     amount: null
     value: 500000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - AdMV5OCa/k4LZXL1Pg57l3e2fudIe4pNs1l1TMeeZPI=
       - E8TWGhefQ5gMOK1T3AXDmC0ZcmlkjzS3qyU4RlUNJ9k=
@@ -756,9 +697,8 @@ actions:
     amount: null
     value: 550000000
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - AMb0eNytOwbJeYUulzDN374Pq7GARRdrWNicZpHfxc8=
       - PkXhTaJBqBQ4gM85S7HXnPt31Oa5N6cI9Ab9LE+P/bQ=

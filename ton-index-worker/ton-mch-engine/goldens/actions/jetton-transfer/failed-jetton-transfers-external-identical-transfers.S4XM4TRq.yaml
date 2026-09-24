@@ -16,12 +16,11 @@ actions:
     amount: 1000000000
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: "11"
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:A15BE6C42302853D479BB6BCF654D93D399536514190F1AF7497B35F48FEA71D
-      is_encrypted_comment: false
       query_id: 31
       response_destination: 0:7F8555013B5A6763BB4977DB0A82C7D392661B0D24AF87FED8D6D12F92AE9F45
     tx_hashes:
@@ -49,12 +48,11 @@ actions:
     amount: 1000000000
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: "11"
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:A15BE6C42302853D479BB6BCF654D93D399536514190F1AF7497B35F48FEA71D
-      is_encrypted_comment: false
       query_id: 31
       response_destination: 0:7F8555013B5A6763BB4977DB0A82C7D392661B0D24AF87FED8D6D12F92AE9F45
     tx_hashes:

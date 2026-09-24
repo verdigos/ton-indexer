@@ -191,6 +191,7 @@ actions:
     amount: 246742586340
     value: null
     opcode: null
+    data:
     tx_hashes:
       - 0uFDUicjsZVS8Ofe2OAZLO0FPks+g5LFuGhWYYYh2I0=
       - 8vlyXwtRTRZJoG8x0N8nqD0tK1Tq9XzBGIewCogXeUs=

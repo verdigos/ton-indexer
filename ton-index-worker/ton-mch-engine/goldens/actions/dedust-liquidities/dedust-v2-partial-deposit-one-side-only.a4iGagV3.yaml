@@ -538,15 +538,10 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 1500000000000
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: dedust_v2
-      lp_tokens_minted: null
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 1500000000000
+      protocol: dedust_v2
     tx_hashes:
       - NZ2s063uQwxWBUhj9CczePQzD4JMKLV3AYVuOaciBQc=
       - TMcWen4jpJlK9QwCF9AD6e3L5lzQPDMZfHTb1RBW8fg=
@@ -576,9 +571,9 @@ actions:
     amount: null
     value: 250000000
     opcode: null
-    ton_transfer_data:
-      content: DTrade fee / Uranus
-      encrypted: false
+    data:
+      comment: DTrade fee / Uranus
+      comment_encrypted: false
     tx_hashes:
       - a4iGagV3jl5etlZ77Zxj8krjyQn7Z3Uqzb7YRYIOY/U=
       - puhFo0oox9wzoyjbT/i+YcsHhQFtknPqojAdT7z9+RU=

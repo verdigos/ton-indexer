@@ -43,8 +43,8 @@ actions:
     amount: 1346898335834463
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - ezruN+Gzhi1ZZSQ/UCeDf3Kz7TPekGxrRDJCvkVXydg=
       - z7L9BXr84WUtSLQRKMI7XfkPNcJbC1qqRkHgto4KK8A=
@@ -71,9 +71,8 @@ actions:
     amount: null
     value: 1346898345834463
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - SfMA6Ze8RSaefqBM2rrdiGoPUwe+TchHjpgnVkCILfc=
       - z7L9BXr84WUtSLQRKMI7XfkPNcJbC1qqRkHgto4KK8A=

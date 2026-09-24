@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -15,8 +16,8 @@ import (
 //
 //	ton-mch-dev-engine --actions-msgpack-out ton-index-go/index/emulated/testdata/actions_wire.msgpack
 //
-// The fixture covers every writer wire type. Regenerate it when
-// wire_fixture_action changes.
+// The fixture covers every writer wire type. Each action is a real stored type whose
+// details travel in the `payload` bytes; the decoder is the shared payload decoder.
 func TestActionsWireFixture(t *testing.T) {
 	blob, err := os.ReadFile("testdata/actions_wire.msgpack")
 	if err != nil {
@@ -27,8 +28,8 @@ func TestActionsWireFixture(t *testing.T) {
 	if err := msgpack.Unmarshal(blob, &actions); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if len(actions) != 1 {
-		t.Fatalf("got %d actions, want 1", len(actions))
+	if len(actions) == 0 {
+		t.Fatal("fixture is empty")
 	}
 	a := actions[0]
 
@@ -78,203 +79,161 @@ func TestActionsWireFixture(t *testing.T) {
 	// amount is *string and 256-bit: only a decimal string survives.
 	str("amount", a.Amount, "340282366920938463463374607431768211456")
 
-	if a.JettonTransferData == nil {
-		t.Fatal("jetton_transfer_data is nil")
-	}
-	// query_id sits above 2^63, so it cannot be an int64 in either direction.
-	str("jetton_transfer_data.query_id", a.JettonTransferData.QueryId, "18446744073709551615")
-	str("jetton_transfer_data.forward_amount", a.JettonTransferData.ForwardAmount, "400000000")
-
-	// Bounded ints into *int32 / *int64, decoded from natural integers.
-	if a.LayerzeroPacketData == nil {
-		t.Fatal("layerzero_packet_data is nil")
-	}
-	if a.LayerzeroPacketData.SrcEid == nil || *a.LayerzeroPacketData.SrcEid != 30101 {
-		t.Errorf("src_eid = %v, want 30101", a.LayerzeroPacketData.SrcEid)
-	}
-	if a.LayerzeroPacketData.Nonce == nil || *a.LayerzeroPacketData.Nonce != 1234567890123 {
-		t.Errorf("nonce = %v, want 1234567890123", a.LayerzeroPacketData.Nonce)
-	}
-
-	// uint64 keys use decimal strings: send_request_id sits above 2^63 and
-	// the fees are uint128-domain, so the writer cannot emit them as integers.
-	if a.LayerzeroSendData == nil {
-		t.Fatal("layerzero_send_data is nil")
-	}
-	if a.LayerzeroSendData.SendRequestId == nil ||
-		*a.LayerzeroSendData.SendRequestId != 18446744073709551614 {
-		t.Errorf("send_request_id = %v, want 18446744073709551614", a.LayerzeroSendData.SendRequestId)
-	}
-	if a.LayerzeroSendData.NativeFee == nil || a.LayerzeroSendData.NativeFee.Cmp(big.NewInt(14835102020)) != 0 {
-		t.Errorf("native_fee = %v, want 14835102020", a.LayerzeroSendData.NativeFee)
-	}
-	if a.LayerzeroSendData.ZroFee == nil || a.LayerzeroSendData.ZroFee.Sign() != 0 {
-		t.Errorf("zro_fee = %v, want 0", a.LayerzeroSendData.ZroFee)
-	}
-	str("layerzero_send_data.msglib", a.LayerzeroSendData.Msglib, "0x63bdfbf347f883dd")
-
-	// LayerZero nonce values use decimal strings because key rules apply at every depth.
-
-	// A bounded *int64 beside the status STRING the parser maps from the code.
-	if a.LayerzeroDvnVerifyData == nil {
-		t.Fatal("layerzero_dvn_verify_data is nil")
-	}
-	if a.LayerzeroDvnVerifyData.Nonce == nil || *a.LayerzeroDvnVerifyData.Nonce != 125 {
-		t.Errorf("dvn nonce = %v, want 125", a.LayerzeroDvnVerifyData.Nonce)
-	}
-	str("layerzero_dvn_verify_data.status", a.LayerzeroDvnVerifyData.Status, "succeeded")
-
-	// All ten tonco_deploy_pool fields are *string, but only the Q64.96 price
-	// exceeds int64 and therefore has to travel as a decimal string; the u16
-	// fees and the int24 tick spacing stay natural integers and reach the same
-	// *string field through the flexible decoder.
-	if a.ToncoDeployPoolData == nil {
-		t.Fatal("tonco_deploy_pool_data is nil")
-	}
-	str("tonco_deploy_pool_data.initial_price_x96",
-		a.ToncoDeployPoolData.InitialPriceX96, "2159938633973433351177391787024")
-	str("tonco_deploy_pool_data.protocol_fee", a.ToncoDeployPoolData.ProtocolFee, "33268")
-	str("tonco_deploy_pool_data.tick_spacing", a.ToncoDeployPoolData.TickSpacing, "60")
-	if a.ToncoDeployPoolData.PoolActive == nil || !*a.ToncoDeployPoolData.PoolActive {
-		t.Errorf("pool_active = %v, want true", a.ToncoDeployPoolData.PoolActive)
-	}
-
-	// These Cocoon composites cover every family wire shape. The nonce exceeds int64.
-	if a.CocoonWorkerPayoutData == nil {
-		t.Fatal("cocoon_worker_payout_data is nil")
-	}
-	str("cocoon_worker_payout_data.payout_type", a.CocoonWorkerPayoutData.PayoutType, "last")
-	str("cocoon_worker_payout_data.new_tokens",
-		a.CocoonWorkerPayoutData.NewTokens, "9229614747703451079")
-	str("cocoon_worker_payout_data.worker_tokens",
-		a.CocoonWorkerPayoutData.WorkerTokens, "73063940556")
-	// *int64 beside those *string amounts: the u2 worker state stays an integer.
-	if a.CocoonWorkerPayoutData.WorkerState == nil || *a.CocoonWorkerPayoutData.WorkerState != 2 {
-		t.Errorf("worker_state = %v, want 2", a.CocoonWorkerPayoutData.WorkerState)
-	}
-	if a.CocoonClientRegisterData == nil {
-		t.Fatal("cocoon_client_register_data is nil")
-	}
-	str("cocoon_client_register_data.nonce",
-		a.CocoonClientRegisterData.Nonce, "11924145372215500834")
-	// The family's only *bool, and its only u32 reaching a *int64.
-	if a.CocoonClientRequestRefundData == nil {
-		t.Fatal("cocoon_client_request_refund_data is nil")
-	}
-	if a.CocoonClientRequestRefundData.ViaWallet == nil ||
-		!*a.CocoonClientRequestRefundData.ViaWallet {
-		t.Errorf("via_wallet = %v, want true", a.CocoonClientRequestRefundData.ViaWallet)
-	}
-	if a.CocoonUnregisterProxyData == nil {
-		t.Fatal("cocoon_unregister_proxy_data is nil")
-	}
-	if a.CocoonUnregisterProxyData.Seqno == nil || *a.CocoonUnregisterProxyData.Seqno != 1 {
-		t.Errorf("seqno = %v, want 1", a.CocoonUnregisterProxyData.Seqno)
-	}
-
-	if a.ChangeDnsRecordData == nil {
-		t.Fatal("change_dns_record_data is nil")
-	}
-	if a.ChangeDnsRecordData.Flags == nil || *a.ChangeDnsRecordData.Flags != 7 {
-		t.Errorf("flags = %v, want 7", a.ChangeDnsRecordData.Flags)
-	}
-
-	// --- []string, whose elements bypass the flexible decoders --------------
-	if a.JvaultClaimData == nil {
-		t.Fatal("jvault_claim_data is nil")
-	}
-	want := []string{"1000", "340282366920938463463374607431768211456"}
-	if len(a.JvaultClaimData.ClaimedAmounts) != len(want) {
-		t.Fatalf("claimed_amounts = %v, want %v", a.JvaultClaimData.ClaimedAmounts, want)
-	}
-	for i, w := range want {
-		if a.JvaultClaimData.ClaimedAmounts[i] != w {
-			t.Errorf("claimed_amounts[%d] = %q, want %q", i, a.JvaultClaimData.ClaimedAmounts[i], w)
-		}
-	}
-	if len(a.JvaultClaimData.ClaimedJettons) != 2 {
-		t.Errorf("claimed_jettons = %v", a.JvaultClaimData.ClaimedJettons)
-	}
-	// The whitelist's accounts_added is the second []string on the wire, and the
-	// only one carrying ADDRESSES rather than decimal amounts.
-	if a.VestingAddWhitelistData == nil {
-		t.Fatal("vesting_add_whitelist_data is nil")
-	}
-	wantAccounts := []string{"0:" + strings.Repeat("A", 64), "0:" + strings.Repeat("B", 64)}
-	if len(a.VestingAddWhitelistData.AccountsAdded) != len(wantAccounts) {
-		t.Fatalf("accounts_added = %v, want %v",
-			a.VestingAddWhitelistData.AccountsAdded, wantAccounts)
-	}
-	for i, w := range wantAccounts {
-		if a.VestingAddWhitelistData.AccountsAdded[i] != w {
-			t.Errorf("accounts_added[%d] = %q, want %q",
-				i, a.VestingAddWhitelistData.AccountsAdded[i], w)
-		}
-	}
-
-	if a.MultisigCreateOrderData == nil || a.MultisigApproveData == nil ||
-		a.MultisigExecuteData == nil {
-		t.Fatal("multisig wire composites are nil")
-	}
-	str("multisig_create_order_data.query_id",
-		a.MultisigCreateOrderData.QueryId, "18446744073709551615")
-	str("multisig_create_order_data.order_seqno", a.MultisigCreateOrderData.OrderSeqno,
-		"115792089237316195423570985008687907853269984665640564039457584007913129639935")
-	if a.MultisigCreateOrderData.IsCreatedBySigner == nil ||
-		!*a.MultisigCreateOrderData.IsCreatedBySigner {
-		t.Errorf("is_created_by_signer = %v, want true", a.MultisigCreateOrderData.IsCreatedBySigner)
-	}
-	if a.MultisigApproveData.SignerIndex == nil || *a.MultisigApproveData.SignerIndex != -1 {
-		t.Errorf("signer_index = %v, want -1", a.MultisigApproveData.SignerIndex)
-	}
-	str("multisig_execute_data.order_seqno", a.MultisigExecuteData.OrderSeqno, "899")
-	str("multisig_execute_data.signers_hash", a.MultisigExecuteData.SignersHash,
-		"C32M4/TYDdcDTvMVw09kw5jnsfQJaZGrLCsRJuShiZQ=")
-
-	// --- ints reaching *string fields, via decodeFlexString ------------------
-	if a.NftTransferData == nil {
-		t.Fatal("nft_transfer_data is nil")
-	}
-	// A float-backed index: msgpack-c normalizes the integral double to an
-	// integer, and the flexible string decoder renders it.
-	str("nft_transfer_data.nft_item_index", a.NftTransferData.NftItemIndex, "1037")
-	str("nft_transfer_data.price", a.NftTransferData.Price, "2500000000")
-	if a.DexDepositLiquidityData == nil {
-		t.Fatal("dex_deposit_liquidity_data is nil")
-	}
-	// Negative int24 into a *string field.
-	str("dex_deposit_liquidity_data.tick_lower", a.DexDepositLiquidityData.TickLower, "-887220")
-	str("dex_deposit_liquidity_data.nft_index", a.DexDepositLiquidityData.NFTIndex, "4242")
-
-	// --- dex_wallet_1 / dex_wallet_2 ----------------------------------------
-	// Pool-side fields in the dex_withdraw_liquidity_details composite.
-	if a.DexWithdrawLiquidityData == nil {
-		t.Fatal("dex_withdraw_liquidity_data is nil")
-	}
-	str("dex_withdraw_liquidity_data.dex_wallet_1", a.DexWithdrawLiquidityData.DexWallet1,
-		"0:"+strings.Repeat("A", 64))
-	str("dex_withdraw_liquidity_data.dex_wallet_2", a.DexWithdrawLiquidityData.DexWallet2,
-		"0:"+strings.Repeat("B", 64))
-	str("dex_withdraw_liquidity_data.lp_tokens_burnt", a.DexWithdrawLiquidityData.LpTokensBurnt,
-		"123456789")
-
-	// These fields must survive conversion into the API details struct.
+	// --- payload details ----------------------------------------------------
+	// Details live in the payload bytes, decoded by the shared decoder.
 	raw, err := a.ToRawAction()
 	if err != nil {
 		t.Fatalf("ToRawAction: %v", err)
 	}
-	if raw.DexWithdrawLiquidityDataDexWallet1 == nil {
-		t.Error("ToRawAction dropped dex_wallet_1")
+	str("jetton_transfer.query_id", raw.JettonTransferQueryId, "18446744073709551615")
+	str("jetton_transfer.forward_amount", raw.JettonTransferForwardAmount, "400000000")
+	if raw.JettonTransferComment == nil || *raw.JettonTransferComment != "hello" {
+		t.Errorf("jetton_transfer.comment = %v", raw.JettonTransferComment)
 	}
-	if raw.DexWithdrawLiquidityDataDexWallet2 == nil {
-		t.Error("ToRawAction dropped dex_wallet_2")
+	if raw.JettonTransferIsEncryptedComment == nil || *raw.JettonTransferIsEncryptedComment {
+		t.Errorf("jetton_transfer.comment_encrypted = %v", raw.JettonTransferIsEncryptedComment)
 	}
 
-	// --- unset composites stay nil, not zero values -------------------------
-	if a.StakingData != nil {
-		t.Error("staking_data decoded non-nil, but the writer omitted it")
+	// The writer omits an unfilled row column, so unset envelope fields stay nil.
+	if a.TraceId != nil || a.TraceExternalHash != "" {
+		t.Errorf("trace fields = %v / %q", a.TraceId, a.TraceExternalHash)
 	}
-	if a.EvaaWithdrawData != nil {
-		t.Error("evaa_withdraw_data decoded non-nil, but the writer omitted it")
+
+	byType := map[string]*Action{}
+	for i := range actions {
+		byType[actions[i].Type] = &actions[i]
 	}
+
+	rawOf := func(kind string) *models.RawAction {
+		t.Helper()
+		action, ok := byType[kind]
+		if !ok {
+			t.Fatalf("fixture has no %s action", kind)
+		}
+		converted, err := action.ToRawAction()
+		if err != nil {
+			t.Fatalf("%s: ToRawAction: %v", kind, err)
+		}
+		return converted
+	}
+
+	// A bounded *int64 beside the status STRING the parser maps from the code.
+	lzVerify := rawOf("layerzero_dvn_verify")
+	if lzVerify.LayerzeroDvnVerifyNonce == nil || *lzVerify.LayerzeroDvnVerifyNonce != 125 {
+		t.Errorf("dvn nonce = %v, want 125", lzVerify.LayerzeroDvnVerifyNonce)
+	}
+	str("layerzero_dvn_verify.status", lzVerify.LayerzeroDvnVerifyStatus, "succeeded")
+
+	// uint64 keys use decimal strings: send_request_id sits above 2^63 and the
+	// fees are uint128-domain, so the writer cannot emit them as integers.
+	lzSend := rawOf("layerzero_send")
+	if lzSend.LayerzeroSendSendRequestId == nil ||
+		*lzSend.LayerzeroSendSendRequestId != 18446744073709551614 {
+		t.Errorf("send_request_id = %v, want 18446744073709551614", lzSend.LayerzeroSendSendRequestId)
+	}
+	if lzSend.LayerzeroSendNativeFee == nil || lzSend.LayerzeroSendNativeFee.Cmp(big.NewInt(14835102020)) != 0 {
+		t.Errorf("native_fee = %v, want 14835102020", lzSend.LayerzeroSendNativeFee)
+	}
+	if lzSend.LayerzeroSendZroFee == nil || lzSend.LayerzeroSendZroFee.Sign() != 0 {
+		t.Errorf("zro_fee = %v, want 0", lzSend.LayerzeroSendZroFee)
+	}
+	str("layerzero_send.msglib", lzSend.LayerzeroSendMsglib, "0x63bdfbf347f883dd")
+	// Packet keys and send keys share one flat map.
+	packet := rawOf("layerzero_receive")
+	if packet.LayerzeroPacketSrcEid == nil || *packet.LayerzeroPacketSrcEid != 30101 {
+		t.Errorf("src_eid = %v, want 30101", packet.LayerzeroPacketSrcEid)
+	}
+	if packet.LayerzeroPacketNonce == nil || *packet.LayerzeroPacketNonce != 1234567890123 {
+		t.Errorf("packet nonce = %v, want 1234567890123", packet.LayerzeroPacketNonce)
+	}
+
+	// The layerzero_commit_packet row moves the former asset columns into the payload;
+	// the decoder lands them back on Asset/AssetSecondary for the frozen API read.
+	commit := rawOf("layerzero_commit_packet")
+	if commit.Asset == nil || string(*commit.Asset) != "0:"+strings.Repeat("C", 64) {
+		t.Errorf("channel = %v", commit.Asset)
+	}
+	if commit.AssetSecondary == nil || string(*commit.AssetSecondary) != "0:"+strings.Repeat("D", 64) {
+		t.Errorf("msglib_connection = %v", commit.AssetSecondary)
+	}
+
+	// All ten tonco_deploy_pool fields are *string, but only the Q64.96 price exceeds
+	// int64 and therefore has to travel as a decimal string; the u16 fees and the int24
+	// tick spacing stay natural integers and reach the same *string field.
+	tonco := rawOf("tonco_deploy_pool")
+	str("tonco_deploy_pool.initial_price_x96", tonco.ToncoDeployPoolInitialPriceX96, "2159938633973433351177391787024")
+	str("tonco_deploy_pool.protocol_fee", tonco.ToncoDeployPoolProtocolFee, "33268")
+	str("tonco_deploy_pool.tick_spacing", tonco.ToncoDeployPoolTickSpacing, "60")
+	if tonco.ToncoDeployPoolPoolActive == nil || !*tonco.ToncoDeployPoolPoolActive {
+		t.Errorf("pool_active = %v, want true", tonco.ToncoDeployPoolPoolActive)
+	}
+	// Legs reach the indexed fields.
+	if tonco.ToncoDeployPoolJetton0Minter == nil || tonco.ToncoDeployPoolJetton1Minter != nil {
+		t.Errorf("jetton minters = %v / %v", tonco.ToncoDeployPoolJetton0Minter, tonco.ToncoDeployPoolJetton1Minter)
+	}
+	if tonco.ToncoDeployPoolJetton1RouterWallet == nil {
+		t.Error("ToRawAction dropped jetton1 router wallet")
+	}
+
+	// These Cocoon composites cover every family wire shape.
+	payout := rawOf("cocoon_worker_payout")
+	str("cocoon_worker_payout.payout_type", payout.CocoonWorkerPayoutPayoutType, "last")
+	str("cocoon_worker_payout.new_tokens", payout.CocoonWorkerPayoutNewTokens, "9229614747703451079")
+	str("cocoon_worker_payout.worker_tokens", payout.CocoonWorkerPayoutWorkerTokens, "73063940556")
+	if payout.CocoonWorkerPayoutWorkerState == nil || *payout.CocoonWorkerPayoutWorkerState != 2 {
+		t.Errorf("worker_state = %v, want 2", payout.CocoonWorkerPayoutWorkerState)
+	}
+	str("cocoon_client_register.nonce", rawOf("cocoon_client_register").CocoonClientRegisterNonce, "11924145372215500834")
+	if refund := rawOf("cocoon_client_request_refund"); refund.CocoonClientRequestRefundViaWallet == nil ||
+		!*refund.CocoonClientRequestRefundViaWallet {
+		t.Errorf("via_wallet = %v, want true", refund.CocoonClientRequestRefundViaWallet)
+	}
+	if seqno := rawOf("cocoon_unregister_proxy").CocoonUnregisterProxySeqno; seqno == nil || *seqno != 1 {
+		t.Errorf("seqno = %v, want 1", seqno)
+	}
+
+	if flags := rawOf("change_dns").ChangeDNSRecordFlags; flags == nil || *flags != 7 {
+		t.Errorf("change_dns.flags = %v, want 7", flags)
+	}
+
+	// --- []string, whose elements bypass the flexible decoders --------------
+	claim := rawOf("jvault_claim")
+	if len(claim.JvaultClaimClaimedJettons) != 2 {
+		t.Fatalf("claimed_rewards = %+v", claim.JvaultClaimClaimedJettons)
+	}
+	if claim.JvaultClaimClaimedJettons[1].Amount == nil ||
+		*claim.JvaultClaimClaimedJettons[1].Amount != "340282366920938463463374607431768211456" {
+		t.Errorf("claimed_rewards[1].amount = %v", claim.JvaultClaimClaimedJettons[1].Amount)
+	}
+	whitelist := rawOf("vesting_add_whitelist")
+	wantAccounts := []string{"0:" + strings.Repeat("A", 64), "0:" + strings.Repeat("B", 64)}
+	if len(whitelist.VestingAddWhitelistAccountsAdded) != len(wantAccounts) {
+		t.Fatalf("accounts_added = %v, want %v", whitelist.VestingAddWhitelistAccountsAdded, wantAccounts)
+	}
+	for i, want := range wantAccounts {
+		if string(whitelist.VestingAddWhitelistAccountsAdded[i]) != want {
+			t.Errorf("accounts_added[%d] = %q, want %q", i, whitelist.VestingAddWhitelistAccountsAdded[i], want)
+		}
+	}
+
+	// The unstake row moved its opcode column into data.exit_code, which lands on the
+	// Opcode field the API's ExitCode reads.
+	unstake := rawOf("jvault_unstake")
+	if unstake.Opcode == nil || int64(*unstake.Opcode) != 260734629 {
+		t.Errorf("exit_code = %v, want 260734629", unstake.Opcode)
+	}
+
+	// --- multisig *int64 / *uint32 from decimal strings ----------------------
+	create := rawOf("multisig_create_order")
+	if create.MultisigCreateOrderCreatorIndex == nil || *create.MultisigCreateOrderCreatorIndex != 2 {
+		t.Errorf("signer_index = %v, want 2", create.MultisigCreateOrderCreatorIndex)
+	}
+	if create.MultisigCreateOrderExpirationDate == nil || *create.MultisigCreateOrderExpirationDate != 1785595662 {
+		t.Errorf("expiration_date = %v", create.MultisigCreateOrderExpirationDate)
+	}
+	approve := rawOf("multisig_approve")
+	if approve.MultisigApproveSignerIndex == nil || *approve.MultisigApproveSignerIndex != -1 {
+		t.Errorf("signer_index = %v, want -1", approve.MultisigApproveSignerIndex)
+	}
+	str("multisig_execute.order_seqno", rawOf("multisig_execute").MultisigExecuteOrderSeqno, "899")
 }

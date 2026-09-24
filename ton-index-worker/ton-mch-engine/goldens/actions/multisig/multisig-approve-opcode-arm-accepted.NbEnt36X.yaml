@@ -75,7 +75,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_approve_data:
+    data:
       exit_code: 0
       signer_index: 3
     tx_hashes:

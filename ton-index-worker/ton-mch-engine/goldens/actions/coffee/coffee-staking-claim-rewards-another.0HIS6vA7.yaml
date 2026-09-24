@@ -79,12 +79,9 @@ actions:
     amount: 17686745
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 25782
       response_destination: 0:29F6EEFA7E5F4B1F3B69A1F68C60FDDEAECBFBC9ACC2C0EBE5E7207D090C862F
     tx_hashes:

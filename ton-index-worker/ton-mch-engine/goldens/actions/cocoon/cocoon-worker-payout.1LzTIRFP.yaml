@@ -133,7 +133,7 @@ actions:
     amount: 4500148290
     value: null
     opcode: null
-    cocoon_worker_payout_data:
+    data:
       new_tokens: 9229614747703451079
       payout_type: regular
       query_id: 10553886210694500674

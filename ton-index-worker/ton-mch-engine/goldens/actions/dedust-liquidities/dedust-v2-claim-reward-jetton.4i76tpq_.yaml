@@ -133,20 +133,15 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_withdraw_liquidity_data:
-      amount1: 80009525306
-      amount2: null
-      asset1_out: 0:105E5589BC66DB15F13C177A12F2CF3B94881DA2F4B8E7922C58569176625EB5
-      asset2_out: null
-      dex: dedust_v2
-      dex_jetton_wallet_1: 0:50DC3BABDE6F3D2A91CDC874BA110E2F1D6BDDF781AEB9E2149D7160ACC05026
-      dex_jetton_wallet_2: null
-      dex_wallet_1: 0:4E50A518CFFDE030B1E124B2DA8E80EA53BFA3115E1CED345913B100AD8ACAB1
-      dex_wallet_2: null
+    data:
       is_refund: false
-      lp_tokens_burnt: null
-      user_jetton_wallet_1: 0:F7FCCC06277D6540E32DB948817416F990C73C4FAAB693841055203E12F8AA62
-      user_jetton_wallet_2: null
+      legs:
+        - amount: 80009525306
+          asset: 0:105E5589BC66DB15F13C177A12F2CF3B94881DA2F4B8E7922C58569176625EB5
+          dex_jetton_wallet: 0:50DC3BABDE6F3D2A91CDC874BA110E2F1D6BDDF781AEB9E2149D7160ACC05026
+          dex_wallet: 0:4E50A518CFFDE030B1E124B2DA8E80EA53BFA3115E1CED345913B100AD8ACAB1
+          user_jetton_wallet: 0:F7FCCC06277D6540E32DB948817416F990C73C4FAAB693841055203E12F8AA62
+      protocol: dedust_v2
     tx_hashes:
       - +MPbTf9kayd+FDl44xlTw72mn38em9CcrnFCr7Cwwaw=
       - 4i76tpq/x8MmmPIwv84usk0l9e1pRcCKR3ydyQfzZuU=
@@ -183,12 +178,9 @@ actions:
     amount: 80009525306
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 12277259934268799388
       response_destination: 0:04B548C78D18E71E47B4276CC00FAADD67C7EE0DB8A9A315EF25BD658D545BEA
     tx_hashes:

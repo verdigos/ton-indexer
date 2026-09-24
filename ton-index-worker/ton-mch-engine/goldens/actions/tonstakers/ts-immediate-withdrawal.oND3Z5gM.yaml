@@ -17,10 +17,9 @@ actions:
     amount: 477298994
     value: null
     opcode: null
-    staking_data:
-      provider: liquid_staking
+    data:
+      protocol: liquid_staking
       tokens_burnt: 499933340
-      ts_nft: null
     tx_hashes:
       - +FFSJfobbwKHkj0Cz2W3St4R+F0Rs4IWKrGnHtW2Xu0=
       - /6tynZnn+8X2mn4MFgMRmGDWZfbMLxGyjXOoY/R0oi4=

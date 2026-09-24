@@ -128,10 +128,11 @@ actions:
     asset2: null
     asset2_secondary: null
     amount: 425489053700
-    value: 1748619032
+    value: null
     opcode: null
-    extra:
+    data:
       pubkey: bca58e7898026854a2f14ef0beffbf7e9fa7efa2f38deae30c1ac729247c6d3b
+      timestamp: 1748619032
     tx_hashes:
       - +kL9FWY2LiLTKFG0Mjrr9FSrBLksMVahh7QWpHjjfHo=
       - Q+J4kWhZ2vVpyVCBIWUHKTITfQ2STOFPxMD/0g7VfRY=
@@ -162,9 +163,8 @@ actions:
     amount: null
     value: 946466519
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - jpQF3EoXXnlOjpDb5PyzlO2xOAqPOLUvnnrYY+OKRe4=
       - uGdlpPrDOs0tW2CuzxlhXLXQWqay1iMl3c+ltnb2T5k=

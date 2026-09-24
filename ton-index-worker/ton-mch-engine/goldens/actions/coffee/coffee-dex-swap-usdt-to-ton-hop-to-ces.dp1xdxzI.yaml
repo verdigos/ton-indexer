@@ -43,8 +43,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: coffee
+    data:
       dex_incoming_transfer:
         amount: 10000000
         asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
@@ -59,16 +58,14 @@ actions:
         destination_jetton_wallet: 0:8EA33875123015261EF940102531A1E0B760216E9C0B295A399524475A3D1082
         source: 0:E9D6A57EAB067C173862FB893BBD1CF706D656BF7392F1A313B9149AB9963117
         source_jetton_wallet: 0:A2FD1B5E81548267DBABD109E38D31DA9FDC9193A26689C429454E16C25BBBAA
-      min_out_amount: null
       peer_swaps:
         - amount_in: 10000000
           amount_out: 3110612273
           asset_in: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
-          asset_out: null
         - amount_in: 3110612273
           amount_out: 13876673279
-          asset_in: null
           asset_out: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
+      protocol: coffee
       sender: 0:E39C30B5790D4AB456435CD2E7DA12C7CDB2043D020DD6C400CE951F78204B5A
     tx_hashes:
       - /xfc9kL0r/24SK8030P/U0kNicgUSG4ArIcHxiemAX0=

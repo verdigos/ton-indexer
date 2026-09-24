@@ -133,10 +133,9 @@ actions:
     amount: 229066954328
     value: null
     opcode: null
-    evaa_liquidate_data:
+    data:
       asset_id: "0xe08b1f092e7240fb61bf8249d71aa635102acdd50122138105c35dd2896b5331"
       debt_amount: 1960140
-      fail_reason: null
     tx_hashes:
       - +fU0fJsYhlehvQFm3S6FTwdQgXFOy/x8SOgKJRJrnm0=
       - 6fffY+FAlmf5AsPXj6f/+LUbRizkMPvLlzyphZ/EFWA=
@@ -176,12 +175,11 @@ actions:
     amount: 229066954328
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
+    data:
+      comment_encrypted: false
       custom_payload: cellhash:95D8582A58825BFC038BB0C362D9870EF81979540F1A4EE9460C555CB3669B35
       forward_amount: 619064202
       forward_payload: cellhash:95D8582A58825BFC038BB0C362D9870EF81979540F1A4EE9460C555CB3669B35
-      is_encrypted_comment: false
       query_id: 4996252585205519665
       response_destination: 0:A2EE5FA098BFCC20224B776FD566BD897F266ACC54C09DB805229DC29826699B
     tx_hashes:
@@ -218,9 +216,9 @@ actions:
     amount: null
     value: 28505267
     opcode: null
-    ton_transfer_data:
-      content: EVAA liquidation.
-      encrypted: false
+    data:
+      comment: EVAA liquidation.
+      comment_encrypted: false
     tx_hashes:
       - YlaoNuRIHcZ/4UaICUYE+ewx7W4VbUqOGCl05Qs6MLU=
       - htYVEkTJiXxZwfjKyqsf23yVmMr90CwKsnEGcnP7tTA=

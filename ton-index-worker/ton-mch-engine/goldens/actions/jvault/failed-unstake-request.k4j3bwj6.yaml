@@ -74,7 +74,9 @@ actions:
     asset2_secondary: null
     amount: 52940708489332
     value: null
-    opcode: 0x0000002e
+    opcode: null
+    data:
+      exit_code: 46
     tx_hashes:
       - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
       - 2O1uY3l4qOwa4F0R+umaoeU/bns8MMRq3JTa3ouHSi4=

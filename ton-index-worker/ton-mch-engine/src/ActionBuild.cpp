@@ -80,7 +80,28 @@ std::int64_t node_utime(const EventNode *n) {
   }
   return n->tx != nullptr ? n->tx->now : 0;
 }
-Value mkdict(Value::Fields f) { return Value::make_dict(std::move(f)); }
+bool payload_omitted(const Value &v) {
+  return v.t == VType::Null || (v.t == VType::Amount && v.num.is_null());
+}
+
+Value mkdict(Value::Fields f) {
+  std::erase_if(f, [](const auto &field) { return payload_omitted(field.second); });
+  return Value::make_dict(std::move(f));
+}
+
+void append_fields(Value::Fields &out, const Value &value) {
+  if (!value.fields) return;
+  out.insert(out.end(), value.fields->begin(), value.fields->end());
+}
+
+void append_leg(std::vector<Value> &legs, Value::Fields fields) {
+  Value leg = mkdict(std::move(fields));
+  if (leg.fields && !leg.fields->empty()) legs.push_back(std::move(leg));
+}
+
+void append_legs(Value::Fields &fields, std::vector<Value> legs) {
+  if (!legs.empty()) fields.emplace_back("legs", Value::make_list(std::move(legs)));
+}
 
 // Extra participant the generic source/destination assembly cannot derive.
 // build_action seeds its account list from here, then dedups, so a duplicate
@@ -104,8 +125,8 @@ void fill_jetton_transfer(const Value &d, Action &a) {
   f.emplace_back("custom_payload", dg(d, "custom_payload"));
   f.emplace_back("forward_payload", dg(d, "forward_payload"));
   f.emplace_back("comment", comment_value(d));
-  f.emplace_back("is_encrypted_comment", dg(d, "encrypted_comment"));
-  a.jetton_transfer_data = mkdict(std::move(f));
+  f.emplace_back("comment_encrypted", dg(d, "encrypted_comment"));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_jetton_burn(const Value &d, Action &a) {
@@ -169,7 +190,7 @@ void fill_jetton_swap(const Value &d, Action &a) {
   Value min_out = Value::null();
   if (has(d, "min_out_amount")) min_out = av_amount(dg(d, "min_out_amount"));
   Value::Fields f;
-  f.emplace_back("dex", dex);
+  f.emplace_back("protocol", dex);
   f.emplace_back("sender", av_addr(dg(d, "sender")));
   f.emplace_back("dex_incoming_transfer", in_conv);
   f.emplace_back("dex_outgoing_transfer", out_conv);
@@ -182,7 +203,7 @@ void fill_jetton_swap(const Value &d, Action &a) {
     }
     f.emplace_back("peer_swaps", Value::make_list(std::move(conv)));
   }
-  a.jetton_swap_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_nft_transfer(const Value &d, Action &a) {
@@ -199,7 +220,7 @@ void fill_nft_transfer(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("is_purchase", dg(d, "is_purchase"));
   f.emplace_back("price", is_purchase ? av_amount(dg(d, "price")) : Value::null());
-  f.emplace_back("nft_item_index", dg(nft, "index"));
+  f.emplace_back("nft_index", dg(nft, "index"));
   Value fwd = dg(d, "forward_amount");
   f.emplace_back("forward_amount", av_amount(fwd));
   f.emplace_back("custom_payload", dg(d, "custom_payload"));
@@ -213,11 +234,9 @@ void fill_nft_transfer(const Value &d, Action &a) {
   f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
   f.emplace_back("payout_comment", dg(d, "payout_comment"));
   f.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
-  a.nft_transfer_data = mkdict(std::move(f));
-  Value::Fields l;
-  l.emplace_back("marketplace_fee_address", av_addr(dg(d, "payout_address")));
-  l.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
-  a.nft_listing_data = mkdict(std::move(l));
+  f.emplace_back("marketplace_fee_address", av_addr(dg(d, "payout_address")));
+  f.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_dedust_deposit(const Value &d, Action &a) {
@@ -241,20 +260,22 @@ void fill_dedust_deposit(const Value &d, Action &a) {
     }
   }
   Value::Fields f;
-  f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
-  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
-  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
-  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_jetton_wallet_1")));
-  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "user_jetton_wallet_2")));
-  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
-  f.emplace_back("target_asset_1", av_addr(dg(d, "target_asset_1")));
-  f.emplace_back("target_amount_1", av_amount(dg(d, "target_amount_1")));
-  f.emplace_back("target_asset_2", av_addr(dg(d, "target_asset_2")));
-  f.emplace_back("target_amount_2", av_amount(dg(d, "target_amount_2")));
+  f.emplace_back("protocol", dg(d, "dex"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"asset", av_addr(dg(d, "asset_1"))},
+                         {"amount", av_amount(dg(d, "amount_1"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "user_jetton_wallet_1"))},
+                         {"target_asset", av_addr(dg(d, "target_asset_1"))},
+                         {"target_amount", av_amount(dg(d, "target_amount_1"))}});
+  append_leg(legs, {{"asset", av_addr(dg(d, "asset_2"))},
+                         {"amount", av_amount(dg(d, "amount_2"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "user_jetton_wallet_2"))},
+                         {"target_asset", av_addr(dg(d, "target_asset_2"))},
+                         {"target_amount", av_amount(dg(d, "target_amount_2"))}});
+  append_legs(f, std::move(legs));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
   f.emplace_back("vault_excesses", Value::make_list(std::move(excesses)));
-  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_dedust_deposit_partial(const Value &d, Action &a) {
@@ -262,65 +283,63 @@ void fill_dedust_deposit_partial(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination_secondary = av_addr(dg(d, "deposit_contract"));
   Value::Fields f;
-  f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
-  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
-  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
-  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_jetton_wallet_1")));
-  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "user_jetton_wallet_2")));
-  f.emplace_back("lp_tokens_minted", Value::null());
-  f.emplace_back("target_asset_1", av_addr(dg(d, "target_asset_1")));
-  f.emplace_back("target_amount_1", av_amount(dg(d, "target_amount_1")));
-  f.emplace_back("target_asset_2", av_addr(dg(d, "target_asset_2")));
-  f.emplace_back("target_amount_2", av_amount(dg(d, "target_amount_2")));
-  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+  f.emplace_back("protocol", dg(d, "dex"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"asset", av_addr(dg(d, "asset_1"))},
+                         {"amount", av_amount(dg(d, "amount_1"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "user_jetton_wallet_1"))},
+                         {"target_asset", av_addr(dg(d, "target_asset_1"))},
+                         {"target_amount", av_amount(dg(d, "target_amount_1"))}});
+  append_leg(legs, {{"asset", av_addr(dg(d, "asset_2"))},
+                         {"amount", av_amount(dg(d, "amount_2"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "user_jetton_wallet_2"))},
+                         {"target_asset", av_addr(dg(d, "target_asset_2"))},
+                         {"target_amount", av_amount(dg(d, "target_amount_2"))}});
+  append_legs(f, std::move(legs));
+  a.data = mkdict(std::move(f));
 }
 
-// DeDust CPMM V2 LP trading-fees claim. Reuses the dex_withdraw_liquidity_data
-// composite, both slots populated; leaves a.type at the block's btype.
+// DeDust CPMM V2 LP trading-fees claim, both legs populated; leaves a.type at
+// the block's btype.
 void fill_dedust_v2_claim_fees(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "pool"));
   a.destination_secondary = av_addr(dg(d, "position"));
   Value::Fields f;
-  f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("amount1", av_amount(dg(d, "amount_x")));
-  f.emplace_back("amount2", av_amount(dg(d, "amount_y")));
-  f.emplace_back("asset1_out", av_addr(dg(d, "asset_x")));
-  f.emplace_back("asset2_out", av_addr(dg(d, "asset_y")));
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_wallet_x")));
-  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "user_wallet_y")));
-  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_x")));
-  f.emplace_back("dex_wallet_2", av_addr(dg(d, "dex_wallet_y")));
-  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_x")));
-  f.emplace_back("dex_jetton_wallet_2", av_addr(dg(d, "dex_jetton_wallet_y")));
+  f.emplace_back("protocol", dg(d, "dex"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount_x"))},
+                         {"asset", av_addr(dg(d, "asset_x"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "user_wallet_x"))},
+                         {"dex_wallet", av_addr(dg(d, "dex_wallet_x"))},
+                         {"dex_jetton_wallet", av_addr(dg(d, "dex_jetton_wallet_x"))}});
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount_y"))},
+                         {"asset", av_addr(dg(d, "asset_y"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "user_wallet_y"))},
+                         {"dex_wallet", av_addr(dg(d, "dex_wallet_y"))},
+                         {"dex_jetton_wallet", av_addr(dg(d, "dex_jetton_wallet_y"))}});
+  append_legs(f, std::move(legs));
   f.emplace_back("is_refund", Value::make_bool(false));
-  f.emplace_back("lp_tokens_burnt", Value::null());
-  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
-// DeDust CPMM V2 reward claim. Reuses the dex_withdraw_liquidity_data composite;
-// reward_index is carried in the block data but is NOT serialized.
+// DeDust CPMM V2 reward claim. reward_index is carried in the block data but
+// is not serialized.
 void fill_dedust_v2_claim_reward(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "pool"));
   a.destination_secondary = av_addr(dg(d, "position"));
   Value::Fields f;
-  f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("amount1", av_amount(dg(d, "amount")));
-  f.emplace_back("amount2", Value::null());
-  f.emplace_back("asset1_out", av_addr(dg(d, "asset")));
-  f.emplace_back("asset2_out", Value::null());
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_wallet")));
-  f.emplace_back("user_jetton_wallet_2", Value::null());
-  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet")));
-  f.emplace_back("dex_wallet_2", Value::null());
-  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet")));
-  f.emplace_back("dex_jetton_wallet_2", Value::null());
+  f.emplace_back("protocol", dg(d, "dex"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount"))},
+                         {"asset", av_addr(dg(d, "asset"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "user_wallet"))},
+                         {"dex_wallet", av_addr(dg(d, "dex_wallet"))},
+                         {"dex_jetton_wallet", av_addr(dg(d, "dex_jetton_wallet"))}});
+  append_legs(f, std::move(legs));
   f.emplace_back("is_refund", Value::make_bool(false));
-  f.emplace_back("lp_tokens_burnt", Value::null());
-  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 // Tonco LP shares live in position NFTs rather than LP jettons. Withdrawals
@@ -332,24 +351,26 @@ void fill_tonco_withdraw(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "pool"));
   a.asset = Value::null();
   Value::Fields f;
-  f.emplace_back("dex", Value::make_str("tonco"));
-  f.emplace_back("amount1", av_amount(dg(d, "amount1_out")));
-  f.emplace_back("amount2", av_amount(dg(d, "amount2_out")));
-  f.emplace_back("asset1_out", av_addr(dg(d, "asset1_out")));
-  f.emplace_back("asset2_out", av_addr(dg(d, "asset2_out")));
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "wallet1")));
-  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "wallet2")));
-  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_1")));
-  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_1")));
-  f.emplace_back("dex_wallet_2", av_addr(dg(d, "dex_wallet_2")));
-  f.emplace_back("dex_jetton_wallet_2", av_addr(dg(d, "dex_jetton_wallet_2")));
+  f.emplace_back("protocol", Value::make_str("tonco"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount1_out"))},
+                         {"asset", av_addr(dg(d, "asset1_out"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "wallet1"))},
+                         {"dex_jetton_wallet", av_addr(dg(d, "dex_jetton_wallet_1"))},
+                         {"dex_wallet", av_addr(dg(d, "dex_wallet_1"))}});
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount2_out"))},
+                         {"asset", av_addr(dg(d, "asset2_out"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "wallet2"))},
+                         {"dex_wallet", av_addr(dg(d, "dex_wallet_2"))},
+                         {"dex_jetton_wallet", av_addr(dg(d, "dex_jetton_wallet_2"))}});
+  append_legs(f, std::move(legs));
   f.emplace_back("is_refund", Value::make_bool(false));
-  f.emplace_back("lp_tokens_burnt", av_amount(dg(d, "liquidity_burnt")));
-  f.emplace_back("burned_nft_index", dg(d, "burned_nft_index"));
-  f.emplace_back("burned_nft_address", av_addr(dg(d, "burned_nft_address")));
+  f.emplace_back("tokens_burnt", av_amount(dg(d, "liquidity_burnt")));
+  f.emplace_back("nft_index", dg(d, "burned_nft_index"));
+  f.emplace_back("nft_address", av_addr(dg(d, "burned_nft_address")));
   f.emplace_back("tick_lower", dg(d, "tick_lower"));
   f.emplace_back("tick_upper", dg(d, "tick_upper"));
-  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_tonco_deposit(const Value &d, Action &a) {
@@ -391,24 +412,27 @@ void fill_tonco_deposit(const Value &d, Action &a) {
     }
   }
   Value::Fields f;
-  f.emplace_back("dex", Value::make_str("tonco"));
-  f.emplace_back("amount1", av_amount(actual_amount_1));
-  f.emplace_back("amount2", av_amount(actual_amount_2));
-  f.emplace_back("asset1", av_addr(actual_asset_1));
-  f.emplace_back("asset2", av_addr(actual_asset_2));
-  f.emplace_back("user_jetton_wallet_1", av_addr(sw1));
-  f.emplace_back("user_jetton_wallet_2", av_addr(sw2));
-  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  f.emplace_back("protocol", Value::make_str("tonco"));
+  // Preserve Tonco's old compressed amount/asset slots and uncompressed wallet/target slots.
+  std::vector<Value> legs;
+  append_leg(legs, {{"amount", av_amount(actual_amount_1)},
+                         {"asset", av_addr(actual_asset_1)},
+                         {"user_jetton_wallet", av_addr(sw1)},
+                         {"target_amount", av_amount(dg(d, "position_amount_1"))},
+                         {"target_asset", av_addr(dg(d, "asset_1"))}});
+  append_leg(legs, {{"amount", av_amount(actual_amount_2)},
+                         {"asset", av_addr(actual_asset_2)},
+                         {"user_jetton_wallet", av_addr(sw2)},
+                         {"target_amount", av_amount(dg(d, "position_amount_2"))},
+                         {"target_asset", av_addr(dg(d, "asset_2"))}});
+  append_legs(f, std::move(legs));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
   f.emplace_back("tick_lower", dg(d, "tick_lower"));
   f.emplace_back("tick_upper", dg(d, "tick_upper"));
   f.emplace_back("nft_index", dg(d, "nft_index"));
   f.emplace_back("nft_address", av_addr(dg(d, "nft_address")));
-  f.emplace_back("target_amount_1", av_amount(dg(d, "position_amount_1")));
-  f.emplace_back("target_amount_2", av_amount(dg(d, "position_amount_2")));
-  f.emplace_back("target_asset_1", av_addr(dg(d, "asset_1")));
-  f.emplace_back("target_asset_2", av_addr(dg(d, "asset_2")));
   f.emplace_back("vault_excesses", Value::make_list(std::move(excesses)));
-  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 // `amount` is a raw Int here (not an Amount), like the withdraw twin.
@@ -430,7 +454,7 @@ void fill_evaa_supply(const Value &d, Action &a, bool block_failed) {
   f.emplace_back("recipient_jetton_wallet", av_addr(rjw));
   Value mjw = dg(d, "master_jetton_wallet");
   f.emplace_back("master_jetton_wallet", av_addr(mjw));
-  a.evaa_supply_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_evaa_withdraw(const Value &d, Action &a, bool block_failed) {
@@ -451,7 +475,7 @@ void fill_evaa_withdraw(const Value &d, Action &a, bool block_failed) {
   f.emplace_back("fail_reason", dg(d, "fail_reason"));
   f.emplace_back("master", av_addr(dg(d, "master")));
   f.emplace_back("asset_id", av_hex(dg(d, "asset_id")));
-  a.evaa_withdraw_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 }  // namespace
@@ -467,7 +491,7 @@ void fill_evaa_liquidate(const Value &d, Action &a) {
   f.emplace_back("fail_reason", dg(d, "fail_reason"));
   f.emplace_back("debt_amount", dg(d, "debt_amount"));
   f.emplace_back("asset_id", av_hex(dg(d, "collateral_asset_id")));
-  a.evaa_liquidate_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 namespace {
@@ -481,7 +505,7 @@ void fill_jvault_stake(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("period", dg(d, "period"));
   f.emplace_back("stake_wallet", av_addr(dg(d, "stake_wallet")));
-  a.jvault_stake_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_jvault_unstake(const Value &d, Action &a) {
@@ -489,9 +513,9 @@ void fill_jvault_unstake(const Value &d, Action &a) {
   a.source_secondary = av_addr(dg(d, "stake_wallet"));
   a.destination = av_addr(dg(d, "staking_pool"));
   a.amount = av_amount(dg(d, "unstaked_amount"));
-  a.opcode = dg(d, "exit_code");
   a.asset = av_addr(dg(d, "asset"));
   a.asset2 = av_addr(dg(d, "jvault_asset"));
+  a.data = mkdict({{"exit_code", dg(d, "exit_code")}});
 }
 
 void fill_jvault_unstake_request(const Value &d, Action &a) {
@@ -501,22 +525,23 @@ void fill_jvault_unstake_request(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "requested_amount"));
   a.asset = av_addr(dg(d, "asset"));
   a.asset2 = av_addr(dg(d, "jvault_asset"));
-  a.opcode = dg(d, "exit_code");
+  a.data = mkdict({{"exit_code", dg(d, "exit_code")}});
 }
 
 void fill_jvault_claim(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.source_secondary = av_addr(dg(d, "stake_wallet"));
   a.destination = av_addr(dg(d, "staking_pool"));
-  std::vector<Value> jettons;
-  Value cj = dg(d, "claimed_jettons");
-  if (cj.items) {
-    for (const Value &j : *cj.items) jettons.push_back(av_addr(j));
+  std::vector<Value> rewards;
+  const Value jettons = dg(d, "claimed_jettons");
+  const Value amounts = dg(d, "claimed_amounts");
+  if (jettons.items && amounts.items && jettons.items->size() == amounts.items->size()) {
+    for (std::size_t i = 0; i < jettons.items->size(); ++i) {
+      rewards.push_back(mkdict({{"asset", av_addr((*jettons.items)[i])},
+                                {"amount", av_amount((*amounts.items)[i])}}));
+    }
   }
-  Value::Fields f;
-  f.emplace_back("claimed_jettons", Value::make_list(std::move(jettons)));
-  f.emplace_back("claimed_amounts", dg(d, "claimed_amounts"));
-  a.jvault_claim_data = mkdict(std::move(f));
+  a.data = mkdict({{"claimed_rewards", Value::make_list(std::move(rewards))}});
 }
 
 void fill_ethena_deposit(const Value &d, Action &a) {
@@ -528,16 +553,18 @@ void fill_ethena_deposit(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "asset"));
   a.asset2 = av_addr(dg(d, "source_asset"));
   Value::Fields f;
-  f.emplace_back("provider", Value::make_str("ethena"));
+  f.emplace_back("protocol", Value::make_str("ethena"));
   f.emplace_back("tokens_minted", av_amount(dg(d, "tokens_minted")));
-  a.staking_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_layerzero_receive(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "oapp"));
   a.destination_secondary = av_addr(dg(d, "channel"));
-  a.layerzero_packet_data = dg(d, "packet_data");
+  Value::Fields f;
+  append_fields(f, dg(d, "packet_data"));
+  a.data = mkdict(std::move(f));
 }
 
 // Populate the LayerZero send composites shared by native and token sends.
@@ -552,8 +579,8 @@ void fill_layerzero_send_fields(const Value &d, Action &a) {
   f.emplace_back("zro_fee", dg(d, "zro_fee"));
   f.emplace_back("endpoint", av_addr(dg(d, "endpoint")));
   f.emplace_back("channel", av_addr(dg(d, "channel")));
-  a.layerzero_send_data = mkdict(std::move(f));
-  a.layerzero_packet_data = dg(d, "packet_data");
+  append_fields(f, dg(d, "packet_data"));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_layerzero_send(const Value &d, Action &a) {
@@ -578,9 +605,11 @@ void fill_layerzero_commit_packet(const Value &d, Action &a) {
   a.source_secondary = av_addr(dg(d, "endpoint"));
   a.destination = av_addr(dg(d, "uln"));
   a.destination_secondary = av_addr(dg(d, "uln_connection"));
-  a.asset = av_addr(dg(d, "channel"));
-  a.asset_secondary = av_addr(dg(d, "msglib_connection"));
-  a.layerzero_packet_data = dg(d, "packet_data");
+  Value::Fields f;
+  append_fields(f, dg(d, "packet_data"));
+  f.emplace_back("channel", av_addr(dg(d, "channel")));
+  f.emplace_back("msglib_connection", av_addr(dg(d, "msglib_connection")));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_layerzero_dvn_verify(const Value &d, Action &a) {
@@ -592,7 +621,7 @@ void fill_layerzero_dvn_verify(const Value &d, Action &a) {
   f.emplace_back("proxy", av_addr(dg(d, "proxy")));
   f.emplace_back("uln", av_addr(dg(d, "uln")));
   f.emplace_back("uln_connection", av_addr(dg(d, "uln_connection")));
-  a.layerzero_dvn_verify_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_coffee_create_vault(const Value &d, Action &a) {
@@ -611,9 +640,9 @@ void fill_coffee_create_pool_creator(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "deposit_recipient"));
   a.destination_secondary = av_addr(dg(d, "pool_creator_contract"));
   a.asset = av_addr(dg(d, "provided_asset"));
-  a.asset2 = av_addr(dg(d, "pool_first"));
-  a.asset2_secondary = av_addr(dg(d, "pool_second"));
   a.amount = av_amount(dg(d, "amount"));
+  a.data = mkdict({{"pool_first", av_addr(dg(d, "pool_first"))},
+                   {"pool_second", av_addr(dg(d, "pool_second"))}});
 }
 
 void fill_coffee_create_pool(const Value &d, Action &a) {
@@ -625,13 +654,15 @@ void fill_coffee_create_pool(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "pool"));
   a.destination_secondary = av_addr(dg(d, "pool_creator_contract"));
   Value::Fields f;
-  f.emplace_back("amount_1", av_amount(dg(d, "amount_1")));
-  f.emplace_back("amount_2", av_amount(dg(d, "amount_2")));
-  f.emplace_back("initiator_1", av_addr(dg(d, "initiator_1")));
-  f.emplace_back("initiator_2", av_addr(dg(d, "initiator_2")));
+  std::vector<Value> legs;
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount_1"))},
+                    {"initiator", av_addr(dg(d, "initiator_1"))}});
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount_2"))},
+                    {"initiator", av_addr(dg(d, "initiator_2"))}});
+  append_legs(f, std::move(legs));
   f.emplace_back("provided_asset", av_addr(dg(d, "provided_asset")));
-  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
-  a.coffee_create_pool_data = mkdict(std::move(f));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_coffee_mev_protect_hold_funds(const Value &d, Action &a) {
@@ -656,11 +687,11 @@ void fill_coffee_staking_deposit(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "asset"));
   a.amount = av_amount(dg(d, "value"));
   Value::Fields f;
-  f.emplace_back("minted_item_address", av_addr(dg(d, "minted_item_address")));
+  f.emplace_back("nft_address", av_addr(dg(d, "minted_item_address")));
   // Raw passthrough: the index comes off the nft-item interface record, where
   // it can be a float.
-  f.emplace_back("minted_item_index", dg(d, "minted_item_index"));
-  a.coffee_staking_deposit_data = mkdict(std::move(f));
+  f.emplace_back("nft_index", dg(d, "minted_item_index"));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_coffee_staking_withdraw(const Value &d, Action &a) {
@@ -674,7 +705,7 @@ void fill_coffee_staking_withdraw(const Value &d, Action &a) {
   f.emplace_back("nft_address", av_addr(dg(d, "nft_address")));
   f.emplace_back("nft_index", dg(d, "nft_index"));
   f.emplace_back("points", dg(d, "points"));
-  a.coffee_staking_withdraw_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_coffee_staking_claim_rewards(const Value &d, Action &a) {
@@ -698,7 +729,7 @@ void fill_vesting_send_message(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("message_boc", dg(d, "message_boc_str"));
-  a.vesting_send_message_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 // `accounts_added` is a LIST of addresses (the whitelist's unbounded ref chain),
@@ -714,7 +745,7 @@ void fill_vesting_add_whitelist(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("accounts_added", Value::make_list(std::move(added)));
-  a.vesting_add_whitelist_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_multisig_create_order(const Value &d, Action &a) {
@@ -726,10 +757,10 @@ void fill_multisig_create_order(const Value &d, Action &a) {
   f.emplace_back("order_seqno", dg(d, "order_seqno"));
   f.emplace_back("is_created_by_signer", dg(d, "is_created_by_signer"));
   f.emplace_back("is_signed_by_creator", dg(d, "creator_approved"));
-  f.emplace_back("creator_index", dg(d, "creator_index"));
+  f.emplace_back("signer_index", dg(d, "creator_index"));
   f.emplace_back("expiration_date", dg(d, "expiration_date"));
   f.emplace_back("order_boc", dg(d, "order_boc_str"));
-  a.multisig_create_order_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
   Value sg = dg(d, "signers");
   if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
 }
@@ -742,7 +773,7 @@ void fill_multisig_approve(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("signer_index", dg(d, "signer_index"));
   f.emplace_back("exit_code", dg(d, "exit_code"));
-  a.multisig_approve_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
   Value sg = dg(d, "signers");
   if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
 }
@@ -759,7 +790,7 @@ void fill_multisig_execute(const Value &d, Action &a) {
   f.emplace_back("approvals_num", dg(d, "approvals_num"));
   f.emplace_back("signers_hash", dg(d, "signers_hash_str"));
   f.emplace_back("order_boc", dg(d, "order_boc_str"));
-  a.multisig_execute_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
   Value sg = dg(d, "signers");
   if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
 }
@@ -769,22 +800,24 @@ void fill_tonco_deploy_pool(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "router"));
   a.destination_secondary = av_addr(dg(d, "pool"));
   Value::Fields f;
-  f.emplace_back("jetton0_router_wallet", av_addr(dg(d, "jetton0_router_wallet")));
-  f.emplace_back("jetton1_router_wallet", av_addr(dg(d, "jetton1_router_wallet")));
-  f.emplace_back("jetton0_minter", av_addr(dg(d, "jetton0_minter")));
-  f.emplace_back("jetton1_minter", av_addr(dg(d, "jetton1_minter")));
+  std::vector<Value> legs;
+  append_leg(legs, {{"dex_jetton_wallet", av_addr(dg(d, "jetton0_router_wallet"))},
+                    {"asset", av_addr(dg(d, "jetton0_minter"))}});
+  append_leg(legs, {{"dex_jetton_wallet", av_addr(dg(d, "jetton1_router_wallet"))},
+                    {"asset", av_addr(dg(d, "jetton1_minter"))}});
+  append_legs(f, std::move(legs));
   f.emplace_back("tick_spacing", dg(d, "tick_spacing"));
   f.emplace_back("initial_price_x96", dg(d, "initial_price_x96"));
   f.emplace_back("protocol_fee", dg(d, "protocol_fee"));
   f.emplace_back("lp_fee_base", dg(d, "lp_fee_base"));
   f.emplace_back("lp_fee_current", dg(d, "lp_fee_current"));
   f.emplace_back("pool_active", dg(d, "pool_active"));
-  a.tonco_deploy_pool_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 // Rewrites the row type like the deposit above: the ethena block btype is
 // ethena_withdrawal_request, the ACTION type is the generic
-// stake_withdrawal_request with a provider-tagged staking_data.
+// stake_withdrawal_request with a protocol-tagged payload.
 void fill_ethena_withdrawal_request(const Value &d, Action &a) {
   a.type = "stake_withdrawal_request";
   a.source = av_addr(dg(d, "source"));
@@ -793,9 +826,9 @@ void fill_ethena_withdrawal_request(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "asset"));
   a.amount = av_amount(dg(d, "amount"));
   Value::Fields f;
-  f.emplace_back("provider", Value::make_str("ethena"));
+  f.emplace_back("protocol", Value::make_str("ethena"));
   f.emplace_back("tokens_minted", av_amount(dg(d, "ts_usde_amount")));
-  a.staking_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_worker_payout(const Value &d, Action &a) {
@@ -809,7 +842,7 @@ void fill_cocoon_worker_payout(const Value &d, Action &a) {
   f.emplace_back("new_tokens", dg(d, "new_tokens"));
   f.emplace_back("worker_state", dg(d, "worker_state"));
   f.emplace_back("worker_tokens", dg(d, "worker_tokens"));
-  a.cocoon_worker_payout_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_proxy_payout(const Value &d, Action &a) {
@@ -818,7 +851,7 @@ void fill_cocoon_proxy_payout(const Value &d, Action &a) {
   a.destination_secondary = av_addr(dg(d, "excesses_recipient"));
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
-  a.cocoon_proxy_payout_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 // `amount = 0` is a LITERAL ("no actual transfer"), not a value read off the
@@ -831,7 +864,7 @@ void fill_cocoon_proxy_charge(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("new_tokens_used", dg(d, "new_tokens_used"));
   f.emplace_back("expected_address", dg(d, "expected_address"));
-  a.cocoon_proxy_charge_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_client_top_up(const Value &d, Action &a) {
@@ -841,14 +874,14 @@ void fill_cocoon_client_top_up(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "top_up_amount"));
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
-  a.cocoon_client_top_up_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_register_proxy(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "root_contract"));
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
-  a.cocoon_register_proxy_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_unregister_proxy(const Value &d, Action &a) {
@@ -856,7 +889,7 @@ void fill_cocoon_unregister_proxy(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("seqno", dg(d, "seqno"));
-  a.cocoon_unregister_proxy_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_client_register(const Value &d, Action &a) {
@@ -865,7 +898,7 @@ void fill_cocoon_client_register(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("nonce", dg(d, "nonce"));
-  a.cocoon_client_register_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 // Composite stores the uint256 as lowercase hex without "0x"; the block data
@@ -876,7 +909,7 @@ void fill_cocoon_client_change_secret_hash(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("new_secret_hash", av_hex_bare(dg(d, "new_secret_hash")));
-  a.cocoon_client_change_secret_hash_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_client_request_refund(const Value &d, Action &a) {
@@ -885,7 +918,7 @@ void fill_cocoon_client_request_refund(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("via_wallet", dg(d, "via_wallet"));
-  a.cocoon_client_request_refund_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_grant_refund(const Value &d, Action &a) {
@@ -897,19 +930,16 @@ void fill_cocoon_grant_refund(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("new_tokens_used", dg(d, "new_tokens_used"));
   f.emplace_back("expected_address", dg(d, "expected_address"));
-  a.cocoon_grant_refund_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
-// `new_stake` / `withdraw_amount` are each written twice: once as the
-// row-level `amount`, once inside the composite.
 void fill_cocoon_client_increase_stake(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "owner"));
   a.destination = av_addr(dg(d, "client_contract"));
   a.amount = av_amount(dg(d, "new_stake"));
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
-  f.emplace_back("new_stake", av_amount(dg(d, "new_stake")));
-  a.cocoon_client_increase_stake_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_cocoon_client_withdraw(const Value &d, Action &a) {
@@ -918,8 +948,7 @@ void fill_cocoon_client_withdraw(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "withdraw_amount"));
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
-  f.emplace_back("withdraw_amount", av_amount(dg(d, "withdraw_amount")));
-  a.cocoon_client_withdraw_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_tgbtc_mint(const Value &d, Action &a) {
@@ -930,9 +959,7 @@ void fill_tgbtc_mint(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "recipient"));
   a.amount = av_amount(dg(d, "amount"));
   a.asset = av_addr(dg(d, "asset"));
-  Value::Fields ex;
-  ex.emplace_back("btc_txid", dg(d, "bitcoin_txid"));
-  a.extra = mkdict(std::move(ex));
+  a.data = mkdict({{"btc_txid", dg(d, "bitcoin_txid")}});
   a.source_secondary = av_addr(dg(d, "teleport_contract"));
   a.destination_secondary = av_addr(dg(d, "recipient_wallet"));
 }
@@ -950,31 +977,25 @@ void fill_tgbtc_burn(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "asset"));
 }
 
-// `amount` is a raw int (av_amount is the Int passthrough). `value` carries
-// the DKG timestamp and `extra.pubkey` the raw hex; neither is a TON address.
+// `amount` is a raw int (av_amount is the Int passthrough).
 void fill_tgbtc_new_key(const Value &d, Action &a) {
   a.type = "tgbtc_new_key";
   Value cr = dg(d, "crippled");
   if (cr.t == VType::Bool && cr.boolean) a.type += "_fallback";
   a.source = av_addr(dg(d, "teleport_contract"));
-  Value::Fields ex;
-  ex.emplace_back("pubkey", dg(d, "pubkey"));
-  a.extra = mkdict(std::move(ex));
+  a.data = mkdict({{"pubkey", dg(d, "pubkey")}, {"timestamp", dg(d, "timestamp")}});
   a.destination = av_addr(dg(d, "coordinator_contract"));
   a.destination_secondary = av_addr(dg(d, "pegout_address"));
   a.amount = av_amount(dg(d, "amount"));
-  a.value = dg(d, "timestamp");
 }
 
 // Type is hardcoded `_fallback` (no non-fallback producer, so no `crippled`
-// field). Extra key is `pubkey` while the data field is `internal_pubkey`.
+// field). Payload key is `pubkey` while the data field is `internal_pubkey`.
 void fill_tgbtc_dkg_log(const Value &d, Action &a) {
   a.type = "tgbtc_dkg_log_fallback";
   a.source = av_addr(dg(d, "coordinator_contract"));
-  Value::Fields ex;
-  ex.emplace_back("pubkey", dg(d, "internal_pubkey"));
-  a.extra = mkdict(std::move(ex));
-  a.value = dg(d, "timestamp");
+  a.data = mkdict({{"pubkey", dg(d, "internal_pubkey")},
+                   {"timestamp", dg(d, "timestamp")}});
 }
 
 void fill_dns_renew(const Value &d, Action &a) {
@@ -1033,8 +1054,8 @@ void fill_change_dns(const Value &d, Action &a) {
   // composite, which Go's *string + ParseInt expects.
   f.emplace_back("flags", flags);
   f.emplace_back("key", bytes_hex(dg(d, "key")));
-  f.emplace_back("value", value_field);
-  a.change_dns_record_data = mkdict(std::move(f));
+  f.emplace_back("record_value", value_field);
+  a.data = mkdict(std::move(f));
 }
 
 // Same column with everything but the key nulled. A deletion names the record
@@ -1044,10 +1065,8 @@ void fill_delete_dns(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "destination"));
   a.asset = av_addr(dg(d, "collection_address"));
   Value::Fields f;
-  f.emplace_back("value_schema", Value::null());
-  f.emplace_back("flags", Value::null());
   f.emplace_back("key", bytes_hex(dg(d, "key")));
-  a.change_dns_record_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_nominator_pool_deposit(const Value &d, Action &a) {
@@ -1056,8 +1075,8 @@ void fill_nominator_pool_deposit(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "pool"));
   a.amount = av_amount(dg(d, "value"));
   Value::Fields f;
-  f.emplace_back("provider", Value::make_str("nominator"));
-  a.staking_data = mkdict(std::move(f));
+  f.emplace_back("protocol", Value::make_str("nominator"));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_nominator_pool_withdraw_request(const Value &d, Action &a) {
@@ -1071,8 +1090,8 @@ void fill_nominator_pool_withdraw_request(const Value &d, Action &a) {
     a.amount = av_amount(payout);
   }
   Value::Fields f;
-  f.emplace_back("provider", Value::make_str("nominator"));
-  a.staking_data = mkdict(std::move(f));
+  f.emplace_back("protocol", Value::make_str("nominator"));
+  a.data = mkdict(std::move(f));
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "pool"));
 }
@@ -1104,9 +1123,9 @@ void fill_tonstakers_deposit(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "value"));
   a.asset = av_addr(dg(d, "asset"));
   Value::Fields f;
-  f.emplace_back("provider", Value::make_str("liquid_staking"));
+  f.emplace_back("protocol", Value::make_str("liquid_staking"));
   f.emplace_back("tokens_minted", av_amount(dg(d, "tokens_minted")));
-  a.staking_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_tonstakers_withdraw(const Value &d, Action &a) {
@@ -1116,10 +1135,10 @@ void fill_tonstakers_withdraw(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "amount"));
   a.asset = av_addr(dg(d, "asset"));
   Value::Fields f;
-  f.emplace_back("provider", Value::make_str("liquid_staking"));
-  f.emplace_back("ts_nft", av_addr(dg(d, "burnt_nft")));
+  f.emplace_back("protocol", Value::make_str("liquid_staking"));
+  f.emplace_back("nft_address", av_addr(dg(d, "burnt_nft")));
   f.emplace_back("tokens_burnt", av_amount(dg(d, "tokens_burnt")));
-  a.staking_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_tonstakers_withdraw_request(const Value &d, Action &a) {
@@ -1130,29 +1149,30 @@ void fill_tonstakers_withdraw_request(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "tokens_burnt"));
   a.asset = av_addr(dg(d, "asset"));
   Value::Fields f;
-  f.emplace_back("provider", Value::make_str("liquid_staking"));
-  f.emplace_back("ts_nft", av_addr(dg(d, "minted_nft")));
-  a.staking_data = mkdict(std::move(f));
+  f.emplace_back("protocol", Value::make_str("liquid_staking"));
+  f.emplace_back("nft_address", av_addr(dg(d, "minted_nft")));
+  a.data = mkdict(std::move(f));
 }
 
-// Distinct from the dedust deposit fills: same composite column, different
-// data field spelling (amount_1 here, amount1 there).
+// Distinct from the DeDust V1 deposit fills by its input field spellings.
 void fill_dex_deposit_liquidity(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "pool"));
   Value::Fields f;
-  f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
-  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
-  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
-  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "sender_wallet_1")));
-  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "sender_wallet_2")));
-  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
-  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+  f.emplace_back("protocol", dg(d, "dex"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount_1"))},
+                         {"asset", av_addr(dg(d, "asset_1"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "sender_wallet_1"))}});
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount_2"))},
+                         {"asset", av_addr(dg(d, "asset_2"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "sender_wallet_2"))}});
+  append_legs(f, std::move(legs));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  a.data = mkdict(std::move(f));
 }
 
-// Reuses the dex_deposit_liquidity_data composite. Not typos vs V1: pool
+// Not typos vs V1: pool
 // lives under `pool` (V1: `pool_address`), user wallets under
 // `sender_wallet_N` (V1: `user_jetton_wallet_N`); `target_asset_*` aliases
 // asset_1/asset_2 (V2 has no separate target asset, only target amounts).
@@ -1181,20 +1201,22 @@ void fill_dedust_v2_deposit(const Value &d, Action &a) {
     }
   }
   Value::Fields f;
-  f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
-  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
-  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
-  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "sender_wallet_1")));
-  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "sender_wallet_2")));
-  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
-  f.emplace_back("target_asset_1", av_addr(dg(d, "asset_1")));
-  f.emplace_back("target_amount_1", av_amount(dg(d, "target_amount_1")));
-  f.emplace_back("target_asset_2", av_addr(dg(d, "asset_2")));
-  f.emplace_back("target_amount_2", av_amount(dg(d, "target_amount_2")));
+  f.emplace_back("protocol", dg(d, "dex"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"asset", av_addr(dg(d, "asset_1"))},
+                         {"amount", av_amount(dg(d, "amount_1"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "sender_wallet_1"))},
+                         {"target_asset", av_addr(dg(d, "asset_1"))},
+                         {"target_amount", av_amount(dg(d, "target_amount_1"))}});
+  append_leg(legs, {{"asset", av_addr(dg(d, "asset_2"))},
+                         {"amount", av_amount(dg(d, "amount_2"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "sender_wallet_2"))},
+                         {"target_asset", av_addr(dg(d, "asset_2"))},
+                         {"target_amount", av_amount(dg(d, "target_amount_2"))}});
+  append_legs(f, std::move(legs));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
   f.emplace_back("vault_excesses", Value::make_list(std::move(excesses)));
-  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 // Bare dex_deposit_liquidity fill plus the deposit contract. A partial carries
@@ -1215,24 +1237,25 @@ void fill_dex_withdraw_liquidity(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "pool"));
   a.asset = av_addr(dg(d, "asset"));
   Value::Fields f;
-  f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("amount1", av_amount(dg(d, "amount1_out")));
-  f.emplace_back("amount2", av_amount(dg(d, "amount2_out")));
-  f.emplace_back("asset1_out", av_addr(dg(d, "asset1_out")));
-  f.emplace_back("asset2_out", av_addr(dg(d, "asset2_out")));
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "wallet1")));
-  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "wallet2")));
-  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_1")));
-  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_1")));
-  f.emplace_back("dex_wallet_2", av_addr(dg(d, "dex_wallet_2")));
-  f.emplace_back("dex_jetton_wallet_2", av_addr(dg(d, "dex_jetton_wallet_2")));
+  f.emplace_back("protocol", dg(d, "dex"));
+  std::vector<Value> legs;
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount1_out"))},
+                         {"asset", av_addr(dg(d, "asset1_out"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "wallet1"))},
+                         {"dex_jetton_wallet", av_addr(dg(d, "dex_jetton_wallet_1"))},
+                         {"dex_wallet", av_addr(dg(d, "dex_wallet_1"))}});
+  append_leg(legs, {{"amount", av_amount(dg(d, "amount2_out"))},
+                         {"asset", av_addr(dg(d, "asset2_out"))},
+                         {"user_jetton_wallet", av_addr(dg(d, "wallet2"))},
+                         {"dex_wallet", av_addr(dg(d, "dex_wallet_2"))},
+                         {"dex_jetton_wallet", av_addr(dg(d, "dex_jetton_wallet_2"))}});
+  append_legs(f, std::move(legs));
   f.emplace_back("is_refund", dg(d, "is_refund"));
-  f.emplace_back("lp_tokens_burnt", av_amount(dg(d, "lp_tokens_burnt")));
-  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+  f.emplace_back("tokens_burnt", av_amount(dg(d, "lp_tokens_burnt")));
+  a.data = mkdict(std::move(f));
 }
 
-// getgems / telegram NFT purchase. Sets nft_transfer_data ONLY, unlike
-// fill_nft_transfer, which also writes nft_listing_data.
+// getgems / telegram NFT purchase.
 void fill_nft_purchase(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "prev_owner"));
   a.destination = av_addr(dg(d, "new_owner"));
@@ -1242,7 +1265,7 @@ void fill_nft_purchase(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("is_purchase", Value::make_bool(true));
   f.emplace_back("price", av_amount(dg(d, "price")));
-  f.emplace_back("nft_item_index", dg(d, "nft_index"));
+  f.emplace_back("nft_index", dg(d, "nft_index"));
   f.emplace_back("forward_amount", av_amount(dg(d, "forward_amount")));
   f.emplace_back("custom_payload", dg(d, "custom_payload"));
   f.emplace_back("forward_payload", dg(d, "forward_payload"));
@@ -1253,31 +1276,15 @@ void fill_nft_purchase(const Value &d, Action &a) {
   f.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
   f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
   f.emplace_back("payout_comment", dg(d, "payout_comment"));
-  f.emplace_back("royalty_amount", Value::null());
-  a.nft_transfer_data = mkdict(std::move(f));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_dns_release(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "nft_address"));
   a.asset = av_addr(dg(d, "nft_collection"));
-  Value::Fields t;
-  t.emplace_back("query_id", dg(d, "query_id"));
-  t.emplace_back("is_purchase", Value::null());
-  t.emplace_back("price", Value::null());
-  t.emplace_back("nft_item_index", dg(d, "nft_index"));
-  t.emplace_back("forward_amount", Value::null());
-  t.emplace_back("custom_payload", Value::null());
-  t.emplace_back("forward_payload", Value::null());
-  t.emplace_back("response_destination", Value::null());
-  t.emplace_back("marketplace_address", Value::null());
-  t.emplace_back("real_prev_owner", Value::null());
-  t.emplace_back("payout_amount", Value::null());
-  t.emplace_back("payout_comment_encrypted", Value::null());
-  t.emplace_back("payout_comment_encoded", Value::null());
-  t.emplace_back("payout_comment", Value::null());
-  t.emplace_back("royalty_amount", Value::null());
-  a.nft_transfer_data = mkdict(std::move(t));
+  a.data = mkdict({{"query_id", dg(d, "query_id")},
+                   {"nft_index", dg(d, "nft_index")}});
   a.value = av_amount(dg(d, "value"));
 }
 
@@ -1287,23 +1294,17 @@ void fill_nft_put_on_auction(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "auction_address"));
   a.asset = av_addr(dg(d, "nft_collection"));
   a.asset_secondary = av_addr(dg(d, "nft_address"));
-  Value::Fields t;
-  t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
-  a.nft_transfer_data = mkdict(std::move(t));
-  Value::Fields l;
-  l.emplace_back("nft_item_index", dg(d, "nft_index"));
-  l.emplace_back("mp_fee_factor", av_amount(dg(d, "mp_fee_factor")));
-  l.emplace_back("mp_fee_base", av_amount(dg(d, "mp_fee_base")));
-  l.emplace_back("royalty_fee_base", av_amount(dg(d, "royalty_fee_base")));
-  l.emplace_back("max_bid", av_amount(dg(d, "max_bid")));
-  l.emplace_back("min_bid", av_amount(dg(d, "min_bid")));
-  l.emplace_back("marketplace_fee_address", av_addr(dg(d, "mp_fee_address")));
-  l.emplace_back("royalty_address", av_addr(dg(d, "royalty_fee_addr")));
-  // Sale fields are deliberately null on auction listings.
-  l.emplace_back("full_price", Value::null());
-  l.emplace_back("marketplace_fee", Value::null());
-  l.emplace_back("royalty_amount", Value::null());
-  a.nft_listing_data = mkdict(std::move(l));
+  Value::Fields f;
+  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  f.emplace_back("nft_index", dg(d, "nft_index"));
+  f.emplace_back("mp_fee_factor", av_amount(dg(d, "mp_fee_factor")));
+  f.emplace_back("mp_fee_base", av_amount(dg(d, "mp_fee_base")));
+  f.emplace_back("royalty_fee_base", av_amount(dg(d, "royalty_fee_base")));
+  f.emplace_back("max_bid", av_amount(dg(d, "max_bid")));
+  f.emplace_back("min_bid", av_amount(dg(d, "min_bid")));
+  f.emplace_back("marketplace_fee_address", av_addr(dg(d, "mp_fee_address")));
+  f.emplace_back("royalty_address", av_addr(dg(d, "royalty_fee_addr")));
+  a.data = mkdict(std::move(f));
 }
 
 // Shared by teleitem_cancel_auction and the three GetGems cancel/finish
@@ -1316,52 +1317,25 @@ void fill_cancel_nft_trade(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "trade_contract"));
   a.asset_secondary = av_addr(dg(d, "nft_address"));
   a.asset = av_addr(dg(d, "nft_collection"));
-  Value::Fields f;
-  f.emplace_back("query_id", Value::null());
-  f.emplace_back("is_purchase", Value::null());
-  f.emplace_back("price", Value::null());
-  f.emplace_back("nft_item_index", Value::null());
-  f.emplace_back("forward_amount", Value::null());
-  f.emplace_back("custom_payload", Value::null());
-  f.emplace_back("forward_payload", Value::null());
-  f.emplace_back("response_destination", Value::null());
-  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
-  f.emplace_back("real_prev_owner", Value::null());
-  f.emplace_back("payout_amount", Value::null());
-  f.emplace_back("payout_comment_encrypted", Value::null());
-  f.emplace_back("payout_comment_encoded", Value::null());
-  f.emplace_back("payout_comment", Value::null());
-  f.emplace_back("royalty_amount", Value::null());
-  a.nft_transfer_data = mkdict(std::move(f));
+  a.data = mkdict({{"marketplace_address", av_addr(dg(d, "marketplace_address"))}});
   push_account(a, a.asset_secondary);
 }
 
-// Same two composites as fill_nft_put_on_auction with sale/auction key
-// groups swapped: the sale carries full_price / marketplace_fee /
-// royalty_amount and nulls the five auction-only keys.
 void fill_nft_put_on_sale(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "owner"));
   a.source_secondary = av_addr(dg(d, "listing_address"));
   a.destination = av_addr(dg(d, "sale_address"));
   a.asset = av_addr(dg(d, "nft_collection"));
   a.asset_secondary = av_addr(dg(d, "nft_address"));
-  Value::Fields t;
-  t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
-  a.nft_transfer_data = mkdict(std::move(t));
-  Value::Fields l;
-  l.emplace_back("nft_item_index", dg(d, "nft_index"));
-  l.emplace_back("full_price", av_amount(dg(d, "full_price")));
-  l.emplace_back("marketplace_fee", av_amount(dg(d, "marketplace_fee")));
-  l.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
-  l.emplace_back("marketplace_fee_address", av_addr(dg(d, "marketplace_fee_address")));
-  l.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
-  // Auction fields are deliberately null on sale listings.
-  l.emplace_back("mp_fee_factor", Value::null());
-  l.emplace_back("mp_fee_base", Value::null());
-  l.emplace_back("royalty_fee_base", Value::null());
-  l.emplace_back("max_bid", Value::null());
-  l.emplace_back("min_bid", Value::null());
-  a.nft_listing_data = mkdict(std::move(l));
+  Value::Fields f;
+  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  f.emplace_back("nft_index", dg(d, "nft_index"));
+  f.emplace_back("full_price", av_amount(dg(d, "full_price")));
+  f.emplace_back("marketplace_fee", av_amount(dg(d, "marketplace_fee")));
+  f.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
+  f.emplace_back("marketplace_fee_address", av_addr(dg(d, "marketplace_fee_address")));
+  f.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
+  a.data = mkdict(std::move(f));
 }
 
 // asset_secondary here is the NFT (neither source nor destination), so it
@@ -1370,36 +1344,12 @@ void fill_sale_update(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "sale_contract"));
   a.asset_secondary = av_addr(dg(d, "nft_address"));
-  Value::Fields l;
-  l.emplace_back("nft_item_index", Value::null());
-  l.emplace_back("full_price", av_amount(dg(d, "new_full_price")));
-  l.emplace_back("marketplace_fee", av_amount(dg(d, "new_marketplace_fee")));
-  l.emplace_back("royalty_amount", av_amount(dg(d, "new_royalty_amount")));
-  l.emplace_back("marketplace_fee_address", Value::null());
-  l.emplace_back("royalty_address", Value::null());
-  l.emplace_back("mp_fee_factor", Value::null());
-  l.emplace_back("mp_fee_base", Value::null());
-  l.emplace_back("royalty_fee_base", Value::null());
-  l.emplace_back("max_bid", Value::null());
-  l.emplace_back("min_bid", Value::null());
-  a.nft_listing_data = mkdict(std::move(l));
-  Value::Fields t;
-  t.emplace_back("query_id", Value::null());
-  t.emplace_back("is_purchase", Value::null());
-  t.emplace_back("price", Value::null());
-  t.emplace_back("nft_item_index", Value::null());
-  t.emplace_back("forward_amount", Value::null());
-  t.emplace_back("custom_payload", Value::null());
-  t.emplace_back("forward_payload", Value::null());
-  t.emplace_back("response_destination", Value::null());
-  t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
-  t.emplace_back("real_prev_owner", Value::null());
-  t.emplace_back("payout_amount", Value::null());
-  t.emplace_back("payout_comment_encrypted", Value::null());
-  t.emplace_back("payout_comment_encoded", Value::null());
-  t.emplace_back("payout_comment", Value::null());
-  t.emplace_back("royalty_amount", Value::null());
-  a.nft_transfer_data = mkdict(std::move(t));
+  Value::Fields f;
+  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  f.emplace_back("full_price", av_amount(dg(d, "new_full_price")));
+  f.emplace_back("marketplace_fee", av_amount(dg(d, "new_marketplace_fee")));
+  f.emplace_back("royalty_amount", av_amount(dg(d, "new_royalty_amount")));
+  a.data = mkdict(std::move(f));
   push_account(a, a.asset_secondary);
 }
 
@@ -1408,9 +1358,7 @@ void fill_auction_bid(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "auction"));
   a.asset_secondary = av_addr(dg(d, "nft_address"));
   a.asset = av_addr(dg(d, "nft_collection"));
-  Value::Fields t;
-  t.emplace_back("nft_item_index", dg(d, "nft_item_index"));
-  a.nft_transfer_data = mkdict(std::move(t));
+  a.data = mkdict({{"nft_index", dg(d, "nft_item_index")}});
   push_account(a, a.asset_secondary);
   a.value = dg(d, "amount");  // raw int, not av_amount
 }
@@ -1421,12 +1369,8 @@ void fill_auction_outbid(const Value &d, Action &a) {
   a.source_secondary = av_addr(dg(d, "new_bidder"));
   a.asset_secondary = av_addr(dg(d, "nft"));
   a.asset = av_addr(dg(d, "nft_collection"));
-  Value::Fields t;
-  a.nft_transfer_data = mkdict(std::move(t));
   a.amount = av_amount(dg(d, "amount"));
-  Value::Fields tt;
-  tt.emplace_back("content", dg(d, "comment"));
-  a.ton_transfer_data = mkdict(std::move(tt));
+  a.data = mkdict({{"comment", dg(d, "comment")}});
   push_account(a, a.asset_secondary);
 }
 
@@ -1435,27 +1379,10 @@ void fill_nft_discovery(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.asset = av_addr(dg(d, "result_collection"));
   a.asset_secondary = av_addr(dg(d, "nft"));
-  Value::Fields t;
-  t.emplace_back("query_id", Value::null());
-  t.emplace_back("is_purchase", Value::null());
-  t.emplace_back("price", Value::null());
-  t.emplace_back("nft_item_index", dg(d, "result_index"));
-  t.emplace_back("forward_amount", Value::null());
-  t.emplace_back("custom_payload", Value::null());
-  t.emplace_back("forward_payload", Value::null());
-  t.emplace_back("response_destination", Value::null());
-  t.emplace_back("marketplace_address", Value::null());
-  t.emplace_back("real_prev_owner", Value::null());
-  t.emplace_back("payout_amount", Value::null());
-  t.emplace_back("payout_comment_encrypted", Value::null());
-  t.emplace_back("payout_comment_encoded", Value::null());
-  t.emplace_back("payout_comment", Value::null());
-  t.emplace_back("royalty_amount", Value::null());
-  a.nft_transfer_data = mkdict(std::move(t));
+  a.data = mkdict({{"nft_index", dg(d, "result_index")}});
 }
 
-// The only producer of the nft_mint_data composite. `opcode` and
-// `nft_item_index` are raw passthroughs; the index is already an Int.
+// `opcode` and `nft_index` are raw passthroughs; the index is already an Int.
 void fill_nft_mint(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "address"));
@@ -1463,8 +1390,8 @@ void fill_nft_mint(const Value &d, Action &a) {
   a.opcode = dg(d, "opcode");
   a.asset = av_addr(dg(d, "collection"));
   Value::Fields f;
-  f.emplace_back("nft_item_index", dg(d, "index"));
-  a.nft_mint_data = mkdict(std::move(f));
+  f.emplace_back("nft_index", dg(d, "index"));
+  a.data = mkdict(std::move(f));
 }
 
 // Fallback-path fills only (ClassifyResult.failure). The main dump never
@@ -1493,9 +1420,9 @@ void fill_ton_transfer(const Value &d, Action &a) {
     }
   }
   Value::Fields f;
-  f.emplace_back("content", dg(d, "comment"));  // leaf_comment_info already strips U+0000
-  f.emplace_back("encrypted", dg(d, "encrypted"));
-  a.ton_transfer_data = mkdict(std::move(f));
+  f.emplace_back("comment", dg(d, "comment"));  // leaf_comment_info already strips U+0000
+  f.emplace_back("comment_encrypted", dg(d, "encrypted"));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_tick_tock(const Value &d, Action &a) {
@@ -1707,9 +1634,9 @@ bool build_action(const ActionRow &row, Action &a) {
   a.parent_action_id = row.parent_action_id;
   a.ancestor_type = row.ancestor_type;
   if (!row.parent_gasless_action.empty()) {
-    Value::Fields f = a.extra.fields ? *a.extra.fields : Value::Fields{};
+    Value::Fields f = a.data.fields ? *a.data.fields : Value::Fields{};
     f.emplace_back("parent_gasless_action", Value::make_str(row.parent_gasless_action));
-    a.extra = mkdict(std::move(f));
+    a.data = mkdict(std::move(f));
   }
   return true;
 }

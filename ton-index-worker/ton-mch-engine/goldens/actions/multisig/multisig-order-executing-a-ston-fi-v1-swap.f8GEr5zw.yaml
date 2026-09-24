@@ -183,8 +183,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi
+    data:
       dex_incoming_transfer:
         amount: 1694387774402439
         asset: 0:8C938FCEBA30A7938EA30291E72116E64ED61391299FBA357D5FC61ED2ABEC1D
@@ -199,8 +198,8 @@ actions:
         destination_jetton_wallet: 0:BB51841D4566FAD540E6289B9C88F349171D06D8B76224B50E9056BFF5DB5ADB
         source: 0:ED3D8F99E97027D680B0FAD044361636C828591095B1F602789A970DF0BCD74A
         source_jetton_wallet: 0:72E546F32124FDC75F9B24260889807D9FA2F6F5397EDB13015E8D9833A10515
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi
       sender: 0:75B6AACB30B259934627994FF550AAFEAFDD1006752E6E6D12A34F5BDFD2CF93
     tx_hashes:
       - 0KL4iTIqtufdqDdr4mpEbo/icQFfSG/w+xIqbagObiw=
@@ -242,14 +241,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_create_order_data:
-      creator_index: 0
+    data:
       expiration_date: 1785505258
       is_created_by_signer: true
       is_signed_by_creator: false
       order_boc: cellhash:EA5ED9E815592D1B8CF1C621BA2B941F50557B64BD88F80286D40AFC42085826
       order_seqno: 1785501658645695
       query_id: 0
+      signer_index: 0
     tx_hashes:
       - 1yERowIhbNyInr4JnTh7UCm7QNDJsQjm7i1phbJLtWw=
       - YDOuW247ZPpgRiSIJsUnz2WqceCH+018cPS4zBjPTcc=
@@ -281,7 +280,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_execute_data:
+    data:
       approvals_num: 1
       expiration_date: 1785505258
       order_boc: cellhash:9E9DED97E1D676DDEDFD538E3E07A910F8DE11F29FE815E09884CF5CAC7D4B60

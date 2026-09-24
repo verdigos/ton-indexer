@@ -133,7 +133,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    cocoon_client_request_refund_data:
+    data:
       query_id: 0
       via_wallet: true
     tx_hashes:

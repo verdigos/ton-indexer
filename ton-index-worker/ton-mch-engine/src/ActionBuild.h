@@ -24,46 +24,7 @@ namespace mch {
   X(amount) \
   X(value) \
   X(opcode) \
-  X(ton_transfer_data) \
-  X(jetton_transfer_data) \
-  X(jetton_swap_data) \
-  X(nft_transfer_data) \
-  X(nft_listing_data) \
-  X(nft_mint_data) \
-  X(dex_deposit_liquidity_data) \
-  X(dex_withdraw_liquidity_data) \
-  X(staking_data) \
-  X(evaa_supply_data) \
-  X(evaa_withdraw_data) \
-  X(evaa_liquidate_data) \
-  X(vesting_send_message_data) \
-  X(vesting_add_whitelist_data) \
-  X(tonco_deploy_pool_data) \
-  X(multisig_create_order_data) \
-  X(multisig_approve_data) \
-  X(multisig_execute_data) \
-  X(cocoon_worker_payout_data) \
-  X(cocoon_proxy_payout_data) \
-  X(cocoon_proxy_charge_data) \
-  X(cocoon_client_top_up_data) \
-  X(cocoon_register_proxy_data) \
-  X(cocoon_unregister_proxy_data) \
-  X(cocoon_client_register_data) \
-  X(cocoon_client_change_secret_hash_data) \
-  X(cocoon_client_request_refund_data) \
-  X(cocoon_grant_refund_data) \
-  X(cocoon_client_increase_stake_data) \
-  X(cocoon_client_withdraw_data) \
-  X(layerzero_packet_data) \
-  X(layerzero_send_data) \
-  X(layerzero_dvn_verify_data) \
-  X(jvault_stake_data) \
-  X(jvault_claim_data) \
-  X(change_dns_record_data) \
-  X(coffee_create_pool_data) \
-  X(coffee_staking_deposit_data) \
-  X(coffee_staking_withdraw_data) \
-  X(extra)
+  X(data)
 
 struct Action {
   std::string action_id;
@@ -90,7 +51,7 @@ struct ActionRow {
   std::string parent_action_id;
   std::vector<std::string> ancestor_type;
   // action_id of the gasless_request marker this row is an immediate result
-  // of (empty otherwise); rendered as extra.parent_gasless_action.
+  // of (empty otherwise); rendered as data.parent_gasless_action.
   std::string parent_gasless_action;
 };
 

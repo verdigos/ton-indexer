@@ -43,8 +43,8 @@ actions:
     amount: 10000000000
     value: null
     opcode: null
-    staking_data:
-      provider: liquid_staking
+    data:
+      protocol: liquid_staking
       tokens_minted: 9439323796
     tx_hashes:
       - /7lfl/nvDY009KqdkU8BK6ieEAAxSGzUP5/eMdA/2zk=

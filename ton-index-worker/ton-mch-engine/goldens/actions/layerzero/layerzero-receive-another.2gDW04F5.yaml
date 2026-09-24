@@ -219,7 +219,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    layerzero_packet_data:
+    data:
       dst_eid: 30343
       dst_oapp: "0x170725394aa56136fbd27d0ce31d8a98e0f8ae72a4d2379b5dde83e211a2d5fa"
       guid: "0x5bfa61f1b406276287d8e207a12fbebc41e80dcefc0e03b927a197dc4ce3e3e"
@@ -263,9 +263,8 @@ actions:
     amount: null
     value: 6336965
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - L8SjG1mWEFluv8T1DlqX7Ty4Bikf9UU5lgvtrMTDlOE=
       - dpb5sfOEiEgAw1hNYvnsea7DYeL+KmwVlKNCWmf5SD0=
@@ -295,9 +294,8 @@ actions:
     amount: null
     value: 70678538
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - WLOC08AFbbaXZ0eZT/mDNtmCMD7UyRv4ZPLERWVzurE=
       - jy8zAp6gZ4daKvI1/qw5dCMALruHFWutJrBxJIc6nxk=

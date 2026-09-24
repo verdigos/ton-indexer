@@ -43,8 +43,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: tonco
+    data:
       dex_incoming_transfer:
         amount: 10000000
         asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
@@ -64,11 +63,10 @@ actions:
         - amount_in: 10000000
           amount_out: 2907640091
           asset_in: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
-          asset_out: null
         - amount_in: 2907640091
           amount_out: 541070180798
-          asset_in: null
           asset_out: 0:6CA2C99C66B0FA1478A303BA9618BC39C28FDA1FC50DE37E618BDDF98C9FD24C
+      protocol: tonco
       sender: 0:E39C30B5790D4AB456435CD2E7DA12C7CDB2043D020DD6C400CE951F78204B5A
     tx_hashes:
       - 42S+VZzVnUTp+q5ZbQ2u3J/yxxijnd2cCQFgyrX44Rk=

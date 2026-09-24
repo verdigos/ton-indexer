@@ -201,10 +201,10 @@ actions:
     amount: 798178302119
     value: null
     opcode: null
-    staking_data:
-      provider: liquid_staking
+    data:
+      nft_address: 0:9E96100D5C6170EBE584F383DE873905B573A8D4050A45F97127E2DA03E49010
+      protocol: liquid_staking
       tokens_burnt: 773926085446
-      ts_nft: 0:9E96100D5C6170EBE584F383DE873905B573A8D4050A45F97127E2DA03E49010
     tx_hashes:
       - DCB/nVN3gtVKnN34CWgCv4pK+cQ5axzJbf7HgOXo0oc=
       - E1Hrp9NqTZBjNRoD7dEX0vjIaShGKw5cHsdt2zRrYZY=
@@ -236,10 +236,10 @@ actions:
     amount: 85961295
     value: null
     opcode: null
-    staking_data:
-      provider: liquid_staking
+    data:
+      nft_address: 0:30A867E3D5D69284A96CFF30B742316CD5B514C55FCC2E9564F42D65A9A3D252
+      protocol: liquid_staking
       tokens_burnt: 4170935
-      ts_nft: 0:30A867E3D5D69284A96CFF30B742316CD5B514C55FCC2E9564F42D65A9A3D252
     tx_hashes:
       - 2Wo0GlurbVmJADBUZ5eovSImVH82RHov3x2bTDTjfx8=
       - E1Hrp9NqTZBjNRoD7dEX0vjIaShGKw5cHsdt2zRrYZY=
@@ -272,10 +272,10 @@ actions:
     amount: 2982933841
     value: null
     opcode: null
-    staking_data:
-      provider: liquid_staking
+    data:
+      nft_address: 0:5F090D11D41733FB3CC4FC637B1CACC0CF9F9154D1DE1F4A3F962F78C5D5982A
+      protocol: liquid_staking
       tokens_burnt: 2802990078
-      ts_nft: 0:5F090D11D41733FB3CC4FC637B1CACC0CF9F9154D1DE1F4A3F962F78C5D5982A
     tx_hashes:
       - 4ERFgmk6YE0aa5fzLs+KXzG591GdtNYsg12SZ572U8s=
       - Y5d2J+ykoJedam42z1Q+T0+5Ao2ysrSsk761d6krEjA=

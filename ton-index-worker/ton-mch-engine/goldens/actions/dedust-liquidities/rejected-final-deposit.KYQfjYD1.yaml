@@ -17,22 +17,17 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 256036790792077
-      amount2: null
-      asset1: 0:83EE5AEBC6939CAB903947A9D32DE17592E21B97504A09EE4E9DA9C67B7701E0
-      asset2: null
-      dex: dedust
-      lp_tokens_minted: null
-      target_amount_1: 787792360
-      target_amount_2: 256036790792077
-      target_asset_1: null
-      target_asset_2: 0:83EE5AEBC6939CAB903947A9D32DE17592E21B97504A09EE4E9DA9C67B7701E0
-      user_jetton_wallet_1: 0:CC35F5C67981134570B25C665BA04DEBB003BE84C844AC3F8998B530B96B04C1
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 256036790792077
+          asset: 0:83EE5AEBC6939CAB903947A9D32DE17592E21B97504A09EE4E9DA9C67B7701E0
+          target_amount: 787792360
+          user_jetton_wallet: 0:CC35F5C67981134570B25C665BA04DEBB003BE84C844AC3F8998B530B96B04C1
+        - target_amount: 256036790792077
+          target_asset: 0:83EE5AEBC6939CAB903947A9D32DE17592E21B97504A09EE4E9DA9C67B7701E0
+      protocol: dedust
       vault_excesses:
         - amount: 1082488901
-          asset: null
         - amount: 256036790792077
           asset: 0:83EE5AEBC6939CAB903947A9D32DE17592E21B97504A09EE4E9DA9C67B7701E0
     tx_hashes:

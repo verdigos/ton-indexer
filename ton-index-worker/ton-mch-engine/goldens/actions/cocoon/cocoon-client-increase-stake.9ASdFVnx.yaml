@@ -104,8 +104,7 @@ actions:
     amount: 18000000000
     value: null
     opcode: null
-    cocoon_client_increase_stake_data:
-      new_stake: 18000000000
+    data:
       query_id: 0
     tx_hashes:
       - +dmj92BFx4glM6ieoOhbzjKfW5jT5k15aAiBnBZmCYM=

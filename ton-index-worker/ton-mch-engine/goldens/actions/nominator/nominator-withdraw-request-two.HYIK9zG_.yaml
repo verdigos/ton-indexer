@@ -18,8 +18,8 @@ actions:
     amount: 1300
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - JiCLbT6eNqw6zvb5VYO75ZqZ6+A1D6Oln3hPjB8oc4k=
       - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=

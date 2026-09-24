@@ -184,18 +184,20 @@ actions:
     source_secondary: 0:BA92D918248098831404784B68FB2FF4B7CF6567146C8FC34004236C98D6A2A4
     destination: 0:54A466DAF8A8575471799B1187E06E2E68CC0E806B0547D3BE22FE64F5E86736
     destination_secondary: 0:54A466DAF8A8575471799B1187E06E2E68CC0E806B0547D3BE22FE64F5E86736
-    asset: 0:62056B0298CA16D840F7FB8ED420017589493426C8981EE76C0CA13454B15E78
-    asset_secondary: 0:54A466DAF8A8575471799B1187E06E2E68CC0E806B0547D3BE22FE64F5E86736
+    asset: null
+    asset_secondary: null
     asset2: null
     asset2_secondary: null
     amount: null
     value: null
     opcode: null
-    layerzero_packet_data:
+    data:
+      channel: 0:62056B0298CA16D840F7FB8ED420017589493426C8981EE76C0CA13454B15E78
       dst_eid: 30343
       dst_oapp: "0x70037e28dd2535f6b31fe11109f075a4b3acb4a286480404cf0755c6b045caea"
       guid: "0xe7db0b36b8b81bcd2a22d087d69dd4ec7640c2bb358092ac9e7306b9a77601a9"
       message: "0x010000768700000000"
+      msglib_connection: 0:54A466DAF8A8575471799B1187E06E2E68CC0E806B0547D3BE22FE64F5E86736
       nonce: 1
       src_eid: 30343
       src_oapp: "0x70037e28dd2535f6b31fe11109f075a4b3acb4a286480404cf0755c6b045caea"
@@ -235,9 +237,8 @@ actions:
     amount: null
     value: 9927066752
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - 2nK8Ukjv+JJf035tEakvp2rLTajLn0xiO9NxxWbxWu0=
       - UPkC2FUkpOWIi/4FAhbVlPxTCzQKwqreo944BGOo1dQ=

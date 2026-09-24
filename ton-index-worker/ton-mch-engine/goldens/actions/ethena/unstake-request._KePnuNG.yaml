@@ -17,8 +17,8 @@ actions:
     amount: 199179780
     value: null
     opcode: null
-    staking_data:
-      provider: ethena
+    data:
+      protocol: ethena
       tokens_minted: 250729913
     tx_hashes:
       - /KePnuNGucIpfF1FhRFdzd85XgsXO3ooKFAKXjI+vhM=

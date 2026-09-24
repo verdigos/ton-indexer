@@ -70,14 +70,10 @@ actions:
     amount: 2093172
     value: null
     opcode: null
-    extra:
-      parent_gasless_action: dQSOwTkDA/8wH/TeVfe7vmQTrKAbyT7JKZiRbAl9qHg=
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 1
-      forward_payload: null
-      is_encrypted_comment: false
+      parent_gasless_action: dQSOwTkDA/8wH/TeVfe7vmQTrKAbyT7JKZiRbAl9qHg=
       query_id: 0
       response_destination: 0:7AE5056C3FD9406F9BBBE7C7089CD4C40801D9075486CBEDB7CE12DF119EACF1
     tx_hashes:

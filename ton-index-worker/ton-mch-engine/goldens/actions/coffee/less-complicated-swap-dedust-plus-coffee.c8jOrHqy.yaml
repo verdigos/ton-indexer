@@ -43,8 +43,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: dedust
+    data:
       dex_incoming_transfer:
         amount: 185867644473
         asset: 0:896E9D240693F03E8046F94E42F9C59F3FF8E792CBE8B467C0ACF179D10F508A
@@ -59,7 +58,6 @@ actions:
         destination_jetton_wallet: 0:3E6DC70DB3489E5D8357711CACC46CED25462EF0D585710841EF6B0DB211AB3B
         source: 0:BC8DB25F47B32EECAE687B2888A070B78162E67428EEDA9501B9C5EA9900A507
         source_jetton_wallet: 0:3EBBD5337967C173CA7497C42BD54FDBF60DFEDF02CE82A1598E737F2508A74C
-      min_out_amount: null
       peer_swaps:
         - amount_in: 185867644473
           amount_out: 14787435
@@ -69,6 +67,7 @@ actions:
           amount_out: 4666275916
           asset_in: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
           asset_out: 0:CD0EFE78BFF4C4539B76EAB17293296C74F42CBF99EC499687FEFEC94893ED32
+      protocol: dedust
       sender: 0:81812A9F5F84C5D3629C62C6BCEFC526CD37966A716F80FD070A301D9DEECEB6
     tx_hashes:
       - 6nF+TsOn7Mt7fGy/UVRh95ja3XyY4GOy/5DpzRQSu+I=
@@ -115,8 +114,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: coffee
+    data:
       dex_incoming_transfer:
         amount: 4666275916
         asset: 0:CD0EFE78BFF4C4539B76EAB17293296C74F42CBF99EC499687FEFEC94893ED32
@@ -126,13 +124,10 @@ actions:
         source_jetton_wallet: 0:3E6DC70DB3489E5D8357711CACC46CED25462EF0D585710841EF6B0DB211AB3B
       dex_outgoing_transfer:
         amount: 4712371036
-        asset: null
         destination: 0:81812A9F5F84C5D3629C62C6BCEFC526CD37966A716F80FD070A301D9DEECEB6
-        destination_jetton_wallet: null
         source: 0:790931BC687EB86BFD92858C32964839DFE1635436EA05E031766986AC770457
-        source_jetton_wallet: null
-      min_out_amount: null
       peer_swaps: []
+      protocol: coffee
       sender: 0:A17D0198E066C9103BDB66A63BF898E6A5141389AA53CBBE936B678445ED99E2
     tx_hashes:
       - 0I7WwgWqMCreAe5NG3H3pqZP/YGIi1ujNPpKq3lN0M0=

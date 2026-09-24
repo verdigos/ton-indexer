@@ -75,7 +75,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    vesting_add_whitelist_data:
+    data:
       accounts_added:
         - "-1:ECB7B7B4C200424F8D837AC9E0C5EDCA800A162546CD5706FB86549C0FE03038"
       query_id: 0

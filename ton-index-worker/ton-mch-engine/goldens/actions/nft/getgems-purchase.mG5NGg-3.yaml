@@ -17,22 +17,19 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 30000000
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 54813218239866193352888578548178888850000084822145173604758197814985523986432
+      nft_index: 54813218239866193352888578548178888850000084822145173604758197814985523986432
       payout_amount: 1372369010
-      payout_comment: null
       payout_comment_encoded: false
       payout_comment_encrypted: false
       price: 1350000000
       query_id: 0
       real_prev_owner: 0:0D57780F9ABF651ACF690E6F37B2F8F9C61C4131A3968C5A555A18811CD2E7E4
       response_destination: 0:B9A7DCE19431B56044254C69858E8DC11FEC5C0761DED415E386FBE4B4E116F5
-      royalty_amount: null
     tx_hashes:
       - 2LbITkVPWvxuzZH6JNJc4UfA7/FMsjXvNgKs5HfQ5mE=
       - SwmPRBHEjm5pMkrzZL6gWhRYTtrsumIrWCNAG4p7vBI=
@@ -66,25 +63,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 30000000
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 54813218239866193352888578548178888850000084822145173604758197814985523986432
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 54813218239866193352888578548178888850000084822145173604758197814985523986432
       price: 1350000000
       query_id: 0
       real_prev_owner: 0:0D57780F9ABF651ACF690E6F37B2F8F9C61C4131A3968C5A555A18811CD2E7E4
       response_destination: 0:B9A7DCE19431B56044254C69858E8DC11FEC5C0761DED415E386FBE4B4E116F5
-      royalty_amount: null
     tx_hashes:
       - 2LbITkVPWvxuzZH6JNJc4UfA7/FMsjXvNgKs5HfQ5mE=
       - a8gHu9/EqRvUidjXnssqLvZJPvCKUFJ7tTFYCmrMAqs=
@@ -118,9 +106,8 @@ actions:
     amount: null
     value: 1372369010
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - SwmPRBHEjm5pMkrzZL6gWhRYTtrsumIrWCNAG4p7vBI=
       - rIPmbaxEuVdBGJSdLs2jBTSJczrhLpypLLo5OnM1bkM=
@@ -150,9 +137,8 @@ actions:
     amount: null
     value: 0
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - eyVxxLku82DVp6WPzDpl4NChFz7PDawQXacJLd6MahM=
       - rIPmbaxEuVdBGJSdLs2jBTSJczrhLpypLLo5OnM1bkM=

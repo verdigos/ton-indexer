@@ -44,24 +44,15 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: 0:E047B8D9CBD0FCF08042DDD2B8A842636FD0FC5A67C26CBF6FFB8163B23CE6ED
-      royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
+    data:
       forward_payload: cellhash:DBF0C0E2CB2FEED30FDC206C0F0217F88FCDDCD5F53563C3F792BEAF7DAAB9B4
       is_purchase: true
-      marketplace_address: null
-      nft_item_index: "9824106364531410919823695778980965809496756910010020756228949261811666816417"
+      marketplace_fee_address: 0:E047B8D9CBD0FCF08042DDD2B8A842636FD0FC5A67C26CBF6FFB8163B23CE6ED
+      nft_index: "9824106364531410919823695778980965809496756910010020756228949261811666816417"
       payout_amount: 448299774108
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
       price: 472000000000
       query_id: 101739666000008
-      real_prev_owner: null
-      response_destination: null
+      royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
       royalty_amount: 23599933333
     tx_hashes:
       - +il5XEYlYvXuDIYojc4j9rz3JEcTP0LuhDY+elpJqiw=

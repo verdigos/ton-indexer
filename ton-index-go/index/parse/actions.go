@@ -159,9 +159,6 @@ func CollectAddressesFromAction(addr_list *map[models.AccountAddress]bool, raw_a
 	}
 
 	// EVAA fields
-	if v := raw_action.EvaaSupplySenderJettonWallet; v != nil {
-		(*addr_list)[*v] = true
-	}
 	if v := raw_action.EvaaSupplyRecipientJettonWallet; v != nil {
 		(*addr_list)[*v] = true
 	}
@@ -185,8 +182,10 @@ func CollectAddressesFromAction(addr_list *map[models.AccountAddress]bool, raw_a
 	if v := raw_action.JvaultStakeStakeWallet; v != nil {
 		(*addr_list)[*v] = true
 	}
-	for _, v := range raw_action.JvaultClaimClaimedJettons {
-		(*addr_list)[v] = true
+	for _, reward := range raw_action.JvaultClaimClaimedJettons {
+		if reward.Asset != nil {
+			(*addr_list)[*reward.Asset] = true
+		}
 	}
 
 	if v := raw_action.EvaaLiquidateAssetId; v != nil {
@@ -715,14 +714,24 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			IsKnownAsset:     knownAsset,
 		}
 	case "jvault_claim":
+		// The grouped payload always reported both halves of a claim pair, as an empty
+		// string when the value was null; a flat record without the key must not turn
+		// that into null.
 		claimedRewards := make([]models.JettonAmountPair, 0)
-		if len(raw.JvaultClaimClaimedJettons) == len(raw.JvaultClaimClaimedAmounts) {
-			for i := range raw.JvaultClaimClaimedJettons {
-				claimedRewards = append(claimedRewards, models.JettonAmountPair{
-					Jetton: &raw.JvaultClaimClaimedJettons[i],
-					Amount: &raw.JvaultClaimClaimedAmounts[i],
-				})
+		for i := range raw.JvaultClaimClaimedJettons {
+			reward := raw.JvaultClaimClaimedJettons[i]
+			jetton := models.AccountAddress("")
+			if reward.Asset != nil {
+				jetton = *reward.Asset
 			}
+			amount := ""
+			if reward.Amount != nil {
+				amount = *reward.Amount
+			}
+			claimedRewards = append(claimedRewards, models.JettonAmountPair{
+				Jetton: &jetton,
+				Amount: &amount,
+			})
 		}
 		act.Details = models.ActionDetailsJvaultClaim{
 			ClaimedRewards: claimedRewards,
@@ -798,7 +807,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		var details models.ActionDetailsDkgLogFallback
 		details.Coordinator = raw.Source
 		details.Pubkey = extraString(raw.Extra, "pubkey")
-		details.Timestamp = raw.Value
+		details.Timestamp = extraString(raw.Extra, "timestamp")
 		act.Details = &details
 	case "tonco_deploy_pool":
 		act.Details = models.ActionDetailsToncoDeployPool{
@@ -1130,7 +1139,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 	case "cocoon_client_increase_stake":
 		act.Details = models.ActionDetailsCocoonClientIncreaseStake{
 			QueryId:     raw.CocoonClientIncreaseStakeQueryId,
-			NewStake:    raw.CocoonClientIncreaseStakeNewStake,
+			NewStake:    raw.Amount,
 			Source:      raw.Source,
 			Destination: raw.Destination,
 			Amount:      raw.Amount,
@@ -1138,7 +1147,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 	case "cocoon_client_withdraw":
 		act.Details = models.ActionDetailsCocoonClientWithdraw{
 			QueryId:        raw.CocoonClientWithdrawQueryId,
-			WithdrawAmount: raw.CocoonClientWithdrawWithdrawAmount,
+			WithdrawAmount: raw.Amount,
 			Source:         raw.Source,
 			Destination:    raw.Destination,
 			Amount:         raw.Amount,

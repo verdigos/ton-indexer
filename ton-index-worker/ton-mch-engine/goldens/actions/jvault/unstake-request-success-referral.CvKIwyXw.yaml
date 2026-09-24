@@ -220,6 +220,7 @@ actions:
     amount: 2970000000000000
     value: null
     opcode: null
+    data:
     tx_hashes:
       - /cM5PEl5/MwHlhM/3KnhXOg6lD3TdTxWN45pW61tNzo=
       - 58Bh3+hwxOtkv6dFNkHtkRTtFUUrjVU2VEv342ot0Qo=

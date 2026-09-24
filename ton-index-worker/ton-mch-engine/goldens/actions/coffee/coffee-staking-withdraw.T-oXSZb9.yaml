@@ -104,7 +104,7 @@ actions:
     amount: 59457793964
     value: null
     opcode: null
-    coffee_staking_withdraw_data:
+    data:
       nft_address: 0:BB67010D1C015506693316E50176B9BBBE95E87D178FEC3D52C6D00FC0564E3B
       nft_index: 451
       points: 5945779396400
@@ -144,12 +144,9 @@ actions:
     amount: 59457793964
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 1697643576172121
       response_destination: 0:D63BBD8AD1033943D42D0ECFE3E7C89FADC3B91B19FBEA5C9D980C93CA80D14B
     tx_hashes:

@@ -1,10 +1,6 @@
-// --actions-msgpack-test: self-contained unit tests for the write-back writer.
-// Covers the presence rule (absent vs null), the natural-types rule (which
-// fields are decimal strings and which naturalize), the []string element
-// discipline, the Value->msgpack table, the bucket-B fills, the synthetic
-// `unknown` row, and the two insert-side decisions (view_finality and the
-// actions staleness guard). Same flag-driven pattern as --shape-test /
-// --dexrecords-test.
+// --actions-msgpack-test: self-contained tests for the emulator write-back
+// envelope. It checks row columns, codec-prefixed binary payloads, finality,
+// and fixture parity with the batch payload encoder.
 #pragma once
 
 #include <string>

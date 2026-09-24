@@ -104,7 +104,7 @@ actions:
     amount: 1000000000
     value: null
     opcode: null
-    cocoon_client_top_up_data:
+    data:
       query_id: 11691960163567649532
     tx_hashes:
       - 02ZsangSM2tiw/+vYumdC8Kde09o3+7qnJHLIgWrv4s=

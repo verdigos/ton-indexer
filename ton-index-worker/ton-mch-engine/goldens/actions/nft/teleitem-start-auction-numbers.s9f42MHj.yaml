@@ -47,20 +47,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      full_price: null
-      marketplace_fee: null
+    data:
       marketplace_fee_address: 0:D0237ACF80EF60527BF0CC6A4EE39B59621A6FEB907E5616153CEF16C924EFFB
       max_bid: 3399000000000
       min_bid: 3299000000000
       mp_fee_base: 0
       mp_fee_factor: 0
-      nft_item_index: "94033624572866562520644040856138863518795983402233091605220508911761665390946"
-      royalty_address: null
-      royalty_amount: null
+      nft_index: "94033624572866562520644040856138863518795983402233091605220508911761665390946"
       royalty_fee_base: 0
-    nft_transfer_data:
-      marketplace_address: null
     tx_hashes:
       - XGO0YgzJdvnOEPaOBknk8XdaSI/8CMgV/qkH5Q6OhGU=
       - s9f42MHj95A2xmDTz++g2k+Ux08haA11743gA5oA2mM=

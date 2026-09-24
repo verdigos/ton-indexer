@@ -315,12 +315,10 @@ actions:
     amount: 22930287296162
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 140000000
       forward_payload: cellhash:7F8BFA6FCF6BB283B039671817464AB928280692F2FD0A95C8579432C045C18E
-      is_encrypted_comment: false
       query_id: 16991398077488366278
       response_destination: 0:1E733E535DC78BC7A8F3BAA2D5BBBFEB1D7EC7A81F2E4DDAF6203314FAA3A8A0
     tx_hashes:
@@ -356,12 +354,10 @@ actions:
     amount: 11465143648081
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
       forward_payload: cellhash:0E03B341283E8CFA550BAB1F08C4017B9298790775A4AF8BA3FB153150547DFF
-      is_encrypted_comment: false
       query_id: 16991398077488366278
       response_destination: 0:1E733E535DC78BC7A8F3BAA2D5BBBFEB1D7EC7A81F2E4DDAF6203314FAA3A8A0
     tx_hashes:
@@ -396,12 +392,10 @@ actions:
     amount: 11465143648081
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
       forward_payload: cellhash:0E03B341283E8CFA550BAB1F08C4017B9298790775A4AF8BA3FB153150547DFF
-      is_encrypted_comment: false
       query_id: 16991398077488366278
       response_destination: 0:1E733E535DC78BC7A8F3BAA2D5BBBFEB1D7EC7A81F2E4DDAF6203314FAA3A8A0
     tx_hashes:
@@ -436,14 +430,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_create_order_data:
-      creator_index: 1
+    data:
       expiration_date: 1785517110
       is_created_by_signer: true
       is_signed_by_creator: false
       order_boc: cellhash:B1DA0C6E512158048C489BA72F13DD993EC1F33EBB47922C1703218D74D0A6F2
       order_seqno: 5156066503429701095
       query_id: 0
+      signer_index: 1
     tx_hashes:
       - 1Ds6qKAk8J/Im5l6iszbO2Rt3Iq1FeIL3AyFxoyFfUY=
       - RANYKW3JgKt3tWTJfvBT5pT839ACAHnRH4m1CbxRFZQ=
@@ -474,7 +468,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_execute_data:
+    data:
       approvals_num: 1
       expiration_date: 1785517110
       order_boc: cellhash:CD00D83DB33256E274CB0F41A4D86CEEE34CA1E589838565D6291FC9CF12C7FE

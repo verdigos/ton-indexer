@@ -17,8 +17,8 @@ actions:
     amount: 2079869145287964
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - EzPKY80NWHDsaJ0dYNAl4gGVYF33Xolml1qm8akwWIs=
       - iRGU3GQQXzbdnokGQKEQpWlJp4teDUpUJxuTaGPVdAo=

@@ -17,15 +17,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi_v2
+    data:
       dex_incoming_transfer:
         amount: 2467812356
-        asset: null
         destination: 0:42B6537B672F7AAB1FB7C87D188B857448DB50FBC45B85868DB3AE4C0B81F07E
         destination_jetton_wallet: 0:41FDD4E21BABB82086C34FCD328ABAB098BA70469EDC0C691DAE6BD0DD7B3FDF
         source: 0:43F9B542479DF460026BA8D2120B82813A031A9C26E6D6A90EF9D44632E69313
-        source_jetton_wallet: null
       dex_outgoing_transfer:
         amount: 1207407699879720
         asset: 0:0E1793099B5C56CCEEABBA1EEDA2571B62639FD28942B1A1D57E364EB4DAA0C6
@@ -33,8 +30,8 @@ actions:
         destination_jetton_wallet: 0:430C84C1E79DA71DED5413BC6C90FE888872988111B259F91102A0E666402836
         source: 0:42B6537B672F7AAB1FB7C87D188B857448DB50FBC45B85868DB3AE4C0B81F07E
         source_jetton_wallet: 0:42FB95FDBC86909B2ED8DDBA1E42A11F4502D2203A0C50965BE971B54CD2FEEE
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi_v2
       sender: 0:43F9B542479DF460026BA8D2120B82813A031A9C26E6D6A90EF9D44632E69313
     tx_hashes:
       - 1fOLTYG+BKmjzSDbL1SIsXYO2lizqWyluPgmgfAm2Wg=
@@ -73,8 +70,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: dedust_v2
+    data:
       dex_incoming_transfer:
         amount: 1207407699879720
         asset: 0:0E1793099B5C56CCEEABBA1EEDA2571B62639FD28942B1A1D57E364EB4DAA0C6
@@ -84,13 +80,11 @@ actions:
         source_jetton_wallet: 0:430C84C1E79DA71DED5413BC6C90FE888872988111B259F91102A0E666402836
       dex_outgoing_transfer:
         amount: 0
-        asset: null
         destination: 0:43F9B542479DF460026BA8D2120B82813A031A9C26E6D6A90EF9D44632E69313
-        destination_jetton_wallet: null
         source: 0:3A4FC96C5937A5660E9DBEBD01A8BCF602BCEAB86554D05403B7835746C36826
-        source_jetton_wallet: null
       min_out_amount: 2531202124
       peer_swaps: []
+      protocol: dedust_v2
       sender: 0:43F9B542479DF460026BA8D2120B82813A031A9C26E6D6A90EF9D44632E69313
     tx_hashes:
       - +2fSp6XRnLvE4/V0k1gwB9WuxBfobAMayR3bV0NR7gw=

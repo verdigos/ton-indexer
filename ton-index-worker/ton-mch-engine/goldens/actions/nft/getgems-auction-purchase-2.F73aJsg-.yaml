@@ -17,13 +17,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:9A9CB80ADFBD1662F5108766D73355AC2C03304FDA1D25A479670E34EFCD72B3
-      nft_item_index: 1037
+      nft_index: 1037
       payout_amount: 101469600000
       payout_comment: Profit
       payout_comment_encoded: false
@@ -32,7 +31,6 @@ actions:
       query_id: 60675116000001
       real_prev_owner: 0:C002333C4C4873FB77E57A00A6B8E4F4874FCF76E9C73A09EB837E6990440A34
       response_destination: 0:C002333C4C4873FB77E57A00A6B8E4F4874FCF76E9C73A09EB837E6990440A34
-      royalty_amount: null
     tx_hashes:
       - 0Ugv7At3r+quXTtpWVrG4Fy2WISX/m8b3+UzIi9NKTs=
       - C4IgQhVFqHsoM8RMZIRxygkpZ8Hf+zGgYPBUYmlsFvk=
@@ -65,25 +63,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:9A9CB80ADFBD1662F5108766D73355AC2C03304FDA1D25A479670E34EFCD72B3
-      nft_item_index: 1037
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 1037
       price: 103000000000
       query_id: 60675116000001
       real_prev_owner: 0:C002333C4C4873FB77E57A00A6B8E4F4874FCF76E9C73A09EB837E6990440A34
       response_destination: 0:C002333C4C4873FB77E57A00A6B8E4F4874FCF76E9C73A09EB837E6990440A34
-      royalty_amount: null
     tx_hashes:
       - 0Ugv7At3r+quXTtpWVrG4Fy2WISX/m8b3+UzIi9NKTs=
       - C4IgQhVFqHsoM8RMZIRxygkpZ8Hf+zGgYPBUYmlsFvk=
@@ -117,9 +106,9 @@ actions:
     amount: null
     value: 1029600000
     opcode: null
-    ton_transfer_data:
-      content: Marketplace fee
-      encrypted: false
+    data:
+      comment: Marketplace fee
+      comment_encrypted: false
     tx_hashes:
       - F73aJsg+E+RHh3nJel9+KZ23sQ80dLMqt26gbUEXHIs=
       - HuxGoav9KhJveq/Awh2fvB/YY/l/wpi6LIpqmBAYSis=
@@ -146,9 +135,9 @@ actions:
     amount: null
     value: 101469600000
     opcode: null
-    ton_transfer_data:
-      content: Profit
-      encrypted: false
+    data:
+      comment: Profit
+      comment_encrypted: false
     tx_hashes:
       - F73aJsg+E+RHh3nJel9+KZ23sQ80dLMqt26gbUEXHIs=
       - HDcM0YWBHi25xylL2WkqtzuxykJjzhkeQbiYAQqBMWM=

@@ -200,23 +200,20 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 5765664447
-      amount2: null
-      asset1: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
-      asset2: null
-      dex: tonco
-      lp_tokens_minted: 1398855824493
+    data:
+      legs:
+        - amount: 5765664447
+          asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+          target_amount: 2999999999829
+        - target_amount: 5708578661
+          target_asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+          user_jetton_wallet: 0:2BC21F6C2C85ECCF0DFC7FC5CAEC8A124799E6BB47E37206D014322F0DE33EFA
       nft_address: 0:A74CC446A0805F61AF677B3754167DFC5CBB37D94488F9B3D9FA04C91262A06F
       nft_index: 3086
-      target_amount_1: 2999999999829
-      target_amount_2: 5708578661
-      target_asset_1: null
-      target_asset_2: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+      protocol: tonco
       tick_lower: -57180
       tick_upper: -52980
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:2BC21F6C2C85ECCF0DFC7FC5CAEC8A124799E6BB47E37206D014322F0DE33EFA
+      tokens_minted: 1398855824493
       vault_excesses:
         - amount: 57085786
           asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE

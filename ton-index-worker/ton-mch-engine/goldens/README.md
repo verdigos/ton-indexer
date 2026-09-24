@@ -40,9 +40,7 @@ actions:
     amount: 2093172
     value: null
     opcode: null                         # hex when set
-    extra:                               # composites (`*_data`, `extra`) only when set,
-      parent_gasless_action: dQSO…       # nulls inside them spelled out
-    jetton_transfer_data:
+    data:                                # one flat map, only when a payload field is set
       comment: null
       custom_payload: null
       ...
@@ -57,7 +55,9 @@ actions:
     ancestor_type: [...]
 ```
 
-Rows are sorted by anchor. A trace that classifies to nothing carries the
+Rows are sorted by anchor. The emulator Redis envelope stores the codec-prefixed
+payload bytes separately under its binary `payload` key; the action golden shows
+the decoded flat `data` map. A trace that classifies to nothing carries the
 synthetic `unknown` row; a trace whose classification throws writes
 `failure: <reason>` followed by its basic-fallback rows (no corpus trace does).
 BOC-valued fields render as the cell hash.

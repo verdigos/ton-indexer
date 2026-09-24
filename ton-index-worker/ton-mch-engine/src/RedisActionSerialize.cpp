@@ -1,5 +1,6 @@
 #include "RedisActionSerialize.h"
 
+#include "ActionPayload.h"
 #include "Value.h"
 
 #include "td/utils/base64.h"
@@ -8,7 +9,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -30,7 +30,13 @@ void pack_text(Packer &pk, const std::string &s) {
   pk.pack_str_body(s.data(), n);
 }
 
-// These shapes omit an unfilled top-level action field. Composite maps retain
+void pack_binary(Packer &pk, const std::string &s) {
+  const auto n = static_cast<std::uint32_t>(s.size());
+  pk.pack_bin(n);
+  pk.pack_bin_body(s.data(), n);
+}
+
+// These shapes omit an unfilled row column. Composite fallback values retain
 // their full key set and encode unfilled members as nil.
 bool omitted(const Value &v) {
   switch (v.t) {
@@ -53,42 +59,10 @@ bool omitted(const Value &v) {
   }
 }
 
-// Plain MsgPack payload. Integers that can exceed int64 are decimal strings
-// by field name; other integers use native msgpack types.
+// Row amounts can exceed int64 and stay decimal strings. Bounded row integers
+// use native msgpack types.
 bool decimal_string_key(const std::string &k) {
-  static const std::set<std::string> keys{
-      // top level
-      "amount", "value",
-      // jetton_transfer_data / vesting_send_message_data / nft_transfer_data
-      "forward_amount", "query_id",
-      // jetton_swap_data (+ its nested transfer / peer-swap maps)
-      "min_out_amount", "amount_in", "amount_out",
-      // nft_transfer_data
-      "price", "payout_amount", "royalty_amount", "nft_item_index",
-      // dex_deposit_liquidity_data / dex_withdraw_liquidity_data
-      // (`amount` above also covers vault_excesses[].amount)
-      "amount1", "amount2", "lp_tokens_minted", "lp_tokens_burnt",
-      "target_amount_1", "target_amount_2", "nft_index",
-      // staking_data
-      "tokens_minted", "tokens_burnt",
-      // evaa_liquidate_data (Go *string)
-      "debt_amount",
-      // Coffee amount, item-index, and points fields may exceed int64.
-      "amount_1", "amount_2", "minted_item_index", "points",
-      // jvault_claim_data uses []string, whose elements bypass scalar decoders.
-      "claimed_amounts",
-      // LayerZero fees are uint128 and the request ID is uint64.
-      "send_request_id", "native_fee", "zro_fee",
-      // The Tonco Q64.96 initial price is uint160.
-      "initial_price_x96",
-      // Multisig order sequence numbers are uint256.
-      "order_seqno",
-      // Cocoon token, stake, and nonce fields can exceed int64. The shared key
-      // rule also stringifies bounded LayerZero nonce values losslessly.
-      "nonce", "new_tokens", "worker_tokens", "new_tokens_used", "new_stake",
-      "withdraw_amount",
-  };
-  return keys.count(k) != 0;
+  return k == "amount" || k == "value";
 }
 
 // Native integer fields must fit signed int64. Encode an unexpected wider value
@@ -210,16 +184,24 @@ struct ActionField {
 
 const std::vector<ActionField> &optional_fields() {
   static const std::vector<ActionField> fields{
-#define MCH_ACTION_FIELD(name) {#name, &Action::name},
-      MCH_ACTION_VALUE_FIELDS(MCH_ACTION_FIELD)
-#undef MCH_ACTION_FIELD
+      {"source", &Action::source},
+      {"source_secondary", &Action::source_secondary},
+      {"destination", &Action::destination},
+      {"destination_secondary", &Action::destination_secondary},
+      {"asset", &Action::asset},
+      {"asset_secondary", &Action::asset_secondary},
+      {"asset2", &Action::asset2},
+      {"asset2_secondary", &Action::asset2_secondary},
+      {"amount", &Action::amount},
+      {"value", &Action::value},
+      {"opcode", &Action::opcode},
   };
   return fields;
 }
 
 // Number of unconditional keys below. ancestor_type and optional fields are
 // counted separately; fields unused by the Go consumer are not serialized.
-constexpr std::uint32_t kFixedKeys = 12;
+constexpr std::uint32_t kFixedKeys = 13;
 
 void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std::int64_t finality,
                  RedisActionSerializeStats &st) {
@@ -280,6 +262,8 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
       pack_text(pk, t);
     }
   }
+  pack_key(pk, "payload");
+  pack_binary(pk, encode_action_payload(a));
 
   for (const ActionField &f : opt) {
     const Value &v = a.*f.member;

@@ -222,7 +222,7 @@ actions:
     amount: 8800
     value: null
     opcode: null
-    extra:
+    data:
       btc_txid: c8254c7852b5e94c78f1667c29784a760e27c23c3cbf389705184944b4fa0716
     tx_hashes:
       - /PeXz2XTUar9Jjw0056ne1JSoBroxvfKsumrT9BpYO8=

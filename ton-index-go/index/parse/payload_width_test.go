@@ -2,6 +2,7 @@ package parse
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/big"
 	"os"
@@ -95,69 +96,43 @@ func TestPayloadNumericWidthsMatchABI(t *testing.T) {
 	}
 }
 
-func TestPayloadKeysResolveToDecoderFields(t *testing.T) {
-	documented := payloadDocKeys(t)
-	nonPayload := map[string]bool{
-		"amount": true, "asset": true, "btc_txid": true, "destination": true,
-		"destination_jetton_wallet": true, "is_refund": true, "parent_gasless_action": true,
-		"pubkey": true, "source": true, "source_jetton_wallet": true,
-	}
-	groups := map[string]bool{"data": true, "listing": true, "packet": true, "comment_data": true, "extra": true}
-	objects := map[string]bool{"dex_incoming_transfer": true, "dex_outgoing_transfer": true}
-	prefixes := make([]string, 0, len(actionDataPrefixes)+3)
-	for _, prefix := range actionDataPrefixes {
-		prefixes = append(prefixes, prefix)
-	}
-	prefixes = append(prefixes, "NFTListing", "LayerzeroPacket", "TonTransfer")
-
-	payloadKeys := make(map[string]bool, len(documented))
-	for group := range groups {
-		payloadKeys[group] = true
-	}
-	for key := range objects {
-		payloadKeys[key] = true
-	}
-	for path := range actionPayloadFieldNames {
-		payloadKeys[path[strings.LastIndex(path, ".")+1:]] = true
-	}
+// TestPayloadFieldTablesResolve checks the decoder tables against RawAction: every
+// mapped key and every legs template must name a real field of its prefix.
+func TestPayloadFieldTablesResolve(t *testing.T) {
 	rawType := reflect.TypeOf(models.RawAction{})
-	for key := range documented {
-		if nonPayload[key] {
+	for key, name := range actionPayloadFieldNames {
+		prefix := key[:strings.LastIndex(key, ".")]
+		if strings.HasPrefix(name, ".") {
+			// absolute target: the moved row columns reuse an envelope field
+			if !hasNamedField(rawType, name[1:]) {
+				t.Errorf("actionPayloadFieldNames[%q] = %q does not resolve to a RawAction field", key, name[1:])
+			}
 			continue
 		}
-		if groups[key] || objects[key] || payloadKeyResolves(rawType, prefixes, key) {
-			payloadKeys[key] = true
-		} else {
-			t.Errorf("KEYS.md key %q does not resolve through payload.go", key)
+		if !hasNamedField(rawType, prefix+name) {
+			t.Errorf("actionPayloadFieldNames[%q] = %q does not resolve to a RawAction field", key, prefix+name)
 		}
 	}
-	for key := range payloadKeys {
-		if !documented[key] {
-			t.Errorf("payload.go key %q is missing from KEYS.md", key)
+	for prefix, members := range actionPayloadLegFieldNames {
+		for member, template := range members {
+			field := prefix + fmt.Sprintf(template, 1)
+			if !hasNamedField(rawType, field) {
+				t.Errorf("actionPayloadLegFieldNames[%q][%q] = %q does not resolve", prefix, member, field)
+			}
+		}
+	}
+	for stored, prefixes := range actionDataPrefixes {
+		for _, prefix := range prefixes {
+			if !hasFieldPrefix(rawType, prefix) {
+				t.Errorf("actionDataPrefixes[%q] prefix %q owns no RawAction field", stored, prefix)
+			}
 		}
 	}
 }
 
-func payloadDocKeys(t *testing.T) map[string]bool {
-	t.Helper()
-	keys := readRepoFile(t, "ton-index-worker/ton-mch-engine/docs/KEYS.md")
-	documented := make(map[string]bool)
-	keyRow := regexp.MustCompile("^\\| `([^`]+)`")
-	for _, line := range strings.Split(keys, "\n") {
-		if m := keyRow.FindStringSubmatch(line); len(m) == 2 {
-			documented[m[1]] = true
-		}
-	}
-	return documented
-}
-
-func payloadKeyResolves(rawType reflect.Type, prefixes []string, key string) bool {
-	name := actionPayloadFieldName("", key)
-	if hasNamedField(rawType, name) {
-		return true
-	}
-	for _, prefix := range prefixes {
-		if hasNamedField(rawType, prefix+actionPayloadFieldName(prefix, key)) {
+func hasFieldPrefix(typ reflect.Type, prefix string) bool {
+	for i := 0; i < typ.NumField(); i++ {
+		if strings.HasPrefix(typ.Field(i).Name, prefix) {
 			return true
 		}
 	}
@@ -183,11 +158,9 @@ func hasNamedField(typ reflect.Type, name string) bool {
 func TestPayloadDecodesAndMarshalsMaxLayerZeroWidths(t *testing.T) {
 	const maxUint128 = "340282366920938463463374607431768211455"
 	payloadMap := map[string]interface{}{
-		"packet": map[string]interface{}{
-			"dst_eid": "4294967295",
-			"nonce":   "18446744073709551615",
-		},
 		"data": map[string]interface{}{
+			"dst_eid":    "4294967295",
+			"nonce":      "18446744073709551615",
 			"native_fee": maxUint128,
 		},
 	}

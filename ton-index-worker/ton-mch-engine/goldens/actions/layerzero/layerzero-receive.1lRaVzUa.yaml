@@ -219,12 +219,9 @@ actions:
     amount: 80949282885
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 78518479963
       response_destination: 0:075009536B6A712C628045D87118652CB7C0E6E355B0E298927A653EBC90617F
     tx_hashes:
@@ -259,7 +256,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    layerzero_packet_data:
+    data:
       dst_eid: 30343
       dst_oapp: "0x170725394aa56136fbd27d0ce31d8a98e0f8ae72a4d2379b5dde83e211a2d5fa"
       guid: "0x9dc8c0fd5c765d02cf9b213b0f1e39b8617dd76cda4e7497bed59f0e31557cd"
@@ -303,9 +300,8 @@ actions:
     amount: null
     value: 6336977
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - a1J9i1yIhsH+ymLVzAKfB1lHLHyLHwVnf64ixv88ubw=
       - fHAR0RvwhYdgYVCC47SkFmvkI4iTNfhcoZXTPU9c6/U=
@@ -335,9 +331,8 @@ actions:
     amount: null
     value: 31909600
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - GOFAOq6V8ozb+JLbHVDo3N4Mwfso69fAYUNrGccRI/4=
       - babV5WnjqOGi8xjnbBdNjwLPFe1jUyikNMuTBqA/1PQ=

@@ -149,9 +149,9 @@ actions:
     amount: null
     value: 100000000
     opcode: null
-    ton_transfer_data:
-      content: approve
-      encrypted: false
+    data:
+      comment: approve
+      comment_encrypted: false
     tx_hashes:
       - 4QljGlOz1j4I+Upxyt8Tsp8bRXoS05bP9gOnBCQQRj8=
       - YbRufoOZ9e5o82HiEn0CJYH3PYUMWaQqeFZ3Uaril90=

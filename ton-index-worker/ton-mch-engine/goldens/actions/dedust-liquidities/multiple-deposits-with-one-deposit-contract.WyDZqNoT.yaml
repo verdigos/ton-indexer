@@ -95,22 +95,18 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 51504594962
-      amount2: null
-      asset1: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      asset2: null
-      dex: dedust
-      lp_tokens_minted: 52689282818
-      target_amount_1: 7000000000
-      target_amount_2: 51504594962
-      target_asset_1: null
-      target_asset_2: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      user_jetton_wallet_1: 0:096C67F8772E2EAE6DB8D64DA49C989D10C94BB3DFF6DD56EA1D2E944531DD4B
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 51504594962
+          asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+          target_amount: 7000000000
+          user_jetton_wallet: 0:096C67F8772E2EAE6DB8D64DA49C989D10C94BB3DFF6DD56EA1D2E944531DD4B
+        - target_amount: 51504594962
+          target_asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+      protocol: dedust
+      tokens_minted: 52689282818
       vault_excesses:
         - amount: 3554188522
-          asset: null
     tx_hashes:
       - 200xxdO9Xq+WXeY/3k+WKVEwxeTPoFdfM0q/QWJ+mNU=
       - Bz661mQHHBvOc+4mELw1/hK8VPH1kzsxDlgoZJwMgqg=
@@ -158,19 +154,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 3500000000
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: dedust
-      lp_tokens_minted: null
-      target_amount_1: 3500000000
-      target_amount_2: 51504594962
-      target_asset_1: null
-      target_asset_2: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 3500000000
+          target_amount: 3500000000
+        - target_amount: 51504594962
+          target_asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+      protocol: dedust
     tx_hashes:
       - 1gxeaZ6HDQyEJSbTXgm5ORN4cUTD2iR3GtKpG96PZ4g=
       - R1xdMGF16yWWfUAb6gR1Wyws5oS/+DnI+Kwd/nO38EM=
@@ -203,19 +193,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 3500000000
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: dedust
-      lp_tokens_minted: null
-      target_amount_1: 3500000000
-      target_amount_2: 51504594962
-      target_asset_1: null
-      target_asset_2: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 3500000000
+          target_amount: 3500000000
+        - target_amount: 51504594962
+          target_asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+      protocol: dedust
     tx_hashes:
       - DRmer0dKs1nuy9Xe1cK2jult4XcyOxVFoq3l7n+0X0w=
       - WyDZqNoT4YsuauWAnRh5kVXWBsRzkFG5VRTEq96XuEA=
@@ -248,19 +232,15 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 51504594962
-      amount2: null
-      asset1: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      asset2: null
-      dex: dedust
-      lp_tokens_minted: null
-      target_amount_1: 3500000000
-      target_amount_2: 51504594962
-      target_asset_1: null
-      target_asset_2: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      user_jetton_wallet_1: 0:096C67F8772E2EAE6DB8D64DA49C989D10C94BB3DFF6DD56EA1D2E944531DD4B
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 51504594962
+          asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+          target_amount: 3500000000
+          user_jetton_wallet: 0:096C67F8772E2EAE6DB8D64DA49C989D10C94BB3DFF6DD56EA1D2E944531DD4B
+        - target_amount: 51504594962
+          target_asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+      protocol: dedust
     tx_hashes:
       - Cos1yJAO/cNh5P5pOpes6xSmsUV0MzmVcZhExDA+LaA=
       - DtfN+ZDNVBcjpPllAWMqQsE9r1lm6ESry6zH22IuKzE=
@@ -297,12 +277,9 @@ actions:
     amount: 51504594962
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 89070500
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 15253731571625013365
       response_destination: 0:A6658615EBE101A2D39E81A3B2DADBBDFE915F2EEBD2B42459EAE33F7460A792
     tx_hashes:

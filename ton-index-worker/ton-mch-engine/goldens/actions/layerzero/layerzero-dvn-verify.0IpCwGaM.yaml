@@ -191,7 +191,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    layerzero_dvn_verify_data:
+    data:
       dvn: 0:0E5C256C5A961C6D472F1AE83E2061D1F23C8BF2DA6C3EA9CEF67BEBF5DCA9BA
       nonce: 125
       proxy: 0:04B9F9836004D7F53E52E01602D9C07C14CDF38B8A946B6E813CFEA8DE10927D
@@ -234,9 +234,8 @@ actions:
     amount: null
     value: 441355102
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - GD4BhYLJ2/NcvocLEIF9GgBtQX6iols3kxk3hRHzLHc=
       - nqcQasrDJmKO/1PXvH5bX7kQGefGZSZSBKPdaImFCCo=

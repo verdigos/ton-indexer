@@ -72,22 +72,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
-      forward_payload: null
+    data:
       is_purchase: true
-      marketplace_address: null
-      nft_item_index: 42
+      nft_index: 42
       payout_amount: 123
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
       price: 123
       query_id: 7
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
     tx_hashes:
       - +ScxH0/j5SKwXXfZ+c/CIb24HJEPXZUcu2sEMRbmOVU=
       - MJaRrQ0d/7Rz+aLEWUV2G1ZAh2IEre2gVXW4SppBV5k=

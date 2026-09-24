@@ -133,7 +133,7 @@ actions:
     amount: 14999630120
     value: null
     opcode: null
-    cocoon_grant_refund_data:
+    data:
       expected_address: 260;8da2c03aaf0c2beb208f6828c3547d4a86e19a98f1bfaaba9e7fc24ff1452428e
       new_tokens_used: 9225483487327049292
       query_id: 8779794170130083123

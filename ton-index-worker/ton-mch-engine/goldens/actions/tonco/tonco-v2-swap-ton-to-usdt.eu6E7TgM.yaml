@@ -70,15 +70,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: tonco
+    data:
       dex_incoming_transfer:
         amount: 14663978541
-        asset: null
         destination: 0:13D2708EDB4BC2EA0CE9C9425B588EC42E746F0000775472776758D742CC3A28
         destination_jetton_wallet: 0:BB0FCD168F1319666BDD089C56851F97EBDA7E59EB05B11B67F9FBBE86AFCC41
         source: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
-        source_jetton_wallet: null
       dex_outgoing_transfer:
         amount: 20100000
         asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
@@ -88,6 +85,7 @@ actions:
         source_jetton_wallet: 0:E35FCD93A2CC0860829D866F247DAF24E14133693F45D09D10E521BE1BF8C2DA
       min_out_amount: 19095000
       peer_swaps: []
+      protocol: tonco
       sender: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
     tx_hashes:
       - 3JQXxo5GP/kiyX47pSLaCSjSpXN5M2umH3pnjh7Qkx8=
