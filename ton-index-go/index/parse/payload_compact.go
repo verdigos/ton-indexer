@@ -3,6 +3,7 @@ package parse
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -14,6 +15,14 @@ import (
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
 )
 
+const (
+	// compactMaxDepth bounds the nesting of records and arrays: a deeper payload is
+	// rejected before the recursion can exhaust the stack.
+	compactMaxDepth = 32
+	// compactMaxKeyText bounds the key sample an error message quotes.
+	compactMaxKeyText = 32
+)
+
 // The compact payload (codec byte 1) is ONE msgpack map whose keys are registry ids and
 // whose values are typed by those ids, at every nesting level. decodeCompactPayload turns
 // such a body (everything after the codec byte) into the named map the routing layer and
@@ -21,41 +30,70 @@ import (
 // carried: decimal strings for integers, `W:HEX` for addresses, standard padded base64
 // for BOCs and base64 hashes, 64 lowercase hex digits (with or without the `0x` prefix)
 // for the hash forms, msgpack str and bool as is.
+//
+// An id this table does not know (the engine is newer) has its value skipped and the rest
+// of the action decoded, the way the previous reader ignored an unknown data key. A key
+// that is not an integer id at all is rejected: the old name-keyed format is not
+// supported.
 func decodeCompactPayload(body []byte) (map[string]interface{}, error) {
-	dec := msgpack.NewDecoder(bytes.NewReader(body))
-	values, err := decodeCompactRecord(dec)
+	reader := bytes.NewReader(body)
+	d := &compactDecoder{dec: msgpack.NewDecoder(reader), in: reader}
+	values, err := d.record()
 	if err != nil {
 		return nil, err
 	}
-	if _, err := dec.DecodeInterface(); err != io.EOF {
-		return nil, fmt.Errorf("trailing data")
+	// A payload is one value: anything left is trailing data.
+	if left := d.in.Len(); left != 0 {
+		return nil, fmt.Errorf("trailing data: %d bytes after the payload map", left)
 	}
 	return values, nil
 }
 
-// decodeCompactRecord decodes one id-keyed map: the payload body or a nested record
-// (`legs[]` element, claim reward, swap record, `peer_swaps[]`, `vault_excesses[]`, any
-// nested map anywhere). A key must be a registry id in any msgpack integer width; a
-// later entry of a duplicated id wins, the way Go map assignment resolves it.
-func decodeCompactRecord(dec *msgpack.Decoder) (map[string]interface{}, error) {
-	n, err := dec.DecodeMapLen()
+// compactDecoder walks the body. The msgpack decoder reads straight from `in` (it buffers
+// only a reader that cannot seek back a byte), so `in.Len()` is always the exact number of
+// bytes left, and every declared count or length is checked against it before a map, an
+// array or a byte slice is allocated.
+type compactDecoder struct {
+	dec   *msgpack.Decoder
+	in    *bytes.Reader
+	depth int
+}
+
+// record decodes one id-keyed map: the payload body or a nested record (`legs[]` element,
+// claim reward, swap record, `peer_swaps[]`, `vault_excesses[]`, any nested map anywhere).
+// A later entry of a duplicated id wins, the way Go map assignment resolves it.
+func (d *compactDecoder) record() (map[string]interface{}, error) {
+	n, err := d.dec.DecodeMapLen()
 	if err != nil {
 		return nil, fmt.Errorf("expected a map: %w", err)
 	}
 	if n < 0 {
 		return nil, fmt.Errorf("expected a map, got nil")
 	}
+	// A map entry is at least a key and a value, so two bytes.
+	if err := d.checkCount(n, 2, "map"); err != nil {
+		return nil, err
+	}
 	values := make(map[string]interface{}, n)
 	for i := 0; i < n; i++ {
-		key, err := dec.DecodeInterface()
+		key, err := d.scalar()
 		if err != nil {
 			return nil, fmt.Errorf("map key: %w", err)
 		}
-		id, info, err := compactKeyInfo(key)
-		if err != nil {
-			return nil, err
+		id, ok := compactKeyID(key)
+		if !ok {
+			return nil, fmt.Errorf("payload map key %s is not a registry id; the old name-keyed payload format is not supported", compactKeyText(key))
 		}
-		value, err := decodeCompactValue(dec, info)
+		info := payloadKeys[id]
+		if info.Name == "" {
+			// An id this build does not know: a newer engine wrote it. Its value is
+			// skipped so the rest of the action still decodes.
+			if err := d.skip(); err != nil {
+				return nil, fmt.Errorf("payload key id %d: %w", id, err)
+			}
+			continue
+		}
+		value, err := d.value(info)
 		if err != nil {
 			return nil, fmt.Errorf("payload key %s (id %d): %w", info.Name, id, err)
 		}
@@ -64,19 +102,24 @@ func decodeCompactRecord(dec *msgpack.Decoder) (map[string]interface{}, error) {
 	return values, nil
 }
 
-// compactKeyInfo resolves a decoded msgpack map key to its registry id and entry. A
-// retired entry still resolves: its name routes to no field and is dropped downstream,
-// the way the retired name behaved before.
-func compactKeyInfo(key interface{}) (uint8, payloadKeyInfo, error) {
-	id, ok := compactKeyID(key)
-	if !ok {
-		return 0, payloadKeyInfo{}, fmt.Errorf("payload map key %s is not a registry id; the old name-keyed payload format is not supported", compactKeyText(key))
+// checkCount rejects a declared entry count or byte length the bytes left cannot hold:
+// `perEntry` is the minimum size of one entry (a map entry needs two bytes, an array
+// element and a byte length need one).
+func (d *compactDecoder) checkCount(count, perEntry int, what string) error {
+	left := d.in.Len()
+	if count > left/perEntry {
+		return fmt.Errorf("%s declares %d entries but only %d bytes remain", what, count, left)
 	}
-	info := payloadKeys[id]
-	if info.Name == "" {
-		return id, info, fmt.Errorf("payload key id %d is not in the registry", id)
+	return nil
+}
+
+// enter counts one nested container and refuses one deeper than the limit.
+func (d *compactDecoder) enter(what string) error {
+	if d.depth >= compactMaxDepth {
+		return fmt.Errorf("%s nests deeper than %d levels", what, compactMaxDepth)
 	}
-	return id, info, nil
+	d.depth++
+	return nil
 }
 
 // compactKeyID reads a registry id from a decoded msgpack key: any non-negative integer
@@ -104,16 +147,21 @@ func compactKeyID(key interface{}) (uint8, bool) {
 	return 0, false
 }
 
-// decodeCompactValue decodes the value of one registry key. A null is an absent key for
-// every type, exactly as the previous reader skipped a null.
-func decodeCompactValue(dec *msgpack.Decoder, info payloadKeyInfo) (interface{}, error) {
+// value decodes the value of one registry key. A null is an absent key for every type,
+// exactly as the previous reader skipped a null.
+func (d *compactDecoder) value(info payloadKeyInfo) (interface{}, error) {
 	if info.Type == payloadTypeOther {
-		return decodeCompactContainer(dec)
+		return d.container()
 	}
-	value, err := dec.DecodeInterface()
+	value, err := d.scalar()
 	if err != nil {
 		return nil, fmt.Errorf("decode value: %w", err)
 	}
+	return compactTypedText(value, info)
+}
+
+// compactTypedText renders one decoded value in the text form the routing layer expects.
+func compactTypedText(value interface{}, info payloadKeyInfo) (interface{}, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -225,39 +273,210 @@ func compactUintText(value interface{}) (interface{}, error) {
 	return strconv.FormatUint(number, 10), nil
 }
 
-// decodeCompactContainer decodes an `other` value: a map becomes a record whose keys are
-// translated and whose values are typed by their own key, an array keeps its order with
-// its records translated and its null placeholders kept (the positional `legs` slots),
-// and every scalar passes through unchanged.
-func decodeCompactContainer(dec *msgpack.Decoder) (interface{}, error) {
-	code, err := dec.PeekCode()
+// scalar decodes one non-container value. A str or bin value has its declared length
+// checked against the bytes left before its bytes are allocated; the msgpack codes that
+// carry no length are bounded by construction (at most nine bytes).
+func (d *compactDecoder) scalar() (interface{}, error) {
+	code, err := d.peek()
 	if err != nil {
 		return nil, err
 	}
 	switch {
-	case msgpcode.IsFixedMap(code) || code == msgpcode.Map16 || code == msgpcode.Map32:
-		return decodeCompactRecord(dec)
-	case msgpcode.IsFixedArray(code) || code == msgpcode.Array16 || code == msgpcode.Array32:
-		n, err := dec.DecodeArrayLen()
+	case code == msgpcode.Nil || msgpcode.IsFixedNum(code) || msgpcode.IsFixedString(code) ||
+		code == msgpcode.True || code == msgpcode.False || code == msgpcode.Float || code == msgpcode.Double ||
+		code == msgpcode.Uint8 || code == msgpcode.Uint16 || code == msgpcode.Uint32 || code == msgpcode.Uint64 ||
+		code == msgpcode.Int8 || code == msgpcode.Int16 || code == msgpcode.Int32 || code == msgpcode.Int64:
+		return d.dec.DecodeInterface()
+	case isStrCode(code):
+		raw, err := d.lengthPrefixed(code)
+		if err != nil {
+			return nil, err
+		}
+		return string(raw), nil
+	case isBinCode(code):
+		return d.lengthPrefixed(code)
+	}
+	return nil, fmt.Errorf("unsupported msgpack code 0x%02x", code)
+}
+
+// peek reports the next msgpack code without consuming it.
+func (d *compactDecoder) peek() (byte, error) {
+	return d.dec.PeekCode()
+}
+
+// lengthPrefixed consumes a str or bin header and returns its bytes. The declared length
+// is rejected when the bytes left cannot hold it, so nothing larger than the input is ever
+// allocated.
+func (d *compactDecoder) lengthPrefixed(code byte) ([]byte, error) {
+	length, err := d.valueLength(code)
+	if err != nil {
+		return nil, err
+	}
+	if length > d.in.Len() {
+		return nil, fmt.Errorf("value declares %d bytes but only %d bytes remain", length, d.in.Len())
+	}
+	raw := make([]byte, length)
+	if err := d.dec.ReadFull(raw); err != nil {
+		return nil, fmt.Errorf("value body: %w", err)
+	}
+	return raw, nil
+}
+
+// valueLength consumes the header of a str or bin value and returns its declared length.
+func (d *compactDecoder) valueLength(code byte) (int, error) {
+	if _, err := d.in.ReadByte(); err != nil {
+		return 0, fmt.Errorf("value header: %w", err)
+	}
+	switch code {
+	case msgpcode.Str8, msgpcode.Bin8:
+		return d.lengthBytes(1)
+	case msgpcode.Str16, msgpcode.Bin16:
+		return d.lengthBytes(2)
+	case msgpcode.Str32, msgpcode.Bin32:
+		return d.lengthBytes(4)
+	}
+	// A fixstr carries its length in the code byte.
+	return int(code & 0x1f), nil
+}
+
+// lengthBytes reads a big-endian length of `width` bytes.
+func (d *compactDecoder) lengthBytes(width int) (int, error) {
+	var raw [4]byte
+	if _, err := io.ReadFull(d.in, raw[:width]); err != nil {
+		return 0, fmt.Errorf("value header: %w", err)
+	}
+	if width == 1 {
+		return int(raw[0]), nil
+	}
+	if width == 2 {
+		return int(binary.BigEndian.Uint16(raw[:2])), nil
+	}
+	return int(binary.BigEndian.Uint32(raw[:4])), nil
+}
+
+// container decodes an `other` value: a map becomes a record whose keys are translated and
+// whose values are typed by their own key, an array keeps its order with its records
+// translated and its null placeholders kept (the positional `legs` slots), and every
+// scalar passes through unchanged.
+func (d *compactDecoder) container() (interface{}, error) {
+	code, err := d.peek()
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case isMapCode(code):
+		if err := d.enter("payload"); err != nil {
+			return nil, err
+		}
+		values, err := d.record()
+		d.depth--
+		return values, err
+	case isArrayCode(code):
+		n, err := d.dec.DecodeArrayLen()
 		if err != nil {
 			return nil, fmt.Errorf("expected an array: %w", err)
 		}
 		if n < 0 {
 			return nil, nil
 		}
-		// The declared length is untrusted; the read below fails long before a bogus
-		// length can be honoured, so only a bounded slice is reserved up front.
-		items := make([]interface{}, 0, min(n, 1024))
-		for i := 0; i < n; i++ {
-			item, err := decodeCompactContainer(dec)
+		// An element is at least one byte, so the count the bytes left cannot hold is
+		// rejected before the slice is reserved.
+		if err := d.checkCount(n, 1, "array"); err != nil {
+			return nil, err
+		}
+		if err := d.enter("payload"); err != nil {
+			return nil, err
+		}
+		items := make([]interface{}, n)
+		for i := range items {
+			item, err := d.container()
 			if err != nil {
+				d.depth--
 				return nil, fmt.Errorf("array element %d: %w", i, err)
 			}
-			items = append(items, item)
+			items[i] = item
 		}
+		d.depth--
 		return items, nil
 	}
-	return dec.DecodeInterface()
+	return d.scalar()
+}
+
+// skip consumes one value and keeps nothing: it serves an id this build does not know. It
+// obeys the same count, length and depth bounds as the decoder.
+func (d *compactDecoder) skip() error {
+	code, err := d.peek()
+	if err != nil {
+		return err
+	}
+	switch {
+	case isMapCode(code):
+		n, err := d.dec.DecodeMapLen()
+		if err != nil {
+			return fmt.Errorf("expected a map: %w", err)
+		}
+		if n < 0 {
+			return nil
+		}
+		if err := d.checkCount(n, 2, "map"); err != nil {
+			return err
+		}
+		if err := d.enter("payload"); err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			if _, err := d.scalar(); err != nil {
+				d.depth--
+				return fmt.Errorf("map key: %w", err)
+			}
+			if err := d.skip(); err != nil {
+				d.depth--
+				return err
+			}
+		}
+		d.depth--
+		return nil
+	case isArrayCode(code):
+		n, err := d.dec.DecodeArrayLen()
+		if err != nil {
+			return fmt.Errorf("expected an array: %w", err)
+		}
+		if n < 0 {
+			return nil
+		}
+		if err := d.checkCount(n, 1, "array"); err != nil {
+			return err
+		}
+		if err := d.enter("payload"); err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			if err := d.skip(); err != nil {
+				d.depth--
+				return fmt.Errorf("array element %d: %w", i, err)
+			}
+		}
+		d.depth--
+		return nil
+	}
+	_, err = d.scalar()
+	return err
+}
+
+func isMapCode(code byte) bool {
+	return msgpcode.IsFixedMap(code) || code == msgpcode.Map16 || code == msgpcode.Map32
+}
+
+func isArrayCode(code byte) bool {
+	return msgpcode.IsFixedArray(code) || code == msgpcode.Array16 || code == msgpcode.Array32
+}
+
+func isStrCode(code byte) bool {
+	return msgpcode.IsFixedString(code) || code == msgpcode.Str8 || code == msgpcode.Str16 || code == msgpcode.Str32
+}
+
+func isBinCode(code byte) bool {
+	return code == msgpcode.Bin8 || code == msgpcode.Bin16 || code == msgpcode.Bin32
 }
 
 func compactTypeName(value interface{}) string {
@@ -267,11 +486,22 @@ func compactTypeName(value interface{}) string {
 	return fmt.Sprintf("%T", value)
 }
 
-// compactKeyText names a rejected key: a string key of the old payload gets its quotes,
-// an out of range integer its number.
+// compactKeyText names a rejected key by its type and a bounded sample: a key of an
+// untrusted payload must never make the error text (and the log line it reaches) huge.
 func compactKeyText(key interface{}) string {
-	if text, ok := key.(string); ok {
-		return strconv.Quote(text)
+	switch key := key.(type) {
+	case string:
+		return fmt.Sprintf("%s (string, %d bytes)", compactSample([]byte(key)), len(key))
+	case []byte:
+		return fmt.Sprintf("%s (bin, %d bytes)", compactSample(key), len(key))
 	}
-	return fmt.Sprintf("%v", key)
+	return fmt.Sprintf("%v (%s)", key, compactTypeName(key))
+}
+
+// compactSample renders at most compactMaxKeyText bytes, quoted.
+func compactSample(raw []byte) string {
+	if len(raw) <= compactMaxKeyText {
+		return strconv.Quote(string(raw))
+	}
+	return strconv.Quote(string(raw[:compactMaxKeyText])) + "..."
 }

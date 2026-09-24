@@ -638,7 +638,9 @@ func (a *Action) ToRawAction() (*models.RawAction, error) {
 	// has no details.
 	if len(a.Payload) != 0 {
 		if err := parse.DecodeActionPayload(a.Payload, raw); err != nil {
-			return nil, err
+			// The marker the stored-action scan uses: a caller can skip this one
+			// undecodable action instead of failing the whole response.
+			return nil, fmt.Errorf("%w: %v", parse.ErrPayloadDecode, err)
 		}
 	}
 	return raw, nil

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -347,8 +348,9 @@ func TestDecodeCompactTypes(t *testing.T) {
 	}
 }
 
-// TestDecodeCompactErrors pins every rejection: a non-id key, an unknown id, a wrong
-// value type, a wrong bin length and a malformed frame.
+// TestDecodeCompactErrors pins every rejection: a non-id key, a wrong value type, a wrong
+// bin length, a hostile declared length and a malformed frame. An id this table does not
+// know is NOT a rejection - see TestDecodeCompactSkipsUnknownIds.
 func TestDecodeCompactErrors(t *testing.T) {
 	hash31 := hex.EncodeToString(addressHashForTest()[:31])
 	hash32 := hex.EncodeToString(addressHashForTest())
@@ -357,11 +359,8 @@ func TestDecodeCompactErrors(t *testing.T) {
 		body string
 		want string
 	}{
-		{name: "string key", body: "81 a4 64617461 80", want: `payload map key "data" is not a registry id`},
-		{name: "unknown id", body: "81 7f c0", want: "payload key id 127 is not in the registry"},
-		{name: "unknown id in the uint8 form", body: "81 cc c8 c0", want: "payload key id 200 is not in the registry"},
-		{name: "unknown id in a nested record", body: "81 13 81 7f c0", want: "payload key id 127 is not in the registry"},
-		{name: "string key in a nested record", body: "81 13 81 a4 64617461 80", want: `payload map key "data" is not a registry id`},
+		{name: "string key", body: "81 a4 64617461 80", want: `payload map key "data" (string, 4 bytes) is not a registry id`},
+		{name: "string key in a nested record", body: "81 13 81 a4 64617461 80", want: `payload map key "data" (string, 4 bytes) is not a registry id`},
 		{name: "short address", body: "81 06 c4 20 " + hash32, want: "expected a 33 byte address, got 32 bytes"},
 		{name: "long address", body: "81 06 c4 22 00" + hash32 + "00", want: "expected a 33 byte address, got 34 bytes"},
 		{name: "address as text", body: "81 06 a3 666f6f", want: "expected a 33 byte bin address, got string"},
@@ -374,8 +373,10 @@ func TestDecodeCompactErrors(t *testing.T) {
 		{name: "body is an array", body: "90", want: "expected a map"},
 		{name: "body is nil", body: "c0", want: "expected a map, got nil"},
 		{name: "trailing data", body: "80 00", want: "trailing data"},
-		{name: "truncated value", body: "81 06", want: "payload key asset (id 6)"},
-		{name: "truncated key", body: "81", want: "map key: EOF"},
+		{name: "truncated value", body: "81 06", want: "map declares 1 entries but only 1 bytes remain"},
+		{name: "truncated key", body: "81", want: "map declares 1 entries but only 0 bytes remain"},
+		{name: "bin past the input", body: "81 06 c5 ff ff", want: "declares 65535 bytes but only 0 bytes remain"},
+		{name: "unsupported code", body: "81 06 c1", want: "unsupported msgpack code 0xc1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := decodeCompactPayload(compactBodyForTest(t, tc.body))
@@ -384,6 +385,200 @@ func TestDecodeCompactErrors(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error = %q, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// recordBytesForTest builds one record (an id-keyed map) from the test encoder's bytes for
+// `named` plus hand-written extra entry bytes: it is how a payload of a NEWER engine looks
+// to this table - known fields plus ids it does not know.
+func recordBytesForTest(t *testing.T, named map[string]interface{}, extra ...string) []byte {
+	t.Helper()
+	payload, err := EncodeCompactForTest(named)
+	if err != nil {
+		t.Fatalf("EncodeCompactForTest: %v", err)
+	}
+	if payload[0] != actionPayloadCodecMsgpack || payload[1] != 0x80|byte(len(named)) {
+		t.Fatalf("unexpected encoded prefix %x", payload[:2])
+	}
+	var buf bytes.Buffer
+	writeCompactHeaderForTest(&buf, 0x80, 0xde, 0xdf, len(named)+len(extra))
+	buf.Write(payload[2:])
+	for _, raw := range extra {
+		buf.Write(compactBodyForTest(t, raw))
+	}
+	return buf.Bytes()
+}
+
+// TestDecodeCompactSkipsUnknownIds pins the cross-version rule: an id this build does not
+// know has its value skipped - at the top level and inside records - and the rest of the
+// action decodes, exactly as the previous reader ignored an unknown data key.
+func TestDecodeCompactSkipsUnknownIds(t *testing.T) {
+	hashHex := hex.EncodeToString(addressHashForTest())
+	addressHex := "00" + hashHex
+	addressText := "0:" + strings.ToUpper(hashHex)
+	named := map[string]interface{}{
+		"amount": "7", "asset": addressText, "comment": "hello",
+	}
+	bigBin := strings.Repeat("AB", 4096)
+	// A record nested inside `legs` that itself carries an unknown id.
+	leg := recordBytesForTest(t, map[string]interface{}{"amount": "8"}, "7d 80")
+	var legBody bytes.Buffer
+	writeCompactHeaderForTest(&legBody, 0x80, 0xde, 0xdf, 2)
+	legBody.WriteByte(payloadKeyIDByName["comment"])
+	if err := writeCompactScalarForTest(&legBody, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	legBody.WriteByte(payloadKeyIDByName["legs"])
+	legBody.WriteByte(0x92)
+	legBody.WriteByte(0xc0)
+	legBody.Write(leg)
+
+	for _, tc := range []struct {
+		name string
+		body []byte
+		want map[string]interface{}
+	}{
+		{
+			name: "unknown top-level id with a record value",
+			body: recordBytesForTest(t, named, "7d 82 02 05 06 c4 21 "+addressHex),
+			want: named,
+		},
+		{
+			name: "unknown id 200 in the uint8 form with a bin value",
+			body: recordBytesForTest(t, named, "cc c8 c5 10 00 "+bigBin),
+			want: named,
+		},
+		{
+			name: "unknown id inside a nested record",
+			body: legBody.Bytes(),
+			want: map[string]interface{}{"comment": "hello", "legs": []interface{}{nil, map[string]interface{}{"amount": "8"}}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeCompactPayload(tc.body)
+			if err != nil {
+				t.Fatalf("decodeCompactPayload: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("decoded %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+
+	// The same record still rejects a key that is not an id at all.
+	if _, err := decodeCompactPayload(recordBytesForTest(t, named, `a4 64617461 80`)); err == nil {
+		t.Error("a string key was accepted")
+	}
+}
+
+// TestDecodeCompactDepthLimit pins the nesting bound: 32 nested arrays decode, 33 are
+// rejected before the recursion can exhaust the stack.
+func TestDecodeCompactDepthLimit(t *testing.T) {
+	body := func(levels int) []byte {
+		var buf bytes.Buffer
+		buf.WriteByte(0x81)
+		buf.WriteByte(payloadKeyIDByName["legs"])
+		for i := 0; i < levels; i++ {
+			buf.WriteByte(0x91)
+		}
+		buf.WriteByte(0xc0)
+		return buf.Bytes()
+	}
+	if _, err := decodeCompactPayload(body(32)); err != nil {
+		t.Errorf("32 nested arrays rejected: %v", err)
+	}
+	_, err := decodeCompactPayload(body(33))
+	if err == nil {
+		t.Fatal("33 nested arrays accepted")
+	}
+	if !strings.Contains(err.Error(), "nests deeper than 32 levels") {
+		t.Errorf("error = %q, want the depth limit", err)
+	}
+}
+
+// TestDecodeCompactTruncation checks that no prefix of a real payload panics or decodes:
+// every truncated body is an error, the whole one decodes.
+func TestDecodeCompactTruncation(t *testing.T) {
+	payload, err := EncodeCompactForTest(map[string]interface{}{
+		"amount": "7", "asset": "0:" + strings.Repeat("AB", 32), "comment": "hello",
+		"nft_index":       "123456789012345678901234567890123456789",
+		"legs":            []interface{}{nil, map[string]interface{}{"amount": "8", "asset": "0:" + strings.Repeat("CD", 32)}},
+		"claimed_rewards": []interface{}{map[string]interface{}{"amount": "9"}},
+	})
+	if err != nil {
+		t.Fatalf("EncodeCompactForTest: %v", err)
+	}
+	body := payload[1:]
+	for length := 0; length < len(body); length++ {
+		got, err := decodeCompactPayload(body[:length])
+		if err == nil {
+			t.Errorf("prefix of %d/%d bytes decoded to %#v", length, len(body), got)
+		}
+	}
+	if _, err := decodeCompactPayload(body); err != nil {
+		t.Fatalf("whole body rejected: %v", err)
+	}
+}
+
+// TestDecodeCompactHostileLengths pins the allocation bound: a declared count or length
+// the input cannot hold is rejected before anything is reserved, so a tiny crafted body
+// cannot make the process allocate.
+func TestDecodeCompactHostileLengths(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "map32 with a four billion count", body: "df ff ff ff ff", want: "map declares 4294967295 entries but only 0 bytes remain"},
+		{name: "map32 with a hundred count", body: "df 00 00 00 64", want: "map declares 100 entries but only 0 bytes remain"},
+		{name: "array32 in a record", body: "81 2c dd ff ff ff ff", want: "payload key legs (id 44)"},
+		{name: "array32 in an unknown id", body: "81 7d dd ff ff ff ff", want: "payload key id 125"},
+		{name: "bin32 with a four billion length", body: "81 06 c6 ff ff ff ff", want: "declares 4294967295 bytes"},
+		{name: "str32 with a four billion length", body: "81 0d db ff ff ff ff", want: "declares 4294967295 bytes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var before, after runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&before)
+			_, err := decodeCompactPayload(compactBodyForTest(t, tc.body))
+			runtime.ReadMemStats(&after)
+			if err == nil {
+				t.Fatalf("body accepted, want an error containing %q", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to contain %q", err, tc.want)
+			}
+			if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
+				t.Errorf("decoding a %d byte body allocated %d bytes", len(tc.body), allocated)
+			}
+		})
+	}
+}
+
+// TestDecodeCompactKeyErrorIsBounded pins the bounded key sample: a huge key must not put
+// its whole text into the error (which reaches logs and, on other paths, an HTTP body).
+func TestDecodeCompactKeyErrorIsBounded(t *testing.T) {
+	long := strings.Repeat("k", 5000)
+	for _, tc := range []struct {
+		name string
+		body []byte
+		want string
+	}{
+		{name: "str16 key", body: compactBodyForTest(t, "81 da 1388 "+hex.EncodeToString([]byte(long))+" c0"), want: "(string, 5000 bytes)"},
+		{name: "bin16 key", body: compactBodyForTest(t, "81 c5 1388 "+hex.EncodeToString([]byte(long))+" c0"), want: "(bin, 5000 bytes)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := decodeCompactPayload(tc.body)
+			if err == nil {
+				t.Fatal("huge key accepted")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to contain %q", err, tc.want)
+			}
+			if len(err.Error()) > 200 {
+				t.Errorf("error text is %d bytes, want it bounded", len(err.Error()))
 			}
 		})
 	}

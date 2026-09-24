@@ -3,6 +3,7 @@ package parse
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
@@ -54,8 +55,25 @@ func preprocessStakingProvider(raw *models.RawAction) *string {
 	return raw.StakingDataProvider
 }
 
+// normalizeEvaaAssetId reduces an EVAA asset id to its canonical text: lowercase, the `0x`
+// prefix kept, leading zeros of the hex part dropped, at least one digit left. The producer
+// pads the text to 64 hex digits while the tables below are written without leading zeros,
+// so both widths must name the same asset. A text without the `0x` prefix is only lowercased:
+// it is a different wire form and resolves nowhere.
+func normalizeEvaaAssetId(assetId string) string {
+	text := strings.ToLower(assetId)
+	if !strings.HasPrefix(text, "0x") {
+		return text
+	}
+	digits := strings.TrimLeft(text[2:], "0")
+	if digits == "" {
+		digits = "0"
+	}
+	return "0x" + digits
+}
+
 func ParseEvaaAssetId(assetId string) (*models.AccountAddress, bool) {
-	if assetId == EVAA_TON_ASSET_ID {
+	if assetId == EVAA_TON_ASSET_ID || normalizeEvaaAssetId(assetId) == normalizeEvaaAssetId(EVAA_TON_ASSET_ID) {
 		return nil, true
 	}
 	target_asset_map := &EVAA_ASSET_ID_MAP_MAINNET
@@ -64,6 +82,14 @@ func ParseEvaaAssetId(assetId string) (*models.AccountAddress, bool) {
 	}
 	if address, ok := (*target_asset_map)[assetId]; ok {
 		return new(models.AccountAddress(address)), true
+	}
+	// A padded id misses the exact lookup: compare normalised texts on both sides, so a
+	// table key written either way still resolves. The scan (16 entries) runs only on a miss.
+	canonical := normalizeEvaaAssetId(assetId)
+	for id, address := range *target_asset_map {
+		if normalizeEvaaAssetId(id) == canonical {
+			return new(models.AccountAddress(address)), true
+		}
 	}
 	return nil, false
 }

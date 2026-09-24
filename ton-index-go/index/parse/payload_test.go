@@ -297,7 +297,8 @@ func clearPayloadFields(action *models.RawAction) {
 }
 
 // TestDecodeActionPayloadEnvelope pins the payload envelope: codec byte 1 followed by ONE
-// id-keyed map. The empty payload is `01 80`; anything else about the frame is rejected.
+// id-keyed map. The empty payload is `01 80`, an id this table does not know is skipped,
+// and anything else about the frame is rejected.
 func TestDecodeActionPayloadEnvelope(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -305,12 +306,12 @@ func TestDecodeActionPayloadEnvelope(t *testing.T) {
 		wantErr string
 	}{
 		{name: "empty payload", payload: "0180"},
+		{name: "unknown key id is skipped", payload: "0181ccc8c0"},
 		{name: "nil body", payload: "01c0", wantErr: "expected a map, got nil"},
 		{name: "body is an array", payload: "0190", wantErr: "expected a map"},
-		{name: "truncated map header", payload: "0181", wantErr: "map key"},
-		{name: "truncated value", payload: "018106", wantErr: "payload key asset (id 6)"},
+		{name: "truncated map header", payload: "0181", wantErr: "map declares 1 entries"},
+		{name: "truncated value", payload: "018106", wantErr: "map declares 1 entries but only 1 bytes remain"},
 		{name: "legacy name-keyed body", payload: "0181a46461746180", wantErr: "is not a registry id"},
-		{name: "unknown key id", payload: "0181ccc8c0", wantErr: "payload key id 200 is not in the registry"},
 		{name: "trailing data", payload: "018000", wantErr: "trailing data"},
 		{name: "wrong codec", payload: "0280", wantErr: "unsupported payload codec 2"},
 	} {
