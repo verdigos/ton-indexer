@@ -1546,6 +1546,16 @@
    "group": "evaa",
    "name": "EVAA liquidation main jetton payout success",
    "slug": "liquidate-main-jetton-payout"
+  },
+  "-Ow-V1XJF0cgtq9IShbmSek3R1z70ZWUn7fSEHbl5fA=": {
+   "group": "evaa",
+   "name": "Ton withdrawal success, no note",
+   "slug": "ton-withdrawal-success-no-note"
+  },
+  "qf1iKv-5kX1BBNhMLV07KmZYW8rsBx1UVK_GZtwQHQs=": {
+   "group": "evaa",
+   "name": "Ton supply success, no note",
+   "slug": "ton-supply-success-no-note"
   }
  }
 }
