@@ -759,6 +759,11 @@
    "name": "tgBTC burn (with strange burn notification)",
    "slug": "tgbtc-burn-with-strange-burn-notification"
   },
+  "TQk6tatMXJvV5zUGazvyt3YxJ4Ir7RvQM_6zk9PGjwY=": {
+   "group": "evaa",
+   "name": "EVAA jetton liquidation prices missing",
+   "slug": "jetton-liquidation-prices-missing"
+  },
   "TXFkYzpo-8IZvMcy8lhsrKG9QJH73JaYAwsAitgNqdM=": {
    "group": "ton-transfers",
    "name": "four call_contract legs (ab-gap drill)",
