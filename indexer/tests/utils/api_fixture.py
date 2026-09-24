@@ -152,7 +152,14 @@ class ApiClient:
     def get_library(self, lib_hash: bytes) -> Cell:
         if lib_hash not in self._libraries:
             result = self.request(2, "getLibraries", params={"libraries": lib_hash.hex()})
-            self._libraries[lib_hash] = Cell.one_from_boc(base64.b64decode(result[0]["data"]))
+            entries = result.get("result") if isinstance(result, dict) else None
+            if not isinstance(entries, list) or not entries:
+                raise ApiError(f"TON API returned no library for {lib_hash.hex()}")
+            try:
+                data = entries[0]["data"]
+                self._libraries[lib_hash] = Cell.one_from_boc(base64.b64decode(data))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ApiError(f"TON API returned an invalid library for {lib_hash.hex()}") from exc
         return self._libraries[lib_hash]
 
     def run_get_method(self, address: str, method: str, seqno: int,
@@ -443,6 +450,8 @@ def _method(client: ApiClient, address: str, method: str, seqno: int,
             stack: list | None = None) -> list[dict] | None:
     try:
         result = client.run_get_method(address, method, seqno, stack or [])
+    except ApiError:
+        raise
     except Exception:
         return None
     return result.get("stack") if result else None
