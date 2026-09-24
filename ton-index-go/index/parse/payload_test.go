@@ -113,8 +113,9 @@ type emulatedAction struct {
 }
 
 // assertLegacyIsPurchase checks the emulator's is_purchase against the legacy column of
-// the fixture row. That column is a stale pre-wave copy, so a row whose payload no longer
-// carries the key has nothing to compare - `dns_purchase` stopped emitting is_purchase.
+// the fixture row. That column is a stale copy from an older baseline, so a row
+// whose payload no longer carries the key has nothing to compare - `dns_purchase`
+// stopped emitting is_purchase.
 func assertLegacyIsPurchase(t *testing.T, payloadHex string, legacyJSON json.RawMessage, got *bool) {
 	t.Helper()
 	payload, err := hex.DecodeString(payloadHex)
