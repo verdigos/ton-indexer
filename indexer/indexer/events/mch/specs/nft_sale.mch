@@ -97,17 +97,17 @@ matcher nft_put_on_sale {
            }
          ; btype nft_transfer @to_sale }
 
-    reject when account(to_sale.data.nft.address) != account(listing.data.nft.address)
-    reject when account(to_sale.data.new_owner) != sale_init.msg.destination
+    reject when account(to_sale.data._nft.address) != account(listing.data._nft.address)
+    reject when account(to_sale.data.destination) != sale_init.msg.destination
 
     let sale    = getgems_sale(sale_init.msg.destination)
     let auction = getgems_auction(sale_init.msg.destination)
     reject when sale == null and auction == null
 
-    reject when sale != null and account(to_sale.data.nft.address) != account(sale.nft_address)
-    reject when sale != null and account(listing.data.prev_owner) != account(sale.nft_owner_address)
-    reject when sale == null and account(to_sale.data.nft.address) != account(auction.nft_addr)
-    reject when sale == null and account(listing.data.prev_owner) != account(auction.nft_owner)
+    reject when sale != null and account(to_sale.data._nft.address) != account(sale.nft_address)
+    reject when sale != null and account(listing.data.source) != account(sale.nft_owner_address)
+    reject when sale == null and account(to_sale.data._nft.address) != account(auction.nft_addr)
+    reject when sale == null and account(listing.data.source) != account(auction.nft_owner)
 
     let init = state_init(sale_init)
     let sd = sale_data(init, getgems_sale_version(sale.code_hash))
@@ -117,11 +117,11 @@ matcher nft_put_on_sale {
 
     produces switch {
         when sale != null => nft_put_on_sale out {
-            nft_address:             account(to_sale.data.nft.address) ?? addr_none()
-            nft_index:               to_sale.data.nft.index
-            nft_collection:          account(to_sale.data.nft.collection.address) ?? addr_none()
+            nft_address:             account(to_sale.data._nft.address) ?? addr_none()
+            nft_index:               to_sale.data._nft.index
+            nft_collection:          account(to_sale.data._nft.collection.address) ?? addr_none()
             owner:                   account(sale.nft_owner_address) ?? addr_none()
-            listing_address:         account(listing.data.new_owner) ?? addr_none()
+            listing_address:         account(listing.data.destination) ?? addr_none()
             sale_address:            sale_init.msg.destination ?? addr_none()
             full_price:              amount(sd.full_price)
             marketplace_address:     mp(sd.marketplace_address)
@@ -131,11 +131,11 @@ matcher nft_put_on_sale {
             royalty_amount:          amount(sd.royalty_amount)
         }
         else => nft_put_on_auction out {
-            nft_address:         account(to_sale.data.nft.address) ?? addr_none()
-            nft_index:           to_sale.data.nft.index
-            nft_collection:      account(to_sale.data.nft.collection.address) ?? addr_none()
+            nft_address:         account(to_sale.data._nft.address) ?? addr_none()
+            nft_index:           to_sale.data._nft.index
+            nft_collection:      account(to_sale.data._nft.collection.address) ?? addr_none()
             owner:               account(auction.nft_owner) ?? addr_none()
-            listing_address:     account(listing.data.new_owner) ?? addr_none()
+            listing_address:     account(listing.data.destination) ?? addr_none()
             auction_address:     sale_init.msg.destination ?? addr_none()
             marketplace_address: mp(auction.mp_addr)
             mp_fee_address:      account(ad.mp_fee_addr)
@@ -270,12 +270,12 @@ matcher nft_cancel_sale {
       -> peek btype nft_transfer @ret
 
     require sale = getgems_sale(cancel.msg.destination)
-    reject when account(ret.data.nft.address) != account(sale.nft_address)
+    reject when account(ret.data._nft.address) != account(sale.nft_address)
     failed when tx_failed(cancel)
     out {
-        nft_address:         ret.data.nft.address
-        nft_collection:      ret.data.nft.collection.address
-        owner:               ret.data.new_owner
+        nft_address:         ret.data._nft.address
+        nft_collection:      ret.data._nft.collection.address
+        owner:               ret.data.destination
         trade_contract:      cancel.msg.destination ?? addr_none()
         marketplace_address: mp(sale.marketplace_address)
     }
@@ -318,9 +318,9 @@ matcher nft_cancel_auction {
 
     reject when cancel.btype == "ton_transfer" and not (cancel.data.comment in ["cancel", "finish", "stop"])
     require auction = getgems_auction(cancel.msg.destination)
-    reject when account(ret.data.nft.address) != account(auction.nft_addr)
+    reject when account(ret.data._nft.address) != account(auction.nft_addr)
     failed when tx_failed(cancel)
-    let finish = finish_auction_result(ret.data.nft.address, ret.data.nft.collection.address, ret.data.new_owner, cancel.msg.destination ?? addr_none())
+    let finish = finish_auction_result(ret.data._nft.address, ret.data._nft.collection.address, ret.data.destination, cancel.msg.destination ?? addr_none())
 
     produces switch {
         when (cancel.btype == "ton_transfer" and (cancel.data.comment in ["finish", "stop"])) or (cancel.btype == "call_contract" and (cancel.data.opcode in [0xB95616B6, 0x20C9EB18])) => nft_finish_auction out {

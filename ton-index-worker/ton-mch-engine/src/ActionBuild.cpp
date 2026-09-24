@@ -1,5 +1,6 @@
 #include "ActionBuild.h"
 
+#include "IrTables.h"
 #include "MsgParse.h"
 
 #include "td/utils/base64.h"
@@ -9,6 +10,7 @@
 #include "common/refint.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cstdint>
 #include <limits>
 #include <set>
@@ -87,6 +89,95 @@ Value mkdict(Value::Fields f) { return Value::make_dict(std::move(f)); }
 // push is harmless.
 void push_account(Action &a, const Value &v) {
   if (v.t == VType::Str) a.accounts.push_back(v.str);
+}
+
+bool direct_action_column(std::string_view name) {
+  return std::find(kDirectActionColumns.begin(), kDirectActionColumns.end(), name) !=
+         kDirectActionColumns.end();
+}
+
+bool fill_direct_action(Block *b, Action &a) {
+  if ((b->data.t != VType::Dict && b->data.t != VType::Obj) || !b->data.fields) {
+    LOG(ERROR) << "direct action " << b->btype << " has non-record data";
+    return false;
+  }
+
+  auto bad_kind = [&](const std::string &name) {
+    LOG(ERROR) << "direct action " << b->btype << " has invalid " << name << " value";
+    return false;
+  };
+  auto set_address = [&](const std::string &name, const Value &value, Value &target) {
+    if (value.t != VType::Null && value.t != VType::Account && value.t != VType::Asset) {
+      return bad_kind(name);
+    }
+    target = av_addr(value);
+    return true;
+  };
+  auto set_number = [&](const std::string &name, const Value &value, Value &target) {
+    if (value.t != VType::Null && value.t != VType::Amount && value.t != VType::Int) {
+      return bad_kind(name);
+    }
+    target = av_amount(value);
+    return true;
+  };
+
+  Value::Fields data;
+  for (const auto &[name, value] : *b->data.fields) {
+    if (!name.empty() && name.front() == '_') continue;
+    if (name == "type") {
+      if (value.t != VType::Str) return bad_kind(name);
+      a.type = value.str;
+    } else if (name == "success") {
+      if (value.t != VType::Bool) return bad_kind(name);
+      a.success = value.boolean;
+    } else if (name == "source") {
+      if (!set_address(name, value, a.source)) return false;
+    } else if (name == "source_secondary") {
+      if (!set_address(name, value, a.source_secondary)) return false;
+    } else if (name == "destination") {
+      if (!set_address(name, value, a.destination)) return false;
+    } else if (name == "destination_secondary") {
+      if (!set_address(name, value, a.destination_secondary)) return false;
+    } else if (name == "asset") {
+      if (!set_address(name, value, a.asset)) return false;
+    } else if (name == "asset_secondary") {
+      if (!set_address(name, value, a.asset_secondary)) return false;
+    } else if (name == "asset2") {
+      if (!set_address(name, value, a.asset2)) return false;
+    } else if (name == "asset2_secondary") {
+      if (!set_address(name, value, a.asset2_secondary)) return false;
+    } else if (name == "amount") {
+      if (!set_number(name, value, a.amount)) return false;
+    } else if (name == "value") {
+      if (!set_number(name, value, a.value)) return false;
+    } else if (name == "opcode") {
+      if (value.t != VType::Null && value.t != VType::Int) return bad_kind(name);
+      a.opcode = value;
+    } else if (name == "accounts") {
+      if (value.t != VType::List || !value.items) return bad_kind(name);
+      for (const Value &account : *value.items) {
+        if (account.t != VType::Account) return bad_kind(name);
+        push_account(a, av_addr(account));
+      }
+    } else if (name == "value_extra_currencies") {
+      if (value.t != VType::Dict || !value.fields) return bad_kind(name);
+      for (const auto &[id_text, amount] : *value.fields) {
+        std::uint32_t id = 0;
+        const char *end = id_text.data() + id_text.size();
+        auto parsed = std::from_chars(id_text.data(), end, id);
+        if (parsed.ec != std::errc{} || parsed.ptr != end || amount.t != VType::Str) {
+          return bad_kind(name);
+        }
+        a.value_extra_currencies.emplace(id, amount.str);
+      }
+    } else if (direct_action_column(name)) {
+      return bad_kind(name);
+    } else {
+      data.emplace_back(name, value);
+    }
+  }
+  a.data = mkdict(std::move(data));
+  return true;
 }
 
 void fill_jetton_transfer(const Value &d, Action &a) {
@@ -199,7 +290,7 @@ void fill_nft_transfer(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("is_purchase", dg(d, "is_purchase"));
   f.emplace_back("price", is_purchase ? av_amount(dg(d, "price")) : Value::null());
-  f.emplace_back("nft_item_index", dg(nft, "index"));
+  f.emplace_back("nft_index", dg(nft, "index"));
   Value fwd = dg(d, "forward_amount");
   f.emplace_back("forward_amount", av_amount(fwd));
   f.emplace_back("custom_payload", dg(d, "custom_payload"));
@@ -213,11 +304,9 @@ void fill_nft_transfer(const Value &d, Action &a) {
   f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
   f.emplace_back("payout_comment", dg(d, "payout_comment"));
   f.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
-  a.nft_transfer_data = mkdict(std::move(f));
-  Value::Fields l;
-  l.emplace_back("marketplace_fee_address", av_addr(dg(d, "payout_address")));
-  l.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
-  a.nft_listing_data = mkdict(std::move(l));
+  f.emplace_back("marketplace_fee_address", av_addr(dg(d, "payout_address")));
+  f.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
+  a.data = mkdict(std::move(f));
 }
 
 void fill_dedust_deposit(const Value &d, Action &a) {
@@ -717,23 +806,6 @@ void fill_vesting_add_whitelist(const Value &d, Action &a) {
   a.vesting_add_whitelist_data = mkdict(std::move(f));
 }
 
-void fill_multisig_create_order(const Value &d, Action &a) {
-  a.source = av_addr(dg(d, "created_by"));
-  a.destination = av_addr(dg(d, "multisig"));
-  a.destination_secondary = av_addr(dg(d, "order_contract_address"));
-  Value::Fields f;
-  f.emplace_back("query_id", dg(d, "query_id"));
-  f.emplace_back("order_seqno", dg(d, "order_seqno"));
-  f.emplace_back("is_created_by_signer", dg(d, "is_created_by_signer"));
-  f.emplace_back("is_signed_by_creator", dg(d, "creator_approved"));
-  f.emplace_back("creator_index", dg(d, "creator_index"));
-  f.emplace_back("expiration_date", dg(d, "expiration_date"));
-  f.emplace_back("order_boc", dg(d, "order_boc_str"));
-  a.multisig_create_order_data = mkdict(std::move(f));
-  Value sg = dg(d, "signers");
-  if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
-}
-
 void fill_multisig_approve(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "signer"));
   a.destination = av_addr(dg(d, "order"));
@@ -920,21 +992,6 @@ void fill_cocoon_client_withdraw(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("withdraw_amount", av_amount(dg(d, "withdraw_amount")));
   a.cocoon_client_withdraw_data = mkdict(std::move(f));
-}
-
-void fill_tgbtc_mint(const Value &d, Action &a) {
-  a.type = "tgbtc_mint";
-  Value cr = dg(d, "crippled");
-  if (cr.t == VType::Bool && cr.boolean) a.type += "_fallback";
-  a.source = av_addr(dg(d, "sender"));
-  a.destination = av_addr(dg(d, "recipient"));
-  a.amount = av_amount(dg(d, "amount"));
-  a.asset = av_addr(dg(d, "asset"));
-  Value::Fields ex;
-  ex.emplace_back("btc_txid", dg(d, "bitcoin_txid"));
-  a.extra = mkdict(std::move(ex));
-  a.source_secondary = av_addr(dg(d, "teleport_contract"));
-  a.destination_secondary = av_addr(dg(d, "recipient_wallet"));
 }
 
 // `crippled` (set by tgbtc_burn_log_only) appends the `_fallback` suffix,
@@ -1506,6 +1563,7 @@ void fill_tick_tock(const Value &d, Action &a) {
 bool fill_action(Block *b, Action &a) {
   const Value &d = b->data;
   const std::string &t = b->btype;
+  if (b->direct_action) return fill_direct_action(b, a);
   if (t == "call_contract" || t == "contract_deploy" || t == "gasless_request" ||
       t == "change_wallet_key") {
     fill_call_contract(d, a);  // the two wallet types carry only source/destination/value
@@ -1551,7 +1609,6 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_staking_claim_rewards") fill_coffee_staking_claim_rewards(d, a);
   else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
   else if (t == "vesting_add_whitelist") fill_vesting_add_whitelist(d, a);
-  else if (t == "multisig_create_order") fill_multisig_create_order(d, a);
   else if (t == "multisig_approve") fill_multisig_approve(d, a);
   else if (t == "multisig_execute") fill_multisig_execute(d, a);
   else if (t == "tonco_deploy_pool") fill_tonco_deploy_pool(d, a);
@@ -1568,7 +1625,6 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "cocoon_grant_refund") fill_cocoon_grant_refund(d, a);
   else if (t == "cocoon_client_increase_stake") fill_cocoon_client_increase_stake(d, a);
   else if (t == "cocoon_client_withdraw") fill_cocoon_client_withdraw(d, a);
-  else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
   else if (t == "tgbtc_burn") fill_tgbtc_burn(d, a);
   else if (t == "tgbtc_new_key") fill_tgbtc_new_key(d, a);
   else if (t == "tgbtc_dkg_log") fill_tgbtc_dkg_log(d, a);
@@ -1707,9 +1763,11 @@ bool build_action(const ActionRow &row, Action &a) {
   a.parent_action_id = row.parent_action_id;
   a.ancestor_type = row.ancestor_type;
   if (!row.parent_gasless_action.empty()) {
-    Value::Fields f = a.extra.fields ? *a.extra.fields : Value::Fields{};
+    bool flat = a.data.t == VType::Dict || a.data.t == VType::Obj;
+    Value &payload = flat ? a.data : a.extra;
+    Value::Fields f = payload.fields ? *payload.fields : Value::Fields{};
     f.emplace_back("parent_gasless_action", Value::make_str(row.parent_gasless_action));
-    a.extra = mkdict(std::move(f));
+    payload = mkdict(std::move(f));
   }
   return true;
 }

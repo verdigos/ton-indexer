@@ -5,6 +5,7 @@
 #include "RedisActionSerializeTest.h"
 
 #include "ActionBuild.h"
+#include "ActionPayload.h"
 #include "BlockTree.h"
 #include "ClassifyDump.h"
 #include "SchemaTraceLoader.h"
@@ -1129,7 +1130,7 @@ void test_bucket_b_fills() {
     check("bucketB/nft_purchase/nft_item_index", fld(c, "nft_item_index").t == VType::Int);
     check("bucketB/nft_purchase/marketplace_absent", c.field("marketplace") == nullptr);
     check("bucketB/nft_purchase/payout_amount", fld(c, "payout_amount").t == VType::Int);
-    // Unlike fill_nft_transfer, this fill writes NO listing data.
+    // Purchases do not write listing data.
     check("bucketB/nft_purchase/no_listing_data", a.nft_listing_data.is_null());
   }
   {
@@ -1207,6 +1208,73 @@ void test_bucket_b_fills() {
     check("bucketB/delete_dns/value_schema_null", fld(c, "value_schema").is_null());
     check("bucketB/delete_dns/no_value_key", c.field("value") == nullptr);
   }
+}
+
+void test_direct_action_mapper() {
+  BlockArena arena;
+  Block *block = arena.make("direct_test");
+  block->direct_action = true;
+  block->data = Value::make_dict({
+      {"type", Value::make_str("direct_result")},
+      {"success", Value::make_bool(false)},
+      {"source", Value::make_account_raw(kAddrA)},
+      {"amount", Value::make_int64(7)},
+      {"accounts", Value::make_list({Value::make_account_raw(kAddrB)})},
+      {"query_id", Value::make_int64(9)},
+      {"_private", Value::make_str("block only")},
+  });
+  Action action;
+  check("direct/builds", build_action(block, action));
+  check("direct/type", action.type == "direct_result");
+  check("direct/success", !action.success);
+  check("direct/source", action.source.t == VType::Str && action.source.str == kAddrA);
+  check("direct/amount", action.amount.t == VType::Int && action.amount.num->to_long() == 7);
+  check("direct/accounts", action.accounts == std::vector<std::string>({kAddrA, kAddrB}));
+  check("direct/data", action.data.field("query_id") != nullptr &&
+                           action.data.field("_private") == nullptr);
+
+  std::string payload = encode_action_payload(action);
+  Decoded decoded(payload.substr(1));
+  check("direct/payload_decodes", decoded.ok());
+  if (decoded.ok()) {
+    check("direct/payload_flat", is_str(at(decoded.root(), "query_id"), "9") &&
+                                     absent(decoded.root(), "data") &&
+                                     absent(decoded.root(), "type") &&
+                                     absent(decoded.root(), "_private"));
+  }
+
+  Block *legacy_nft = arena.make("nft_transfer");
+  legacy_nft->data = Value::make_dict({
+      {"prev_owner", Value::make_account_raw(kAddrA)},
+      {"new_owner", Value::make_account_raw(kAddrB)},
+      {"is_purchase", Value::make_bool(true)},
+      {"query_id", Value::make_int64(11)},
+      {"price", Value::make_amount(td::make_refint(12))},
+      {"nft", Value::make_dict({
+                  {"address", Value::make_account_raw(kAddrB)},
+                  {"collection", Value::make_dict({{"address", Value::make_account_raw(kAddrA)}})},
+                  {"index", Value::make_int64(17)},
+              })},
+      {"payout_address", Value::make_account_raw(kAddrB)},
+      {"royalty_address", Value::make_account_raw(kAddrA)},
+  });
+  Action legacy_action;
+  check("direct/legacy_nft_builds", build_action(legacy_nft, legacy_action));
+  check("direct/legacy_nft_generic_data",
+        legacy_action.nft_transfer_data.is_null() && legacy_action.nft_listing_data.is_null() &&
+            legacy_action.data.field("nft_index") != nullptr &&
+            legacy_action.data.field("marketplace_fee_address") != nullptr);
+  Decoded legacy_payload(encode_action_payload(legacy_action).substr(1));
+  check("direct/legacy_nft_payload_flat",
+        legacy_payload.ok() && is_str(at(legacy_payload.root(), "nft_index"), "17") &&
+            is_str(at(legacy_payload.root(), "marketplace_fee_address"), kAddrB) &&
+            absent(legacy_payload.root(), "data") && absent(legacy_payload.root(), "listing"));
+
+  Block *bad = arena.make("direct_bad");
+  bad->direct_action = true;
+  bad->data = Value::make_dict({{"source", Value::make_str(kAddrA)}});
+  Action rejected;
+  check("direct/rejects_bad_source_kind", !build_action(bad, rejected));
 }
 
 // EVAA liquidation Stage A: exercise the fill and wire surface directly. No
@@ -1316,6 +1384,7 @@ int run_action_msgpack_test() {
   test_unknown_action();
   test_schema_no_gas_ton_transfer();
   test_bucket_b_fills();
+  test_direct_action_mapper();
   test_evaa_liquidate_surface();
   test_empty_view_finality();
   test_view_finality();

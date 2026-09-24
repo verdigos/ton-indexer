@@ -10,6 +10,26 @@ from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
 from indexer.events.mch.registry import Registries
 
 
+RESERVED_ACTION_COLUMNS: tuple[str, ...] = (
+    "type",
+    "success",
+    "source",
+    "source_secondary",
+    "destination",
+    "destination_secondary",
+    "asset",
+    "asset_secondary",
+    "asset2",
+    "asset2_secondary",
+    "amount",
+    "value",
+    "opcode",
+    "accounts",
+    "value_extra_currencies",
+    "parent_gasless_action",
+)
+
+
 class RecursionClass(Enum):
     NONE = "NONE"
     DIRECT_RECURSIVE = "DIRECT_RECURSIVE"
@@ -788,6 +808,8 @@ def _check_build_stmts(
             _check_expr_refs(stmt.condition, available, bag, registries)
         elif isinstance(stmt, ast_.OutStmt):
             _check_out_fields(stmt.fields, available, bag, registries)
+            if m.direct_action:
+                _check_direct_action_fields(stmt.fields, bag)
         elif isinstance(stmt, ast_.SwitchStmt):
             else_seen = False
             for i, branch in enumerate(stmt.branches):
@@ -803,6 +825,8 @@ def _check_build_stmts(
                         branch.span,
                     )
                 _check_out_fields(branch.out.fields, available, bag, registries)
+                if m.direct_action:
+                    _check_direct_action_fields(branch.out.fields, bag)
             if not else_seen:
                 bag.error(
                     "R021_SWITCH_NO_ELSE",
@@ -826,6 +850,35 @@ def _check_out_fields(fields: tuple[ast_.OutField, ...], available: set[str],
             )
         seen_fields.add(f.name)
         _check_expr_refs(f.value, available, bag, registries)
+
+
+def action_type_literals(expr: ast_.Expr) -> set[str] | None:
+    if isinstance(expr, ast_.StrLit):
+        return {expr.value}
+    if isinstance(expr, ast_.Ternary):
+        then = action_type_literals(expr.then)
+        orelse = action_type_literals(expr.orelse)
+        if then is not None and orelse is not None:
+            return then | orelse
+    return None
+
+
+def _check_direct_action_fields(
+    fields: tuple[ast_.OutField, ...], bag: DiagnosticBag,
+) -> None:
+    for field in fields:
+        if field.name == "parent_gasless_action":
+            bag.error(
+                diagnostics.R046_DIRECT_ACTION_RESERVED,
+                "out field 'parent_gasless_action' is reserved for the engine",
+                field.span,
+            )
+        if field.name == "type" and action_type_literals(field.value) is None:
+            bag.error(
+                diagnostics.R045_DIRECT_ACTION_TYPE,
+                "direct action field 'type' must be a string literal or a ternary of string literals",
+                field.span,
+            )
 
 
 def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,

@@ -417,6 +417,8 @@ class MatcherDecl:
     # engine after merge, for post-build tree surgery on the produced block's
     # region. None when absent.
     shape: str | None = None
+    # `action direct` makes this matcher's output the action row.
+    direct_action: bool = False
 
 
 @dataclass(frozen=True)

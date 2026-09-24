@@ -87,6 +87,7 @@ var actionPayloadFieldNames = map[string]string{
 	"DexWithdrawLiquidityData.nft_address": "BurnedNFTAddress",
 	"DexWithdrawLiquidityData.nft_index":   "BurnedNFTIndex",
 	"JettonTransfer.comment_encrypted":     "IsEncryptedComment",
+	"MultisigCreateOrder.signer_index":     "CreatorIndex",
 	"NFTListing.mp_fee_base":               "MarketplaceFeeBase",
 	"NFTListing.mp_fee_factor":             "MarketplaceFeeFactor",
 	"NFTListing.nft_index":                 "NFTItemIndex",
@@ -123,6 +124,13 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	}
 
 	target := reflect.ValueOf(action).Elem()
+	_, groupedData := groups["data"]
+	_, groupedExtra := groups["extra"]
+	if !groupedData && !groupedExtra && (action.Type == "multisig_create_order" ||
+		action.Type == "nft_transfer" || action.Type == "tgbtc_mint" ||
+		action.Type == "tgbtc_mint_fallback") {
+		return fillDirectActionPayload(target, action, groups)
+	}
 	for group, value := range groups {
 		if group == "extra" {
 			m, ok := value.(map[string]interface{})
@@ -137,6 +145,29 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 			continue
 		}
 		if err := fillActionPayload(target, prefix, "", m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func fillDirectActionPayload(target reflect.Value, action *models.RawAction, values map[string]interface{}) error {
+	for key, value := range values {
+		if key == "parent_gasless_action" || key == "btc_txid" {
+			if action.Extra == nil {
+				action.Extra = make(map[string]interface{})
+			}
+			action.Extra[key] = value
+			continue
+		}
+		prefix := actionDataPrefixes[action.Type]
+		if action.Type == "nft_transfer" && (key == "marketplace_fee_address" || key == "royalty_address") {
+			prefix = "NFTListing"
+		}
+		if prefix == "" {
+			continue
+		}
+		if err := fillActionPayload(target, prefix, "", map[string]interface{}{key: value}); err != nil {
 			return err
 		}
 	}

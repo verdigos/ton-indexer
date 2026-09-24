@@ -12,11 +12,11 @@ matcher getgems_nft_purchase {
     # The sibling payout takes precedence when both payout forms match.
     require seller_payout = sib_payout ?? payout
     out {
-        nft_address:              nft.data.nft.address
-        collection_address:       nft.data.nft.collection.address
-        nft_index:                nft.data.nft.index
-        prev_owner:               nft.data.prev_owner
-        new_owner:                nft.data.new_owner
+        nft_address:              nft.data._nft.address
+        collection_address:       nft.data._nft.collection.address
+        nft_index:                nft.data._nft.index
+        prev_owner:               nft.data.source
+        new_owner:                nft.data.destination
         query_id:                 nft.data.query_id
         forward_amount:           nft.data.forward_amount
         response_destination:     nft.data.response_destination

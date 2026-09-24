@@ -23,6 +23,14 @@ inline constexpr std::array<std::string_view, 8> kLeafBtypes{
     "jetton_transfer", "root",          "tick_tock", "ton_transfer",
 };
 
+inline constexpr std::array<std::string_view, 16> kDirectActionColumns{
+    "type",        "success",               "source",      "source_secondary",
+    "destination", "destination_secondary", "asset",       "asset_secondary",
+    "asset2",      "asset2_secondary",      "amount",      "value",
+    "opcode",      "accounts",              "value_extra_currencies",
+    "parent_gasless_action",
+};
+
 enum class NodeKind { Contract, BlockType, Pred, Any, Or, Recursive };
 enum class RecStrategy { Frontier, Cyclic };
 enum class AnchorKind { OpcodeSet, BType, Pred, Mixed };
@@ -54,6 +62,7 @@ struct CompiledMatcher {
   std::string name;
   int artifact_index{-1};  // index in the artifact `matchers` array (gen_builds key)
   std::vector<std::string> produces;
+  bool direct_action{false};
 
   AnchorKind anchor_kind{AnchorKind::OpcodeSet};
   std::unordered_set<std::uint32_t> anchor_opcodes;

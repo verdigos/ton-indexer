@@ -14,6 +14,7 @@ from indexer.events.mch.resolver import (
     ResolvedMatcher,
     _alternative_is_exclusive,
     _resolve_opcode_ref,
+    action_type_literals,
 )
 
 
@@ -75,6 +76,9 @@ class CompiledMatcher:
     include_bounces: bool = True
     build_stmts: tuple = ()
     shape_fn_name: str | None = None
+    direct_action: bool = False
+    action_types: tuple[str, ...] = ()
+    capture_btypes: tuple[tuple[str, str], ...] = ()
     # Anchor record representation. Exactly one of
     # these is set for a group/predicate anchor; a plain single op/btype anchor
     # leaves them all None and the emitter reads the root node's kind.
@@ -209,6 +213,15 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
 
     _check_peek_subtree_closure(root, decl.name, ctx)
 
+    action_types: set[str] = set()
+    if decl.direct_action:
+        for stmt in decl.build_stmts:
+            if isinstance(stmt, ast_.OutStmt):
+                action_types.update(_direct_action_types(stmt.fields, decl.produces))
+            elif isinstance(stmt, ast_.SwitchStmt):
+                for branch in stmt.branches:
+                    action_types.update(_direct_action_types(branch.out.fields, (branch.btype,)))
+
     return CompiledMatcher(
         name=decl.name,
         root=root,
@@ -222,11 +235,27 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         include_bounces=bool(decl.include_bounces),
         build_stmts=tuple(decl.build_stmts),
         shape_fn_name=decl.shape,
+        direct_action=decl.direct_action,
+        action_types=tuple(sorted(action_types)),
+        capture_btypes=tuple(
+            (name, info.head.name)
+            for name, info in rm.captures.items()
+            if isinstance(info.head, ast_.BTypeHead)
+        ),
         anchor_pred=anchor_pred,
         anchor_branches=anchor_branches,
         anchor_opcodes=anchor_opcodes,
         anchor_btypes=anchor_btypes,
     )
+
+
+def _direct_action_types(
+    fields: tuple[ast_.OutField, ...], fallback: tuple[str, ...],
+) -> set[str]:
+    type_field = next((field for field in fields if field.name == "type"), None)
+    if type_field is None:
+        return set(fallback)
+    return action_type_literals(type_field.value) or set()
 
 
 def _lower_surrounding_sequence(

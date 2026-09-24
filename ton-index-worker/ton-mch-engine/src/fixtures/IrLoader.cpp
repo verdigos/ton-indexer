@@ -119,6 +119,7 @@ std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start) {
 td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
                          CompiledMatcher &m) {
   m.name = jstr(rec, "name");
+  m.direct_action = jbool(rec, "direct_action", false);
   if (const Json *pr = jfield(rec, "produces"); pr != nullptr && pr->type() == JType::Array) {
     for (const auto &p : pr->get_array()) {
       m.produces.push_back(p.get_string().str());
@@ -325,13 +326,36 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
 
   LoadedIr out;
   out.source_sha256 = source_sha;
+  bool has_direct_action = false;
 
   // The matcher array is already in manifest order.
   for (const auto &rec : matchers->get_array()) {
     CompiledMatcher m;
     m.artifact_index = static_cast<int>(out.matchers.size());
     TRY_STATUS(build_matcher(rec, pool, m));
+    has_direct_action = has_direct_action || m.direct_action;
     out.matchers.push_back(std::move(m));
+  }
+
+  if (has_direct_action) {
+    const Json *columns = jfield(root, "reserved_columns");
+    if (columns == nullptr || columns->type() != JType::Array) {
+      return td::Status::Error("IR reserved_columns must be an array");
+    }
+    std::set<std::string> reserved;
+    for (const auto &column : columns->get_array()) {
+      if (column.type() != JType::String) {
+        return td::Status::Error("IR reserved_columns entries must be strings");
+      }
+      reserved.insert(column.get_string().str());
+    }
+    std::set<std::string> expected;
+    for (std::string_view column : kDirectActionColumns) {
+      expected.emplace(column);
+    }
+    if (columns->get_array().size() != kDirectActionColumns.size() || reserved != expected) {
+      return td::Status::Error("IR reserved_columns do not match the engine direct-action columns");
+    }
   }
 
   return out;

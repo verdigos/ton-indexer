@@ -121,6 +121,7 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   line("m.name = " + cstr(m.name) + ";");
   line("m.artifact_index = " + std::to_string(m.artifact_index) + ";");
   set_if(!m.produces.empty(), "produces", str_list(m.produces));
+  set_if(m.direct_action, "direct_action", "true");
   line("m.anchor_kind = " + std::string(anchor_name(m.anchor_kind)) + ";");
   set_if(!m.anchor_opcodes.empty(), "anchor_opcodes", opcode_set(m.anchor_opcodes));
   set_if(!m.anchor_btypes.empty(), "anchor_btypes", str_set(m.anchor_btypes));

@@ -6,6 +6,7 @@ import "lib/opcodes.mch"
 opcode NftTransfer          = 0x5FCC3D14
 matcher nft_transfer {
     produces        nft_transfer
+    action direct
     shape           nft_transfer_parent_absorb
     include_excess  false
     include_bounces false
@@ -35,15 +36,18 @@ matcher nft_transfer {
     let is_purchase = (have_sale or have_auc) and pd_nft == nft.address and real_owner != new_owner
     failed when any_failed(transfer)
     out {
+        source:               prev_owner
+        destination:          new_owner
+        asset:                nft.collection.address
+        asset_secondary:      nft.address
         is_purchase:          is_purchase
-        prev_owner:           prev_owner
-        new_owner:            new_owner
         query_id:             transfer.body.query_id
+        nft_index:            nft.index
         forward_amount:       amount(transfer.body.forward_amount)
         response_destination: rd if rd != addr_none() else null
         custom_payload:       b64(transfer.body.custom_payload)
         forward_payload:      b64(transfer.body.forward_payload)
-        nft:                  nft
+        _nft:                 nft
         marketplace_address?: ((account(sale.marketplace_address) ?? addr_none()) if have_sale else (account(auction.mp_addr) ?? addr_none())) if is_purchase else null
         price?:               (amount(sale.full_price) if have_sale else amount(auction.last_bid)) if is_purchase else null
         real_prev_owner?:     real_owner if is_purchase else null

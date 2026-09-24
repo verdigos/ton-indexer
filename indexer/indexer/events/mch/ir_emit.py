@@ -28,14 +28,15 @@ from indexer.events.mch.btypes import LEAF_BTYPES
 from indexer.events.mch.compile import compile_file
 from indexer.events.mch.compiler import CompiledMatcher, LNode
 from indexer.events.mch.diagnostics import (
-    CompileError, DiagnosticBag, R042_MANIFEST_ORDER, R043_UNKNOWN_BTYPE, Span,
+    CompileError, DiagnosticBag, R042_MANIFEST_ORDER, R043_UNKNOWN_BTYPE,
+    R047_UNKNOWN_DATA_KEY, Span,
     format_diagnostic,
 )
 from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 from indexer.events.mch.registry import Registries
-from indexer.events.mch.resolver import _map_fn_children
+from indexer.events.mch.resolver import RESERVED_ACTION_COLUMNS, _map_fn_children
 
 
 def _unsigned32(opcode: int) -> int:
@@ -298,6 +299,9 @@ def emit_ir(compiled: list[CompiledMatcher]) -> dict:
         }
         if cm.build_stmts:
             rec["build_program"] = [_emit_stmt(s) for s in cm.build_stmts]
+        if cm.direct_action:
+            rec["direct_action"] = True
+            rec["action_types"] = list(cm.action_types)
         # `shape` contains a registered shaper name. Omit it when absent;
         # omit when absent, never emit null.
         if cm.shape_fn_name is not None:
@@ -305,9 +309,95 @@ def emit_ir(compiled: list[CompiledMatcher]) -> dict:
         matchers_out.append(rec)
     return {
         "mch_ir_version": IR_VERSION,
+        "reserved_columns": list(RESERVED_ACTION_COLUMNS),
         "matchers": matchers_out,
         "nodes": nodes,
     }
+
+
+def _validate_direct_consumer_keys(
+    compiled: list[CompiledMatcher], bag: DiagnosticBag,
+) -> None:
+    producer_keys: dict[str, set[str]] = {}
+    direct_btypes: set[str] = set()
+    for matcher in compiled:
+        if matcher.direct_action:
+            direct_btypes.update(matcher.produces)
+        for stmt in matcher.build_stmts:
+            if isinstance(stmt, ast_.OutStmt):
+                keys = {field.name for field in stmt.fields}
+                for btype in matcher.produces:
+                    producer_keys.setdefault(btype, set()).update(keys)
+            elif isinstance(stmt, ast_.SwitchStmt):
+                for branch in stmt.branches:
+                    producer_keys.setdefault(branch.btype, set()).update(
+                        field.name for field in branch.out.fields
+                    )
+
+    for matcher in compiled:
+        captures = {name: {btype} for name, btype in matcher.capture_btypes}
+        reported: set[tuple[int, str]] = set()
+
+        def check_key(key: str, btypes: set[str], span: Span) -> None:
+            relevant = btypes & direct_btypes
+            if relevant and not any(key in producer_keys.get(btype, ()) for btype in relevant):
+                marker = (span.start_off, key)
+                if marker not in reported:
+                    reported.add(marker)
+                    bag.error(
+                        R047_UNKNOWN_DATA_KEY,
+                        f"matcher {matcher.name!r} reads unknown data key {key!r} "
+                        f"from direct btype {sorted(relevant)!r}",
+                        span,
+                    )
+
+        def scan_expr(expr: ast_.Expr) -> None:
+            def visit(node):
+                if (isinstance(node, ast_.FieldAccess)
+                        and isinstance(node.target, ast_.FieldAccess)
+                        and node.target.field == "data"
+                        and isinstance(node.target.target, ast_.NameRef)):
+                    check_key(node.field, captures.get(node.target.target.name, set()), node.span)
+                return _map_fn_children(node, visit)
+
+            visit(expr)
+
+        visited: set[int] = set()
+
+        def scan_node(node: LNode | None) -> None:
+            if node is None or id(node) in visited:
+                return
+            visited.add(id(node))
+            if (node.where_expr is not None and node.kind == "block_type"
+                    and node.btype in direct_btypes):
+                def visit_where(expr):
+                    if isinstance(expr, ast_.FieldRef):
+                        check_key(expr.field, {node.btype}, expr.span)
+                    return _map_fn_children(expr, visit_where)
+
+                visit_where(node.where_expr)
+            for child in (
+                node.child, *(node.children or ()), node.parent,
+                *(node.branches or ()), node.step, node.exit_, node.target,
+            ):
+                scan_node(child)
+
+        scan_node(matcher.root)
+
+        for stmt in matcher.build_stmts:
+            if isinstance(stmt, ast_.LetStmt):
+                scan_expr(stmt.value)
+            elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt)):
+                scan_expr(stmt.condition)
+            elif isinstance(stmt, ast_.OutStmt):
+                for field in stmt.fields:
+                    scan_expr(field.value)
+            elif isinstance(stmt, ast_.SwitchStmt):
+                for branch in stmt.branches:
+                    if branch.condition is not None:
+                        scan_expr(branch.condition)
+                    for field in branch.out.fields:
+                        scan_expr(field.value)
 
 
 def _emit_paths(paths: list[Path]) -> dict:
@@ -356,6 +446,7 @@ def _emit_paths(paths: list[Path]) -> dict:
                     "and is not produced by any matcher",
                     cm.source_span,
                 )
+    _validate_direct_consumer_keys(compiled, bag)
     if bag.items:
         raise CompileError(bag)
     return emit_ir(compiled)

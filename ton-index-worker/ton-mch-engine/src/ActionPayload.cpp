@@ -213,6 +213,18 @@ const char *group_name(const Action &action, const GroupField &field) {
 }  // namespace
 
 std::string encode_action_payload(const Action &action) {
+  if (action.data.t == VType::Dict || action.data.t == VType::Obj) {
+    msgpack::sbuffer buffer;
+    buffer.write("\x01", 1);
+    Packer packer(&buffer);
+    if ((action.data.t == VType::Dict || action.data.t == VType::Obj) && action.data.fields) {
+      pack_fields(packer, *action.data.fields);
+    } else {
+      packer.pack_map(0);
+    }
+    return std::string(buffer.data(), buffer.size());
+  }
+
   std::vector<const GroupField *> present;
   std::unordered_set<std::string> groups;
   for (const auto &field : kGroups) {

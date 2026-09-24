@@ -222,7 +222,7 @@ actions:
     amount: 9850
     value: null
     opcode: null
-    extra:
+    data:
       btc_txid: 29473eb71be95904599a5cecd24f602f07942b1da2b4c5eb3c5551367c2e4023
     tx_hashes:
       - 3vVEwlizZsMRehvsTub2vuEOplA7L/Xkj3hG3iX3mXk=

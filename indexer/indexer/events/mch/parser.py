@@ -234,6 +234,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     shape:    str | None = None
     include_excess  = True
     include_bounces = True
+    direct_action = False
 
     while not s.at(TokenKind.EOF):
         s.skip_newlines()
@@ -254,6 +255,10 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         elif t.kind is TokenKind.KW_INCLUDE_BOUNCES:
             s.i += 1
             include_bounces = _parse_bool_literal(s)
+        elif (t.kind is TokenKind.IDENT and t.text == "action"
+              and s.peek(1).kind is TokenKind.IDENT and s.peek(1).text == "direct"):
+            s.i += 2
+            direct_action = True
         else:
             break
         s.skip_newlines()
@@ -280,6 +285,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         span=_join(start, end),
         build_stmts=build_stmts,
         shape=shape,
+        direct_action=direct_action,
     )
 
 

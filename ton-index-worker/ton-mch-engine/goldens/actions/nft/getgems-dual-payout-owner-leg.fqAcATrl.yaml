@@ -214,25 +214,17 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5109
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5109
       price: 5000000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - 2vDr72vgorLQ2qFyi7Jk1K/L10S5hXp28wrHbI4durc=
       - 9D3D3d6ejTBF+G7rhmnMKsceRfItJshiMuzVymELfJY=
@@ -267,25 +259,17 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5153
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5153
       price: 5500000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - ATC2UPb2ArXHw0IQofZOWr+H/7Ztf0qu4yxXybCA3nY=
       - Q9q9bM88apOvXVJyfoTa4tpWT4g6ITXDF0jeaCFyD9E=
@@ -320,25 +304,17 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5108
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5108
       price: 5000000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - 4GI3B4AWWJhVZw69XmdZ1sxvH16MwkrgNS5gxdt1RvU=
       - E8TWGhefQ5gMOK1T3AXDmC0ZcmlkjzS3qyU4RlUNJ9k=
@@ -373,25 +349,17 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
-      nft_item_index: 5157
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
+      nft_index: 5157
       price: 5500000000
       query_id: 0
       real_prev_owner: 0:487EE92C7A7F9923367AEA80B7F55119477CC589705165C8D75FB7E29BE426E9
       response_destination: 0:D9F5F857636D0B553D0F0252CD07A9AEEC656C42E62FA8CC2B963ED3FE7C520A
-      royalty_amount: null
     tx_hashes:
       - BHANKJE+gbQ4s6nCR6ilcyGaPPbOPAcDf4Y7Dn9CDd4=
       - JGs+JjlspbiG2KOCW7N6JkICWaJxUI9NkkhI8I72K5Q=

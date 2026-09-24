@@ -388,14 +388,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_create_order_data:
-      creator_index: 1
+    data:
       expiration_date: 1785517094
       is_created_by_signer: true
       is_signed_by_creator: false
       order_boc: cellhash:B1DA0C6E512158048C489BA72F13DD993EC1F33EBB47922C1703218D74D0A6F2
       order_seqno: 15268459057278456273
       query_id: 0
+      signer_index: 1
     tx_hashes:
       - cXTiD2DLKrESOha4P2+H8vVyejMM7ektwBbwPy2VEqY=
       - ckIe80EflSI1JtNAu7ivvm9RYJJ7LgvOI1Xu9YzifGI=

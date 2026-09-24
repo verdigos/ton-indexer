@@ -83,6 +83,7 @@ EventTree to_tree(const Trace &trace);
 struct Block {
   std::string btype;
   std::optional<std::uint32_t> opcode;  // set for call_contract blocks
+  bool direct_action{false};
 
   // Leaf blocks carry constructor dicts (subset: see init_block); a produced
   // block carries its build output. Null == no data. Read by where_exprs via

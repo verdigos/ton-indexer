@@ -450,7 +450,7 @@ actions:
     amount: 9700
     value: null
     opcode: null
-    extra:
+    data:
       btc_txid: b07fabef458e0b003895840ebba391d21e340fbb07b3ec95bc737f1b8d188219
     tx_hashes:
       - 73vVPfD4NIyVYCL49IH/5qtEumpXEiH8QwvWH6UIxP4=

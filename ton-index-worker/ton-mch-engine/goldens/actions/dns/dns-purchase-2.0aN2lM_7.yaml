@@ -193,25 +193,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 200000000
       forward_payload: cellhash:30C5AE63D2C1A674F08883C899EC7C36DBC8913F25B5D07019A287AEF1B5E224
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
       query_id: 8549106353659686877
-      real_prev_owner: null
       response_destination: 0:11F70D0E9D8A34A10AF6BDD003BC9B0843DDCC41AB1D321772BF00131997074F
-      royalty_amount: null
     tx_hashes:
       - 0aN2lM/7jGXPgg4Dg4wCRqm2ClpeVUWmjG2lzOOfyZw=
       - 3oPuBMkb8N+kDcY4r1oiJWIt3WkdglFAzoiJlxdqYEQ=
@@ -245,25 +234,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 0
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: 71166500617479174825235592103102180882061043440283375244178943559055051849728
       query_id: 8549106353659686877
-      real_prev_owner: null
       response_destination: 0:11F70D0E9D8A34A10AF6BDD003BC9B0843DDCC41AB1D321772BF00131997074F
-      royalty_amount: null
     tx_hashes:
       - EnhPhEokuCl62CbtuKjoZGYXizL7ZeQgA9ps/Sne/eE=
       - VKEfLBnSzeFSxjYD/9vpNPkjaFNWYgSmKlqX6dj7DCw=

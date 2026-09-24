@@ -91,25 +91,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 200000000
       forward_payload: cellhash:D31F5F3D199B31C755B1E3586DB1497C7167F125D5581C3D248D541BF0989D18
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
       query_id: 0
-      real_prev_owner: null
       response_destination: 0:9BA46D6AEB2F793FF5F3B8F53171E55CCDF32407A26C47A212E3F669A3AE7901
-      royalty_amount: null
     tx_hashes:
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - B82tGO0R8HCd4IG64UY+rlGuvcBid9PnIkDOnxpl6go=
@@ -143,25 +132,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 0
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: "2148043439213041448537974075905118563233232504308491092484043492802816886261"
       query_id: 0
-      real_prev_owner: null
       response_destination: 0:9BA46D6AEB2F793FF5F3B8F53171E55CCDF32407A26C47A212E3F669A3AE7901
-      royalty_amount: null
     tx_hashes:
       - 8tp9LTQjfo2zqh9O22qEoBYVaxUjOQsdCP6BrTZL7hE=
       - ZA1yftr44uPV8GkkiujWEyFz/HtZb0Ph8I52d4ElTVw=

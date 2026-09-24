@@ -24,6 +24,7 @@ namespace mch {
   X(amount) \
   X(value) \
   X(opcode) \
+  X(data) \
   X(ton_transfer_data) \
   X(jetton_transfer_data) \
   X(jetton_swap_data) \
@@ -90,7 +91,7 @@ struct ActionRow {
   std::string parent_action_id;
   std::vector<std::string> ancestor_type;
   // action_id of the gasless_request marker this row is an immediate result
-  // of (empty otherwise); rendered as extra.parent_gasless_action.
+  // of (empty otherwise); rendered as parent_gasless_action in the payload.
   std::string parent_gasless_action;
 };
 

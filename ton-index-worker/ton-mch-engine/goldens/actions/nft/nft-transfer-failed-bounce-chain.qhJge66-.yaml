@@ -44,25 +44,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 810000000
       forward_payload: cellhash:7D73F9FA423ABA4FA76E22FA5C328B5FDFE758BDFCFD5E5D60C648E57E3672DD
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: 205532
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: 205532
       query_id: 0
-      real_prev_owner: null
       response_destination: 0:DBD9A756AFCB354723DBD593E13B3489DCDF724247767282766B886F38FDA48A
-      royalty_amount: null
     tx_hashes:
       - Aa7zaNz0doWGcCiLY1koeEHZUy4PbE7Si1piEOM+O/U=
       - qhJge66+v1EJPRT6xac4cL5htWXcqlxRMhBf6sO+/Wg=

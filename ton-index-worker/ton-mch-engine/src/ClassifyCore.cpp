@@ -168,6 +168,7 @@ bool try_build(const CompiledMatcher &m, const BuildFn &fn, Block *block,
 
   Block *produced = arena.make(o.btype.empty() ? m.produces.front() : o.btype);
   produced->data = o.data;
+  produced->direct_action = m.direct_action;
   produced->failed = o.failed;
   produced->broken = o.broken;
   if (!produced->merge_blocks(res->consumed)) {

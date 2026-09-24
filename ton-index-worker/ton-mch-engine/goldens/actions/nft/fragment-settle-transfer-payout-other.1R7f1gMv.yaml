@@ -70,16 +70,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: 0:B9A1A4492EFE93D1104CD8826054DE34DDCAD829CDB97BF889202F2366A1D57B
-      royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: null
       forward_payload: cellhash:0E308037B7BE06D596382BA7281ABBDE6F880B85F8B9254463102847A3AAC001
       is_purchase: true
       marketplace_address: null
-      nft_item_index: "5757565536066860752903611837761464427199802009455178276534893825253643983948"
+      marketplace_fee_address: 0:B9A1A4492EFE93D1104CD8826054DE34DDCAD829CDB97BF889202F2366A1D57B
+      nft_index: "5757565536066860752903611837761464427199802009455178276534893825253643983948"
       payout_amount: 5574702758
       payout_comment: null
       payout_comment_encoded: null
@@ -88,6 +86,7 @@ actions:
       query_id: 104248257000006
       real_prev_owner: null
       response_destination: null
+      royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
       royalty_amount: 299933333
     tx_hashes:
       - 2uzFkxEqtc0r4BVPRLTExDJ7aSfeIcaPQo1X+5PfscM=
@@ -122,25 +121,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace_address: null
-      nft_item_index: "5757565536066860752903611837761464427199802009455178276534893825253643983948"
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: "5757565536066860752903611837761464427199802009455178276534893825253643983948"
       query_id: 8549106349791030073
-      real_prev_owner: null
       response_destination: 0:EDF2F4B87138F8B4E5FDF17D0C4F93BC25AA0124B7F8720835861DB8F914F3FA
-      royalty_amount: null
     tx_hashes:
       - 8gQqM1P5oVqZ1ZsYgUrJVzVIcM+tPwc/7CRFSyory+w=
       - Kxa2X/aNU/EQ9c4nMrBQoLO/SZqNao67FXj4HQ07T/Y=

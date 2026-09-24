@@ -95,16 +95,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: null
       forward_payload: cellhash:E7B2237ADAE88D56BE374B5CFA1B9FC3FC44ED0AF5059760D4D88EBB4B412D9D
       is_purchase: true
       marketplace_address: null
-      nft_item_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
+      marketplace_fee_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
+      nft_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
       payout_amount: 118996588673
       payout_comment: null
       payout_comment_encoded: null
@@ -113,6 +111,7 @@ actions:
       query_id: 102765053000006
       real_prev_owner: null
       response_destination: null
+      royalty_address: null
       royalty_amount: null
     tx_hashes:
       - IZFzlCQceEnW/QGzEP6ygtU040k+aTzswSyXT2dKaTw=
@@ -141,16 +140,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: null
       forward_payload: cellhash:35700794FAA1AADF1F28DF147AF4A6695A8463E6725E51CE6B5478FDA418268B
       is_purchase: false
       marketplace_address: null
-      nft_item_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
+      marketplace_fee_address: null
+      nft_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
       payout_amount: null
       payout_comment: null
       payout_comment_encoded: null
@@ -159,6 +156,7 @@ actions:
       query_id: 0
       real_prev_owner: null
       response_destination: null
+      royalty_address: null
       royalty_amount: null
     tx_hashes:
       - PuaQeYxahzUJYUu1mEEzFpAxCCZjTseWQ++rsgdgpIw=

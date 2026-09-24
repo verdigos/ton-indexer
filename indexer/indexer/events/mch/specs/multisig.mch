@@ -9,22 +9,24 @@ opcode MultisigExecute        = 0x75097F5D
 
 matcher multisig_create_order {
     produces multisig_create_order
+    action direct
 
     op MultisigNewOrder @new as MultisigNewOrder -> op MultisigInitOrder @init as MultisigInitOrder
 
     require order = lookup multisig_order(init.msg.destination)
+    let signers = map(order.signers as signer => account(signer))
     out {
-        query_id:               new.body.query_id
-        multisig:               new.msg.destination
-        order_seqno:            new.body.order_seqno
-        created_by:             new.msg.source
-        is_created_by_signer:   new.body.is_signer
-        creator_index:          new.body.singer_index
-        order_contract_address: init.msg.destination
-        creator_approved:       init.body.approve_on_init
-        expiration_date:        new.body.expiration_date
-        order_boc_str:          b64(init.body.order)
-        signers:                order.signers
+        source:                new.msg.source
+        destination:           new.msg.destination
+        destination_secondary: init.msg.destination
+        accounts:              signers
+        query_id:              new.body.query_id
+        order_seqno:           new.body.order_seqno
+        is_created_by_signer:  new.body.is_signer
+        is_signed_by_creator:  init.body.approve_on_init
+        signer_index:          new.body.singer_index
+        expiration_date:       new.body.expiration_date
+        order_boc:             b64(init.body.order)
     }
 }
 

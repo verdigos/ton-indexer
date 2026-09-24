@@ -16,6 +16,7 @@ opcode TgBTCDkgCompletedLog = 0x453443A6
 
 matcher tgbtc_mint {
     produces tgbtc_mint
+    action direct
     shape    tgbtc_deploy_absorb
 
     op TgBTCMintHead @head -> $mint_chain
@@ -23,15 +24,16 @@ matcher tgbtc_mint {
     let mint_log = find(consumed as b => b.btype == "call_contract" and b.data.opcode == 0x77A80EF3)
     let mint_jetton = find(consumed as b => b.btype == "jetton_mint")
     require d = tgbtc_mint_data(mint_head, mint_log, mint_jetton)
+    let crippled = false
     out {
-        sender:            head.msg.source
-        recipient:         d.recipient
-        amount:            d.amount
-        asset:             d.asset
-        bitcoin_txid:      d.bitcoin_txid
-        recipient_wallet:  d.recipient_wallet
-        teleport_contract: d.teleport_contract
-        crippled:          false
+        type:                  "tgbtc_mint_fallback" if crippled else "tgbtc_mint"
+        source:                head.msg.source
+        destination:           d.recipient
+        amount:                d.amount
+        asset:                 d.asset
+        source_secondary:      d.teleport_contract
+        destination_secondary: d.recipient_wallet
+        btc_txid:              d.bitcoin_txid
     }
 }
 
@@ -91,20 +93,22 @@ matcher tgbtc_new_key {
 
 matcher tgbtc_mint_log_only {
     produces tgbtc_mint
+    action direct
 
     op TgBTCMintSuccessLog @log as TgBTCMintEvent
 
     require m = log.body
+    let crippled = true
     out {
-        sender:            log.msg.source
-        recipient:         m.recipient_address
-        amount:            m.amount
-        asset:             null
-        bitcoin_txid:      txid_le_hex(m.bitcoin_txid)
-        success:           true
-        recipient_wallet:  null
-        teleport_contract: log.msg.source
-        crippled:          true
+        type:                  "tgbtc_mint_fallback" if crippled else "tgbtc_mint"
+        source:                log.msg.source
+        destination:           m.recipient_address
+        amount:                m.amount
+        asset:                 null
+        source_secondary:      log.msg.source
+        destination_secondary: null
+        success:               true
+        btc_txid:              txid_le_hex(m.bitcoin_txid)
     }
 }
 

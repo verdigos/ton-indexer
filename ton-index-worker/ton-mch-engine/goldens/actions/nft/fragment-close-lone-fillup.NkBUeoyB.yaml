@@ -18,16 +18,14 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
-      royalty_address: null
-    nft_transfer_data:
+    data:
       custom_payload: null
       forward_amount: null
       forward_payload: cellhash:E7B2237ADAE88D56BE374B5CFA1B9FC3FC44ED0AF5059760D4D88EBB4B412D9D
       is_purchase: true
       marketplace_address: null
-      nft_item_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
+      marketplace_fee_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
+      nft_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
       payout_amount: 118996522006
       payout_comment: null
       payout_comment_encoded: null
@@ -36,6 +34,7 @@ actions:
       query_id: 104277894000001
       real_prev_owner: null
       response_destination: null
+      royalty_address: null
       royalty_amount: null
     tx_hashes:
       - /FYwI51RMoyFQ1msQ1hNOSKZNFp6slvKkJpt6IIok5I=
