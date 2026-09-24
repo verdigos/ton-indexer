@@ -667,7 +667,7 @@ void test_two_tier_routing() {
             src.stats().misses_by_kind.at("dedust_pool") == 1);
 }
 
-void test_tier1_authoritative_miss() {
+void test_tier1_stable_miss() {
   const block::StdAddress a = addr_of('A');
   schema::JettonWalletDataV2 jw{};
   jw.balance = td::make_refint(1);
@@ -703,24 +703,24 @@ void test_tier1_authoritative_miss() {
            after.tier1_hits == before.tier1_hits && after.tier2_hits == before.tier2_hits;
   };
 
-  const auto before_authoritative = src.stats();
-  const int calls_before_authoritative = hook_calls;
-  Value authoritative = src.fetch("nft_item", {Value::make_str(raw_of('A'))});
-  check("tier1_auth/authoritative_null",
-        authoritative.is_null() && hook_calls == calls_before_authoritative &&
-            is_miss_delta(src, before_authoritative, "nft_item"));
+  const auto before_stable = src.stats();
+  const int calls_before_stable = hook_calls;
+  Value stable_miss = src.fetch("nft_item", {Value::make_str(raw_of('A'))});
+  check("tier1_stable/stable_null",
+        stable_miss.is_null() && hook_calls == calls_before_stable &&
+            is_miss_delta(src, before_stable, "nft_item"));
 
   const auto before_unstable = src_unstable.stats();
   const int calls_before_unstable = hook_calls;
   Value unstable_miss = src_unstable.fetch("nft_item", {Value::make_str(raw_of('A'))});
-  check("tier1_auth/unstable_falls_through",
+  check("tier1_stable/unstable_falls_through",
         unstable_miss.is_null() && hook_calls == calls_before_unstable + 1 &&
             is_miss_delta(src_unstable, before_unstable, "nft_item"));
 
   const auto before_non_interface = src.stats();
   const int calls_before_non_interface = hook_calls;
   Value non_interface = src.fetch("jetton_master", {Value::make_str(raw_of('A'))});
-  check("tier1_auth/non_interface_kind_falls_through",
+  check("tier1_stable/non_interface_kind_falls_through",
         non_interface.is_null() && hook_calls == calls_before_non_interface + 1 &&
             is_miss_delta(src, before_non_interface, "jetton_master"));
 
@@ -734,14 +734,14 @@ void test_tier1_authoritative_miss() {
   const auto before_e = after_f;
   const int calls_before_e = hook_calls;
   Value absent_unstable = src.fetch("nft_item", {Value::make_str(raw_of('E'))});
-  check("tier1_auth/absent_account_falls_through",
+  check("tier1_stable/absent_account_falls_through",
         stable_absent_falls_through && absent_unstable.is_null() &&
             hook_calls == calls_before_e + 1 && is_miss_delta(src, before_e, "nft_item"));
 
   const auto before_hit = src.stats();
   const int calls_before_hit = hook_calls;
   Value hit = src.fetch("jetton_wallet", {Value::make_str(raw_of('A'))});
-  check("tier1_auth/tier1_hit_unaffected",
+  check("tier1_stable/tier1_hit_unaffected",
         !hit.is_null() && hook_calls == calls_before_hit &&
             src.stats().misses == before_hit.misses &&
             misses_for(src.stats(), "jetton_wallet") ==
@@ -763,7 +763,7 @@ int run_celldb_tier2_test() {
   test_lookup_kind_registry();
   test_telemint_detector();
   test_two_tier_routing();
-  test_tier1_authoritative_miss();
+  test_tier1_stable_miss();
   test_account_lookup_states();
   test_detector_error_is_fault_miss();
   test_nft_sale_v4_fallback_is_not_fault();

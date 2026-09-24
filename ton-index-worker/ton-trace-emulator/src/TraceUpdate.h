@@ -30,6 +30,6 @@ inline TraceUpdate make_trace_update(Trace trace, MeasurementPtr measurement) {
   return update;
 }
 
-// Keeps one authoritative interface view per account. An emulated final state
+// Keeps one interface view per account. An emulated final state
 // always wins over a committed state, regardless of fragment order.
 void normalize_trace_update_interfaces(TraceUpdate& update);

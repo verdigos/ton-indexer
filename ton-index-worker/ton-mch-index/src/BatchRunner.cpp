@@ -5,7 +5,8 @@
 #include <cstdio>
 
 #include "BlockInterfacesDetector.h"
-#include "ClassifyAndSerialize.h"
+#include "Classify.h"
+#include "RedisActionSerialize.h"
 
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/base64.h"
@@ -226,11 +227,8 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   }
   view.config = parsed_block->mc_block_.config_;
   auto &tier1_map = tier1_completion_only_ ? parsed_block->account_interfaces_ : account_interfaces_;
-  auto run = mch::classify_and_serialize(
-      *prep_, txs, view, tier1_map,
-      {.tier2_enabled = tier2_enabled_,
-       .authoritative_tier1 = true,
-       .serialize_failure_rows = false});
+  auto run = mch::classify(*prep_, trace_key, txs, tier1_map,
+                           tier2_enabled_ ? &view.shard_states : nullptr, view.config);
   auto &classified = run.classified;
   const auto &stats = run.lookup_stats;
   lookup_stats_.tier1_hits += stats.tier1_hits;
@@ -256,6 +254,7 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   }
 
   total_actions_emitted_ += classified.rows.size();
+  auto actions_blob = mch::serialize_redis_actions(classified.rows, view);
 
   std::vector<std::string> tx_hash_b64;
   tx_hash_b64.reserve(txs.size());
@@ -268,7 +267,7 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   td::JsonBuilder jb;
   auto obj = jb.enter_object();
   obj("trace_key", trace_key);
-  obj("actions_b64", td::base64_encode(run.actions_blob));
+  obj("actions_b64", td::base64_encode(actions_blob));
   obj("tx_hashes", td::json_array([&](auto &arr) {
         for (const auto &hash : tx_hash_b64) {
           arr << hash;

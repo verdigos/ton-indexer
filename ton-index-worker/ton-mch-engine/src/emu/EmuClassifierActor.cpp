@@ -1,7 +1,8 @@
 #include "EmuClassifierActor.h"
 
-#include "ClassifyAndSerialize.h"
+#include "Classify.h"
 #include "EmuTraceConvert.h"
+#include "RedisActionSerialize.h"
 
 #include "vm/excno.hpp"  // vm::VmError is not a std::exception.
 
@@ -130,8 +131,8 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
     } else {
       auto txs = r_txs.move_as_ok();
       past_conversion = true;
-      auto run = classify_and_serialize(*cfg_.prep, txs, view, *view.interfaces,
-                                        {.tier2_enabled = cfg_.tier2});
+      auto run = mch::classify(*cfg_.prep, view.trace_id, txs, *view.interfaces,
+                               cfg_.tier2 ? &view.shard_states : nullptr, view.config);
       auto &classified = run.classified;
       res.failure = classified.outcome == TraceOutcome::fallback ||
                     classified.outcome == TraceOutcome::terminal_failure_empty;
@@ -150,27 +151,28 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         aai_score = first_tx ? lt : std::min(aai_score, lt);
         first_tx = false;
       }
-      // Build routes within the anchor lifetime and include that work in the
-      // existing serialization timing metric.
+      // Serialize and build routes while the view keeps the cell anchor alive.
       const std::int64_t ser_started_us = emu_now_us();
+      RedisActionSerializeStats serialize_stats;
+      auto actions_blob = serialize_redis_actions(classified.rows, view, &serialize_stats);
       const std::uint8_t finality = res.payload.finality;
       const std::uint64_t update_seq = res.payload.update_seq;
-      res.payload = build_payload(view, classified.rows, aai_score, std::move(run.actions_blob));
+      res.payload = build_payload(view, classified.rows, aai_score, std::move(actions_blob));
       res.payload.finality = finality;
       res.payload.update_seq = update_seq;
-      res.serialize_us = run.serialize_us + emu_now_us() - ser_started_us;
+      res.serialize_us = emu_now_us() - ser_started_us;
       if (res.serialize_us > 0) {
         auto us = static_cast<std::size_t>(res.serialize_us);
         stats_.serialize_us_total += us;
         stats_.serialize_us_max = std::max(stats_.serialize_us_max, us);
       }
       stats_.actions_blob_bytes += res.payload.actions_blob.size();
-      stats_.ser_cell_values += run.serialize_stats.cell_values;
-      stats_.ser_unrenderable += run.serialize_stats.unrenderable;
-      if (run.serialize_stats.cell_values != 0 || run.serialize_stats.unrenderable != 0) {
+      stats_.ser_cell_values += serialize_stats.cell_values;
+      stats_.ser_unrenderable += serialize_stats.unrenderable;
+      if (serialize_stats.cell_values != 0 || serialize_stats.unrenderable != 0) {
         LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << res.trace_id
-                     << " serializer saw cell=" << run.serialize_stats.cell_values
-                     << " unrenderable=" << run.serialize_stats.unrenderable;
+                     << " serializer saw cell=" << serialize_stats.cell_values
+                     << " unrenderable=" << serialize_stats.unrenderable;
       }
       stats_.actions += classified.rows.size();
       if (res.used_fallback) {
