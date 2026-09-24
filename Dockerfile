@@ -102,12 +102,7 @@ RUN cd /go/app && go build -o ton-metadata-cache .
 ## build metadata fetcher service ton-metadata-fetcher
 FROM golang:trixie AS metadata-fetcher-builder
 
-ADD ton-metadata-fetcher/images.go /go/app/images.go
-ADD ton-metadata-fetcher/ipfs.go /go/app/ipfs.go
-ADD ton-metadata-fetcher/main.go /go/app/main.go
-ADD ton-metadata-fetcher/overrides.go /go/app/overrides.go
-ADD ton-metadata-fetcher/go.mod /go/app/go.mod
-ADD ton-metadata-fetcher/go.sum /go/app/go.sum
+COPY ton-metadata-fetcher/*.go ton-metadata-fetcher/go.mod ton-metadata-fetcher/go.sum /go/app/
 
 WORKDIR /go/app
 RUN go build -o ton-metadata-fetcher ./*.go

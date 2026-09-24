@@ -96,7 +96,8 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT "${MCH_PAYLOAD_KEYS_HEADER}"
-    COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.payload_keys cpp
+    COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.payload_keys
+            --registry "${CMAKE_CURRENT_SOURCE_DIR}/payload-keys.yaml" cpp
             --out "${MCH_PAYLOAD_KEYS_HEADER}"
     WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/payload-keys.yaml"
@@ -158,7 +159,8 @@ set(MCH_GENERATED_SOURCES
 )
 add_custom_target(mch_generate_sources
     DEPENDS ${MCH_GENERATED_IR} ${MCH_GENERATED_IR_SECOND}
-            ${MCH_EXPR_VECTORS} ${MCH_GENERATED_SOURCES})
+            ${MCH_GENERATED_SOURCES})
+add_custom_target(mch_generate_test_vectors DEPENDS ${MCH_EXPR_VECTORS})
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
 # The pure pipeline TUs (no CLI/dump/harness) - ton-index-
@@ -351,6 +353,7 @@ target_compile_definitions(ton-mch-engine PRIVATE
 # the only target that knows ::Trace. mch-fixtures is linked HERE and only here.
 target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-classification-runtime)
 add_dependencies(ton-mch-engine mch_generate_sources)
+add_dependencies(ton-mch-engine mch_generate_test_vectors)
 
 add_executable(mch-smc-pruned-cells-test harness/SmcPrunedCellsTest.cpp)
 target_link_libraries(mch-smc-pruned-cells-test PRIVATE smc-envelope)
