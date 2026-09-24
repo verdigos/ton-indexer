@@ -1,123 +1,193 @@
 #include "ActionPayload.h"
-
 #include "Value.h"
-
+#include "payload_keys_generated.h"
+#include "td/utils/base64.h"
 #include <msgpack.hpp>
-
 #include <algorithm>
+#include <charconv>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace mch {
 namespace {
-
 using Packer = msgpack::packer<msgpack::sbuffer>;
 
-void pack_string(Packer &packer, std::string_view value) {
-  packer.pack_str(static_cast<std::uint32_t>(value.size()));
-  packer.pack_str_body(value.data(), static_cast<std::uint32_t>(value.size()));
+void pack_string(Packer &pk, std::string_view s) {
+  pk.pack_str(static_cast<std::uint32_t>(s.size()));
+  pk.pack_str_body(s.data(), static_cast<std::uint32_t>(s.size()));
 }
-
-void pack_binary(Packer &packer, const std::string &value) {
-  packer.pack_bin(static_cast<std::uint32_t>(value.size()));
-  packer.pack_bin_body(value.data(), static_cast<std::uint32_t>(value.size()));
+void pack_binary(Packer &pk, std::string_view s) {
+  pk.pack_bin(static_cast<std::uint32_t>(s.size()));
+  pk.pack_bin_body(s.data(), static_cast<std::uint32_t>(s.size()));
 }
-
-void pack_value(Packer &packer, const Value &value, bool positional_legs = false);
-
-bool omitted(const Value &value) {
-  return value.t == VType::Null || value.t == VType::Block ||
-         ((value.t == VType::Int || value.t == VType::Amount) && value.num.is_null()) ||
-         (value.t == VType::Account && value.addr_none) ||
-         (value.t == VType::Asset && (value.is_ton || !value.has_jetton)) ||
-         (value.t == VType::Cell &&
-          (value.cell.is_null() || td_boc_serialize_crc(value.cell).is_error()));
+bool omitted(const Value &v) {
+  return v.t == VType::Null || v.t == VType::Block ||
+         ((v.t == VType::Int || v.t == VType::Amount) && v.num.is_null()) ||
+         (v.t == VType::Account && v.addr_none) ||
+         (v.t == VType::Asset && (v.is_ton || !v.has_jetton)) ||
+         (v.t == VType::Cell && v.cell.is_null());
 }
-
-void pack_fields(Packer &packer, const Value::Fields &fields) {
-  std::uint32_t size = 0;
-  for (const auto &[key, value] : fields) {
-    if (!omitted(value)) ++size;
+std::string value_text(const Value &v) {
+  if (v.t == VType::Int || v.t == VType::Amount) return v.num->to_dec_string();
+  if (v.t == VType::Account || v.t == VType::Asset) return canonicalize_or_passthrough(v.str);
+  if (v.t == VType::Str) return v.str;
+  throw std::runtime_error("payload value is not text");
+}
+[[noreturn]] void invalid(std::string_view name, std::string_view expected, std::string_view text) {
+  std::string sample(text.substr(0, 48));
+  std::replace_if(sample.begin(), sample.end(), [](char c) { return c == '\r' || c == '\n'; }, ' ');
+  throw std::runtime_error("payload key " + std::string(name) + " expects " + std::string(expected) + ": " + sample);
+}
+std::string typed_text(const Value &v, std::string_view name, std::string_view expected) {
+  if (v.t != VType::Str && v.t != VType::Int && v.t != VType::Amount &&
+      v.t != VType::Account && v.t != VType::Asset)
+    invalid(name, expected, "non-text value");
+  return value_text(v);
+}
+std::string cell_bytes(const Value &v, std::string_view name) {
+  auto boc = td_boc_serialize_crc(v.cell);
+  if (boc.is_error()) invalid(name, "serializable boc", boc.error().message().str());
+  return boc.move_as_ok();
+}
+const PayloadKeyInfo &key_info(std::string_view name) {
+  auto it = std::lower_bound(payload_keys.begin(), payload_keys.end(), name,
+                             [](const PayloadKeyInfo &row, std::string_view n) { return row.name < n; });
+  if (it == payload_keys.end() || it->name != name || it->retired) invalid(name, "registered key", name);
+  return *it;
+}
+int hex_digit(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+std::string hex_bytes(std::string_view text, bool uppercase) {
+  if (text.size() % 2) return {};
+  std::string bytes;
+  bytes.reserve(text.size() / 2);
+  for (std::size_t i = 0; i < text.size(); i += 2) {
+    if (uppercase ? ((text[i] >= 'a' && text[i] <= 'f') || (text[i + 1] >= 'a' && text[i + 1] <= 'f'))
+                  : ((text[i] >= 'A' && text[i] <= 'F') || (text[i + 1] >= 'A' && text[i + 1] <= 'F')))
+      return {};
+    int a = hex_digit(text[i]), b = hex_digit(text[i + 1]);
+    if (a < 0 || b < 0) return {};
+    bytes.push_back(static_cast<char>((a << 4) | b));
   }
-  packer.pack_map(size);
-  for (const auto &[key, value] : fields) {
-    if (omitted(value)) continue;
-    pack_string(packer, key);
-    // Positional legs need nil placeholders for empty earlier slots.
-    pack_value(packer, value, key == "legs");
-  }
+  return bytes;
 }
-
-void pack_value(Packer &packer, const Value &value, bool positional_legs) {
-  switch (value.t) {
-    case VType::Null:
-    case VType::Block:
-      packer.pack_nil();
-      return;
-    case VType::Bool:
-      packer.pack(value.boolean);
-      return;
-    case VType::Int:
-    case VType::Amount:
-      if (value.num.is_null()) packer.pack_nil();
-      else pack_string(packer, value.num->to_dec_string());
-      return;
-    case VType::Str: {
-      std::string text = value.str;
-      std::erase(text, '\0');
-      pack_string(packer, text);
-      return;
-    }
-    case VType::Account:
-      if (value.addr_none) packer.pack_nil();
-      else pack_string(packer, canonicalize_or_passthrough(value.str));
-      return;
-    case VType::Asset:
-      if (value.is_ton || !value.has_jetton) packer.pack_nil();
-      else pack_string(packer, canonicalize_or_passthrough(value.str));
-      return;
-    case VType::Bytes:
-      pack_binary(packer, value.str);
-      return;
-    case VType::Cell: {
-      auto boc = td_boc_serialize_crc(value.cell);
-      if (boc.is_error()) packer.pack_nil();
-      else pack_binary(packer, boc.ok());
-      return;
-    }
+std::string base64_bytes(std::string_view name, std::string_view text, bool hash) {
+  auto decoded = td::base64_decode(td::Slice(text.data(), text.size()));
+  if (decoded.is_error() || td::base64_encode(td::Slice(decoded.ok())) != text ||
+      (hash && decoded.ok().size() != 32))
+    invalid(name, hash ? "32-byte padded base64 hash" : "padded base64 boc", text);
+  return decoded.move_as_ok();
+}
+void pack_fields(Packer &pk, const Value::Fields &fields);
+void pack_plain(Packer &pk, const Value &v, bool legs = false, std::string_view context = "other") {
+  switch (v.t) {
+    case VType::Null: case VType::Block: pk.pack_nil(); return;
+    case VType::Bool: pk.pack(v.boolean); return;
+    case VType::Int: case VType::Amount: case VType::Str:
+    case VType::Account: case VType::Asset: pack_string(pk, value_text(v)); return;
+    case VType::Bytes: pack_binary(pk, v.str); return;
+    case VType::Cell: pack_binary(pk, cell_bytes(v, context)); return;
     case VType::List: {
-      std::uint32_t size = 0;
-      for (const auto &item : *value.items) {
-        if (!omitted(item) || (positional_legs && item.t == VType::Null)) ++size;
-      }
-      packer.pack_array(size);
-      for (const auto &item : *value.items) {
-        if (!omitted(item) || (positional_legs && item.t == VType::Null)) pack_value(packer, item);
-      }
+      std::uint32_t n = 0;
+      for (const auto &item : *v.items) if (!omitted(item) || (legs && item.t == VType::Null)) ++n;
+      pk.pack_array(n);
+      for (const auto &item : *v.items)
+        if (!omitted(item) || (legs && item.t == VType::Null)) pack_plain(pk, item, false, context);
       return;
     }
-    case VType::Dict:
-    case VType::Obj:
-      pack_fields(packer, *value.fields);
-      return;
+    case VType::Dict: case VType::Obj: pack_fields(pk, *v.fields); return;
   }
 }
-
+void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
+  const auto name = key.name;
+  switch (key.type) {
+    case PayloadKeyType::Other: pack_plain(pk, v, name == "legs", name); return;
+    case PayloadKeyType::String:
+      if (v.t != VType::Str && v.t != VType::Int && v.t != VType::Amount) invalid(name, "string", "non-text value");
+      pack_string(pk, value_text(v)); return;
+    case PayloadKeyType::Bool:
+      if (v.t != VType::Bool) invalid(name, "bool", "non-bool value");
+      pk.pack(v.boolean); return;
+    case PayloadKeyType::Address: {
+      auto text = typed_text(v, name, "W:HEX address");
+      auto colon = text.find(':');
+      if (colon == std::string::npos || text.size() != colon + 65) invalid(name, "W:HEX address", text);
+      int wc = 0;
+      auto [ptr, ec] = std::from_chars(text.data(), text.data() + colon, wc);
+      if (ec != std::errc{} || ptr != text.data() + colon ||
+          std::to_string(wc) != text.substr(0, colon) || wc < -128 || wc > 127)
+        invalid(name, "W:HEX address", text);
+      auto hash = hex_bytes(std::string_view(text).substr(colon + 1), true);
+      if (hash.size() != 32) invalid(name, "W:HEX address", text);
+      std::string bytes(1, static_cast<char>(wc));
+      bytes += hash;
+      pack_binary(pk, bytes); return;
+    }
+    case PayloadKeyType::Boc:
+      if (v.t == VType::Bytes) { pack_binary(pk, v.str); return; }
+      if (v.t == VType::Cell) { pack_binary(pk, cell_bytes(v, name)); return; }
+      pack_binary(pk, base64_bytes(name, typed_text(v, name, "padded base64 boc"), false)); return;
+    case PayloadKeyType::Hash: case PayloadKeyType::HashHex: case PayloadKeyType::Hash0x: {
+      auto text = typed_text(v, name, "32-byte hash");
+      if (key.type == PayloadKeyType::Hash) { pack_binary(pk, base64_bytes(name, text, true)); return; }
+      bool prefixed = key.type == PayloadKeyType::Hash0x;
+      if (prefixed && !text.starts_with("0x")) invalid(name, "0x lowercase 32-byte hash", text);
+      auto bytes = hex_bytes(std::string_view(text).substr(prefixed ? 2 : 0), false);
+      if (bytes.size() != 32) invalid(name, prefixed ? "0x lowercase 32-byte hash" : "lowercase 32-byte hash", text);
+      pack_binary(pk, bytes); return;
+    }
+    case PayloadKeyType::Uint: {
+      auto text = typed_text(v, name, "canonical unsigned decimal");
+      if (text.empty() || (text.size() > 1 && text.front() == '0') ||
+          !std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '9'; }))
+        invalid(name, "canonical unsigned decimal", text);
+      std::uint64_t small = 0;
+      auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), small);
+      if (ec == std::errc{} && ptr == text.data() + text.size()) { pk.pack(small); return; }
+      std::string bytes(1, '\0');
+      for (char digit : text) {
+        unsigned carry = static_cast<unsigned>(digit - '0');
+        for (auto it = bytes.rbegin(); it != bytes.rend(); ++it) {
+          carry += static_cast<unsigned char>(*it) * 10;
+          *it = static_cast<char>(carry & 255);
+          carry >>= 8;
+        }
+        while (carry) { bytes.insert(bytes.begin(), static_cast<char>(carry & 255)); carry >>= 8; }
+      }
+      while (bytes.size() > 1 && bytes.front() == '\0') bytes.erase(bytes.begin());
+      pack_binary(pk, bytes); return;
+    }
+  }
+}
+void pack_fields(Packer &pk, const Value::Fields &fields) {
+  std::vector<std::pair<const PayloadKeyInfo *, const Value *>> ordered;
+  ordered.reserve(fields.size());
+  for (const auto &[name, value] : fields) {
+    const auto &key = key_info(name);
+    if (!omitted(value)) ordered.emplace_back(&key, &value);
+  }
+  std::sort(ordered.begin(), ordered.end(), [](const auto &a, const auto &b) { return a.first->id < b.first->id; });
+  for (std::size_t i = 1; i < ordered.size(); ++i)
+    if (ordered[i - 1].first->id == ordered[i].first->id) invalid(ordered[i].first->name, "unique key", "duplicate");
+  pk.pack_map(static_cast<std::uint32_t>(ordered.size()));
+  for (const auto &[key, value] : ordered) { pk.pack(key->id); pack_typed(pk, *value, *key); }
+}
 }  // namespace
 
 std::string encode_action_payload(const Action &action) {
   msgpack::sbuffer buffer;
   buffer.write("\x01", 1);
-  Packer packer(&buffer);
-  packer.pack_map(1);
-  pack_string(packer, "data");
-  if ((action.data.t == VType::Dict || action.data.t == VType::Obj) && action.data.fields) {
-    pack_fields(packer, *action.data.fields);
-  } else {
-    packer.pack_map(0);
-  }
+  Packer pk(&buffer);
+  if ((action.data.t == VType::Dict || action.data.t == VType::Obj) && action.data.fields)
+    pack_fields(pk, *action.data.fields);
+  else pk.pack_map(0);
   return std::string(buffer.data(), buffer.size());
 }
-
 }  // namespace mch

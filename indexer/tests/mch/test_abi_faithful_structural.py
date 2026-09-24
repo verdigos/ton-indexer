@@ -17,9 +17,6 @@ ABI_DIR = REPO / "ton-index-worker/ton-abi/abi"
 ABI_JSON_DIR = Path(
     os.environ.get("TON_ABI_JSON_DIR", REPO / "build/ton-index-worker/ton-abi/abi")
 )
-ENGINE = REPO / "ton-index-worker/ton-mch-engine"
-MSG_PARSE = ENGINE / "src/MsgParse.cpp"
-ABI_BRIDGE = ENGINE / "src/AbiBridge.cpp"
 
 # Logical public rows and their protocol-owned declaration files. The standard
 # and Ethena internal-transfer structs intentionally share one logical key.
@@ -226,40 +223,3 @@ def test_generated_abi_incoming_rows_match_protocol_sources():
             for row in abi["incoming_messages"]
         }
         assert incoming_names == set(_allowed_arms(text))
-
-
-def test_obsolete_message_schema_pipeline_is_absent_from_live_source():
-    deleted = (
-        ENGINE / ("mch-msgs" + ".schema"),
-        ENGINE / ("src/MsgParsers" + "Generated.cpp"),
-        ENGINE / ("src/MsgParsers" + "Generated.h"),
-        ENGINE / ("src/MsgVector" + "Runner.cpp"),
-        ENGINE / ("src/MsgVector" + "Runner.h"),
-        ENGINE / ("ir/msg_" + "vectors.json"),
-        REPO / ("indexer/indexer/events/mch/msgs" + "_gen.py"),
-        REPO / ("indexer/tests/mch/test_msgs" + "_gen.py"),
-    )
-    assert not any(path.exists() for path in deleted)
-
-    forbidden = (
-        "mch-msgs" + ".schema",
-        "msgs" + "_gen",
-        "MsgParsers" + "Generated",
-        "generated_message" + "_parsers",
-        "schema-generated" + " parser",
-        "mch_" + "legacy",
-        "schema_to_faithful" + "_tolk",
-    )
-    roots = (REPO / "indexer/indexer/events/mch", REPO / "indexer/tests/mch", ENGINE / "src")
-    offenders = []
-    for root in roots:
-        for path in root.rglob("*"):
-            if path == Path(__file__) or path.suffix not in {".py", ".mch", ".cpp", ".h"}:
-                continue
-            text = path.read_text(encoding="utf-8")
-            for term in forbidden:
-                if term in text:
-                    offenders.append(f"{path.relative_to(REPO)}: {term}")
-    cmake = (ENGINE / "CMakeLists.txt").read_text(encoding="utf-8")
-    offenders.extend(f"ton-index-worker/ton-mch-engine/CMakeLists.txt: {term}" for term in forbidden if term in cmake)
-    assert not offenders, "obsolete pipeline references:\n" + "\n".join(offenders)

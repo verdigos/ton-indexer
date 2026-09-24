@@ -121,15 +121,13 @@ func assertLegacyIsPurchase(t *testing.T, payloadHex string, legacyJSON json.Raw
 	if err != nil {
 		t.Fatalf("decode payload hex: %v", err)
 	}
-	if len(payload) == 0 || payload[0] != 1 {
-		t.Fatalf("payload codec %v, want 1", payload)
-	}
-	groups, err := msgpack.NewDecoder(bytes.NewReader(payload[1:])).DecodeMap()
-	if err != nil {
+	// The key reaches NFTTransfer.IsPurchase for every type that carries it, so decoding
+	// the payload under that prefix answers whether the payload has the key at all.
+	raw := &models.RawAction{Type: "nft_transfer"}
+	if err := parse.DecodeActionPayload(payload, raw); err != nil {
 		t.Fatalf("decode payload: %v", err)
 	}
-	data, _ := groups["data"].(map[string]interface{})
-	if _, ok := data["is_purchase"]; !ok {
+	if raw.NFTTransferIsPurchase == nil {
 		return
 	}
 	var legacy struct {
@@ -179,13 +177,13 @@ func TestJvaultClaimRewardMissingMember(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := &models.RawAction{Type: "jvault_claim"}
-			payload, err := msgpack.Marshal(map[string]interface{}{
-				"data": map[string]interface{}{"claimed_rewards": []interface{}{tc.record}},
+			payload, err := parse.EncodeCompactForTest(map[string]interface{}{
+				"claimed_rewards": []interface{}{tc.record},
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := parse.DecodeActionPayload(append([]byte{1}, payload...), raw); err != nil {
+			if err := parse.DecodeActionPayload(payload, raw); err != nil {
 				t.Fatalf("DecodeActionPayload: %v", err)
 			}
 			action, err := parse.ParseRawAction(raw)
@@ -221,17 +219,39 @@ func TestJvaultClaimRewardMissingMember(t *testing.T) {
 	}
 }
 
+// TestActionPayloadRejectsLegacyGroups pins the rejection of the previous payload format:
+// its body was a map of named groups (the flat `data` group plus per-family groups), so its
+// keys are strings, not registry ids.
 func TestActionPayloadRejectsLegacyGroups(t *testing.T) {
-	payload, err := msgpack.Marshal(map[string]interface{}{
-		"data":    map[string]interface{}{"nft_index": "1"},
-		"listing": map[string]interface{}{"nft_index": "1"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = parse.DecodeActionPayload(append([]byte{1}, payload...), &models.RawAction{Type: "nft_transfer"})
-	if err == nil {
-		t.Fatal("legacy group accepted")
+	for _, tc := range []struct {
+		name    string
+		payload map[string]interface{}
+	}{
+		{
+			name: "grouped body",
+			payload: map[string]interface{}{
+				"data":    map[string]interface{}{"nft_index": "1"},
+				"listing": map[string]interface{}{"nft_index": "1"},
+			},
+		},
+		{
+			name:    "flat named body",
+			payload: map[string]interface{}{"data": map[string]interface{}{"nft_index": "1"}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := msgpack.Marshal(tc.payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = parse.DecodeActionPayload(append([]byte{1}, payload...), &models.RawAction{Type: "nft_transfer"})
+			if err == nil {
+				t.Fatal("legacy payload accepted")
+			}
+			if !strings.Contains(err.Error(), "is not a registry id") {
+				t.Errorf("error = %q, want it to name the rejected key", err)
+			}
+		})
 	}
 }
 
@@ -276,24 +296,23 @@ func clearPayloadFields(action *models.RawAction) {
 	}
 }
 
-// TestDecodeActionPayloadEnvelope pins the payload envelope: the `data` group is
-// mandatory (the encoder always writes it), its value must be a map, and everything
-// else about the frame is rejected.
+// TestDecodeActionPayloadEnvelope pins the payload envelope: codec byte 1 followed by ONE
+// id-keyed map. The empty payload is `01 80`; anything else about the frame is rejected.
 func TestDecodeActionPayloadEnvelope(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		payload string
 		wantErr string
 	}{
-		{name: "empty data group", payload: "0181a46461746180"},
-		{name: "no group at all", payload: "0180", wantErr: `missing group "data"`},
-		{name: "null body", payload: "01c0", wantErr: "expected map"},
-		{name: "unexpected extra group", payload: "0182a46461746180a5657874726180", wantErr: `unexpected group "extra"`},
-		{name: "data group is not a map", payload: "0181a46461746101", wantErr: `group "data" is not a map`},
-		{name: "truncated map", payload: "0181a464617461", wantErr: "decode action payload"},
-		{name: "truncated key", payload: "0181a46461", wantErr: "decode action payload"},
-		{name: "trailing data", payload: "0181a4646174618000", wantErr: "trailing data"},
-		{name: "wrong codec", payload: "0281a46461746180", wantErr: "unsupported payload codec 2"},
+		{name: "empty payload", payload: "0180"},
+		{name: "nil body", payload: "01c0", wantErr: "expected a map, got nil"},
+		{name: "body is an array", payload: "0190", wantErr: "expected a map"},
+		{name: "truncated map header", payload: "0181", wantErr: "map key"},
+		{name: "truncated value", payload: "018106", wantErr: "payload key asset (id 6)"},
+		{name: "legacy name-keyed body", payload: "0181a46461746180", wantErr: "is not a registry id"},
+		{name: "unknown key id", payload: "0181ccc8c0", wantErr: "payload key id 200 is not in the registry"},
+		{name: "trailing data", payload: "018000", wantErr: "trailing data"},
+		{name: "wrong codec", payload: "0280", wantErr: "unsupported payload codec 2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			payload, err := hex.DecodeString(tc.payload)
@@ -349,12 +368,12 @@ func TestDecodeActionPayloadLegsPosition(t *testing.T) {
 		{name: "non-map element", legs: []interface{}{1, record}, wantErr: "expected map"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			body, err := msgpack.Marshal(map[string]interface{}{"data": map[string]interface{}{"legs": tc.legs}})
+			payload, err := parse.EncodeCompactForTest(map[string]interface{}{"legs": tc.legs})
 			if err != nil {
 				t.Fatal(err)
 			}
 			raw := &models.RawAction{Type: "dex_deposit_liquidity"}
-			err = parse.DecodeActionPayload(append([]byte{1}, body...), raw)
+			err = parse.DecodeActionPayload(payload, raw)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("error = %v, want it to contain %q", err, tc.wantErr)
@@ -389,20 +408,18 @@ func assertLegSlot(t *testing.T, name string, amount *string, asset, wallet *mod
 	}
 }
 
-// TestDecodeActionPayloadEmptyLegFromCppBytes decodes the exact codec-1 bytes the C++
-// encoder produced for `legs = [nil, {amount, asset, target_amount, target_asset,
-// user_jetton_wallet}]` (`_analysis-scratch/payload-wave/legs-sol.md`, DeDust partial
-// block): the API must report every value in slot 2 and leave slot 1 empty.
+// TestDecodeActionPayloadEmptyLegFromCppBytes decodes the exact bytes the C++ encoder
+// produced for `legs = [nil, {amount, asset, target_amount, target_asset,
+// user_jetton_wallet}]` (DeDust partial block, `build_action` + `encode_action_payload` in
+// `harness/RedisActionSerializeTest.cpp:295-340`, printed as `LEGS-ONE-SIDED-HEX` by
+// `ton-mch-engine --actions-msgpack-test`): the API must report every value in slot 2 and
+// leave slot 1 empty. The bytes are the engine's, not the test encoder's: a change of the
+// wire format breaks this case.
 func TestDecodeActionPayloadEmptyLegFromCppBytes(t *testing.T) {
-	const legPayloadHex = "0181a46461746182a870726f746f636f6ca6646564757374a46c65677392c085a56173736574d942303a414141414141" +
-		"414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141" +
-		"41414141414141414141a6616d6f756e74a3343536b2757365725f6a6574746f6e5f77616c6c6574d942303a43434343" +
-		"434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343" +
-		"434343434343434343434343ac7461726765745f6173736574d942303a42424242424242424242424242424242424242" +
-		"424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242ad7461" +
-		"726765745f616d6f756e74a3343537"
-
-	payload, err := hex.DecodeString(legPayloadHex)
+	const engineHex = "01822c92c08502cd01c806c42100aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa6ccd" +
+		"01c96dc42100bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb76c42100cccccccccccc" +
+		"cccccccccccccccccccccccccccccccccccccccccccccccccccc54a6646564757374"
+	payload, err := hex.DecodeString(engineHex)
 	if err != nil {
 		t.Fatalf("decode payload hex: %v", err)
 	}

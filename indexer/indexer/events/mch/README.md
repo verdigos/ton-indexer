@@ -489,7 +489,7 @@ A matcher's `out` block fills the produced block's `data` map.
 `ton-index-worker/ton-mch-engine/src/ActionBuild.cpp` maps each supported btype to a fill function that builds an `Action` row.
 Unsupported btypes are skipped along with their children.
 
-Payload v2 stores protocol-specific action data as one flat keyed map.
+The action payload stores protocol-specific data as one flat map.
 It has no per-protocol composite columns or group wrappers. Shared fields such as
 `source`, `destination`, `asset`, `amount` and `opcode` remain ordinary action fields;
 all other non-null action fields live directly under `data`.
@@ -508,15 +508,20 @@ and omits the key when all legs are empty.
         forward_amount:       amount(transfer.body.forward_amount)
 ```
 
-Payload key names are listed in `ton-index-worker/ton-mch-engine/docs/KEYS.md`.
-When adding an action field to payload v2, register its canonical flat key there; this
-changes the payload contract and does not require a DDL migration.
+Payload key names and ids are generated in `ton-index-worker/ton-mch-engine/docs/KEYS.md`
+from `ton-index-worker/ton-mch-engine/payload-keys.yaml`. Reuse an existing key
+first; a new key needs written justification, then append the next id by hand
+in the YAML and run `python -m indexer.events.mch.payload_keys gen` from
+`indexer/`. This changes the payload contract and needs no DDL migration.
 
 The emulator path writes the same codec-prefixed payload bytes as the batch database
 writer under each Redis action row's binary `payload` field. It emits no `*_data`,
-`listing`, `packet`, `comment_data` or `extra` row fields. Integers that may exceed
-signed 64 bits are decimal strings, keyed by field name at every map depth, while
-bounded fields such as opcodes, flags and times stay native integers.
+`listing`, `packet`, `comment_data` or `extra` row fields. Codec byte `01` is followed
+by one MessagePack map, with numeric registry ids in ascending order at every
+depth and no `data` wrapper. The empty payload is `01 80`. Addresses, BOCs,
+and hashes use binary values; unsigned decimals use MessagePack uint through
+uint64, then minimal big-endian binary. The action goldens still show names
+and decimal text.
 
 ## 10. Comment rules for specs
 

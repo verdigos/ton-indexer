@@ -1,22 +1,17 @@
 package parse
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 const actionPayloadCodecMsgpack = 1
-
-const actionPayloadGroup = "data"
 
 // actionDataPrefixes lists the RawAction field prefixes the flat `data` map of a
 // stored type resolves against, in priority order. A key takes the first prefix
@@ -157,7 +152,7 @@ var actionPayloadFieldNames = map[string]string{
 	"TonTransfer.comment_encrypted":         "Encrypted",
 }
 
-// DecodeActionPayload applies the flat payload's details to an action whose Type is set.
+// DecodeActionPayload applies the compact payload's details to an action whose Type is set.
 func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	if len(payload) == 0 {
 		return fmt.Errorf("empty action payload")
@@ -165,44 +160,18 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	if payload[0] != actionPayloadCodecMsgpack {
 		return fmt.Errorf("unsupported payload codec %d", payload[0])
 	}
-
-	dec := msgpack.NewDecoder(bytes.NewReader(payload[1:]))
-	groups, err := dec.DecodeMap()
+	values, err := decodeCompactPayload(payload[1:])
 	if err != nil {
 		return fmt.Errorf("decode action payload: %w", err)
 	}
-	if groups == nil {
-		return fmt.Errorf("decode action payload: expected map")
-	}
-	if _, err := dec.DecodeInterface(); err != io.EOF {
-		return fmt.Errorf("decode action payload: trailing data")
-	}
+	return applyActionPayload(action, values)
+}
 
-	data := map[string]interface{}{}
-	haveData := false
-	for group, value := range groups {
-		if group != actionPayloadGroup {
-			return fmt.Errorf("decode action payload: unexpected group %q", group)
-		}
-		fields, ok := value.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("decode action payload: group %q is not a map", group)
-		}
-		data = fields
-		haveData = true
-	}
-	// The encoder always writes the group (ActionPayload.cpp encode_action_payload), so a
-	// map without it is a truncated or foreign payload, not an action without details.
-	if !haveData {
-		return fmt.Errorf("decode action payload: missing group %q", actionPayloadGroup)
-	}
-
+// applyActionPayload routes a decoded payload map (names -> text values, one entry per
+// key of the payload) into the action's typed fields.
+func applyActionPayload(action *models.RawAction, values map[string]interface{}) error {
 	target := reflect.ValueOf(action).Elem()
-	prefixes := actionDataPrefixes[action.Type]
-	if err := fillActionPayload(target, action, prefixes, "", data); err != nil {
-		return err
-	}
-	return nil
+	return fillActionPayload(target, action, actionDataPrefixes[action.Type], "", values)
 }
 
 func fillActionPayload(target reflect.Value, action *models.RawAction, prefixes []string, parent string, values map[string]interface{}) error {

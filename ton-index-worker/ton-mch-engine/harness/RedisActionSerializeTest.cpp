@@ -11,6 +11,7 @@
 #include "emu/EmuTypes.h"
 #include "fixtures/FixtureLoader.h"
 #include "fixtures/FixtureLookupSource.h"
+#include "td/utils/base64.h"
 
 #include <msgpack.hpp>
 
@@ -61,6 +62,16 @@ const msgpack::object *at(const msgpack::object &map, const char *key) {
         std::memcmp(candidate.via.str.ptr, key, n) == 0) {
       return &map.via.map.ptr[i].val;
     }
+  }
+  return nullptr;
+}
+
+const msgpack::object *at_id(const msgpack::object &map, std::uint8_t id) {
+  if (map.type != msgpack::type::MAP) return nullptr;
+  for (std::uint32_t i = 0; i < map.via.map.size; ++i) {
+    const auto &entry = map.via.map.ptr[i];
+    if (entry.key.type == msgpack::type::POSITIVE_INTEGER && entry.key.via.u64 == id)
+      return &entry.val;
   }
   return nullptr;
 }
@@ -197,12 +208,10 @@ void test_columns_and_payload() {
   check("columns/payload_codec", !wire_payload.empty() && wire_payload.front() == '\x01');
   Decoded payload(wire_payload.size() > 1 ? wire_payload.substr(1) : std::string{});
   check("columns/payload_decodes", payload.ok() && payload.root().type == msgpack::type::MAP);
-  const auto *data = at(payload.root(), "data");
-  check("columns/data_map", data != nullptr && data->type == msgpack::type::MAP);
-  if (data == nullptr) return;
-  check("columns/query_id_string", is_str(at(*data, "query_id"), "18446744073709551615"));
-  check("columns/comment", is_str(at(*data, "comment"), "hello"));
-  check("columns/no_legacy_wrapper", absent(payload.root(), "ton_transfer_data"));
+  check("columns/flat_map", payload.root().type == msgpack::type::MAP && payload.root().via.map.size == 3);
+  check("columns/query_id_uint", is_uint(at_id(payload.root(), 89), UINT64_MAX));
+  check("columns/comment", is_str(at_id(payload.root(), 13), "hello"));
+  check("columns/comment_encrypted", is_bool(at_id(payload.root(), 14), false));
 }
 
 void test_finality_and_child_fields() {
@@ -308,53 +317,50 @@ void test_positional_legs() {
 
   const auto one_sided = payload(false, true);
   Decoded first_empty(one_sided.substr(1));
-  const auto *first_data = at(first_empty.root(), "data");
-  const auto *first_legs = first_data ? at(*first_data, "legs") : nullptr;
+  const auto *first_data = &first_empty.root();
+  const auto *first_legs = at_id(*first_data, 44);
   const auto *slot_1 = elem(first_legs, 0);
   const auto *slot_2 = elem(first_legs, 1);
   check("legs/first_empty", one_sided.front() == '\x01' && first_empty.ok() &&
                                first_legs != nullptr && first_legs->type == msgpack::type::ARRAY &&
                                first_legs->via.array.size == 2 &&
-                               first_data != nullptr && is_str(at(*first_data, "protocol"), "dedust") &&
+                               is_str(at_id(*first_data, 84), "dedust") &&
                                slot_1 != nullptr && slot_1->type == msgpack::type::NIL &&
                                slot_2 != nullptr && slot_2->type == msgpack::type::MAP &&
                                slot_2->via.map.size == 5 &&
-                               is_str(at(*slot_2, "asset"), kAddrA) &&
-                               is_str(at(*slot_2, "amount"), "456") &&
-                               is_str(at(*slot_2, "target_asset"), kAddrB) &&
-                               is_str(at(*slot_2, "target_amount"), "457") &&
-                               is_str(at(*slot_2, "user_jetton_wallet"), kAddrC));
+                               at_id(*slot_2, 6)->type == msgpack::type::BIN &&
+                               is_uint(at_id(*slot_2, 2), 456) &&
+                               at_id(*slot_2, 109)->type == msgpack::type::BIN &&
+                               is_uint(at_id(*slot_2, 108), 457) &&
+                               at_id(*slot_2, 118)->type == msgpack::type::BIN);
   std::printf("LEGS-ONE-SIDED-HEX ");
   for (unsigned char byte : one_sided) std::printf("%02x", byte);
   std::printf("\n");
 
   const auto trailing_empty = payload(true, false);
   Decoded second_empty(trailing_empty.substr(1));
-  const auto *second_data = at(second_empty.root(), "data");
-  const auto *second_legs = second_data ? at(*second_data, "legs") : nullptr;
+  const auto *second_legs = at_id(second_empty.root(), 44);
   const auto *only_leg = elem(second_legs, 0);
   check("legs/trailing_empty", second_empty.ok() && second_legs != nullptr &&
                                   second_legs->type == msgpack::type::ARRAY &&
                                   second_legs->via.array.size == 1 && only_leg != nullptr &&
-                                  is_str(at(*only_leg, "amount"), "123"));
+                                  is_uint(at_id(*only_leg, 2), 123));
 
   const auto all_empty = payload(false, false);
   Decoded no_legs(all_empty.substr(1));
-  const auto *empty_data = at(no_legs.root(), "data");
-  check("legs/all_empty", no_legs.ok() && empty_data != nullptr && absent(*empty_data, "legs"));
+  check("legs/all_empty", no_legs.ok() && at_id(no_legs.root(), 44) == nullptr);
 
   const auto full = payload(true, true);
   Decoded both(full.substr(1));
-  const auto *full_data = at(both.root(), "data");
-  const auto *full_legs = full_data ? at(*full_data, "legs") : nullptr;
+  const auto *full_legs = at_id(both.root(), 44);
   const auto *full_first = elem(full_legs, 0);
   const auto *full_second = elem(full_legs, 1);
   check("legs/both_filled", both.ok() && full_legs != nullptr &&
                                 full_legs->type == msgpack::type::ARRAY &&
                                 full_legs->via.array.size == 2 &&
                                 full_first != nullptr && full_second != nullptr &&
-                                is_str(at(*full_first, "amount"), "123") &&
-                                is_str(at(*full_second, "amount"), "456"));
+                                is_uint(at_id(*full_first, 2), 123) &&
+                                is_uint(at_id(*full_second, 2), 456));
 }
 
 void test_tx_hash_order() {
@@ -388,6 +394,66 @@ void test_tx_hash_order() {
   Action tied;
   check("hash_order/tied_build", build_action(&block, tied));
   check("hash_order/tied_smaller_hash_first", tied.tx_hashes == std::vector<std::string>({"B", "A", "Z"}));
+}
+
+void test_compact_types_and_errors() {
+  auto encoded = [](Value::Fields fields) {
+    Action action = base_action();
+    action.data = Value::make_dict(std::move(fields));
+    return encode_action_payload(action);
+  };
+  auto fails = [&](const char *label, Value::Fields fields, const char *key) {
+    try {
+      encoded(std::move(fields));
+      check(label, false);
+    } catch (const std::runtime_error &error) {
+      check(label, std::string(error.what()).find(key) != std::string::npos);
+    }
+  };
+  check("compact/empty_known_bytes", encoded({}) == "\x01\x80");
+  check("compact/string_known_bytes", encoded({{"comment", Value::make_str("x")}}) == "\x01\x81\x0d\xa1x");
+  check("compact/bool_known_bytes", encoded({{"comment_encrypted", Value::make_bool(true)}}) == "\x01\x81\x0e\xc3");
+  check("compact/uint_known_bytes", encoded({{"query_id", Value::make_str("127")}}) == "\x01\x81\x59\x7f");
+  check("compact/uint64_max", encoded({{"query_id", Value::make_str("18446744073709551615")}}) ==
+        "\x01\x81\x59\xcf\xff\xff\xff\xff\xff\xff\xff\xff");
+  check("compact/uint_big_known_bytes", encoded({{"query_id", Value::make_str("18446744073709551616")}}) ==
+        std::string("\x01\x81\x59\xc4\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00", 14));
+  const std::string huge = "57896044618658097711785492504343953926634992332820282019728792003956564819968";
+  const std::string big_payload = encoded({{"nft_index", Value::make_str(huge)}});
+  check("compact/uint256", big_payload.size() == 37 && big_payload.substr(0, 5) == "\x01\x81\x43\xc4\x20" &&
+        static_cast<unsigned char>(big_payload[5]) == 0x80 &&
+        std::all_of(big_payload.begin() + 6, big_payload.end(), [](char c) { return c == 0; }));
+  check("compact/boc_base64", encoded({{"custom_payload", Value::make_str("AQID")}}) ==
+        "\x01\x81\x0f\xc4\x03\x01\x02\x03");
+  check("compact/boc_binary", encoded({{"custom_payload", Value::make_bytes("\x01\x02\x03")}}) ==
+        "\x01\x81\x0f\xc4\x03\x01\x02\x03");
+  const std::string hash(32, '\xaa');
+  const std::string address = "0:" + std::string(64, 'A');
+  const std::string addr_payload = encoded({{"asset", Value::make_str(address)}});
+  check("compact/address_33", addr_payload.size() == 38 && addr_payload.substr(0, 6) == std::string("\x01\x81\x06\xc4\x21\x00", 6) &&
+        addr_payload.substr(6) == hash);
+  check("compact/hash_base64", encoded({{"signers_hash", Value::make_str(td::base64_encode(td::Slice(hash)))}}) ==
+        std::string("\x01\x81\x65\xc4\x20", 5) + hash);
+  check("compact/hash_hex", encoded({{"btc_txid", Value::make_str(std::string(64, 'a'))}}) ==
+        std::string("\x01\x81\x0a\xc4\x20", 5) + hash);
+  check("compact/hash_0x", encoded({{"asset_id", Value::make_str("0x" + std::string(64, 'a'))}}) ==
+        std::string("\x01\x81\x07\xc4\x20", 5) + hash);
+  check("compact/ascending_ids", encoded({{"query_id", Value::make_str("1")}, {"comment", Value::make_str("x")}}) ==
+        "\x01\x82\x0d\xa1x\x59\x01");
+  msgpack::sbuffer id_buffer;
+  msgpack::packer<msgpack::sbuffer> id_packer(&id_buffer);
+  id_packer.pack(static_cast<std::uint8_t>(128));
+  check("compact/id128_shortest", std::string(id_buffer.data(), id_buffer.size()) == "\xcc\x80");
+  check("compact/nested_ids", encoded({{"claimed_rewards", Value::make_list({Value::make_dict({
+        {"amount", Value::make_str("2")}, {"asset", Value::make_str(address)}})})}}).substr(0, 8) ==
+        "\x01\x81\x0c\x91\x82\x02\x02\x06");
+  fails("compact/unknown_error", {{"not_registered", Value::make_str("x")}}, "not_registered");
+  fails("compact/address_error", {{"asset", Value::make_str("bad")}}, "asset expects W:HEX");
+  fails("compact/uint_error", {{"query_id", Value::make_str("01")}}, "query_id expects canonical");
+  fails("compact/boc_error", {{"custom_payload", Value::make_str("not-base64")}}, "custom_payload expects padded");
+  fails("compact/hash_error", {{"signers_hash", Value::make_str("short")}}, "signers_hash expects 32-byte");
+  fails("compact/hash_hex_error", {{"btc_txid", Value::make_str("0x" + std::string(64, 'a'))}}, "btc_txid expects lowercase");
+  fails("compact/hash_0x_error", {{"asset_id", Value::make_str(std::string(64, 'a'))}}, "asset_id expects 0x");
 }
 
 }  // namespace
@@ -424,6 +490,7 @@ int run_action_msgpack_test() {
   test_determinism();
   test_positional_legs();
   test_tx_hash_order();
+  test_compact_types_and_errors();
   std::printf("ACTIONS-MSGPACK-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

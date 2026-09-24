@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 // consumedPayloadKeyAllowlist lists `<stored_type>.<key>` entries the reader may ignore,
@@ -137,6 +136,9 @@ func (s *consumedScan) checkRow(t *testing.T, row consumedFixtureRow) {
 	if err != nil {
 		t.Fatalf("decode payload hex: %v", err)
 	}
+	if len(payload) == 0 || payload[0] != actionPayloadCodecMsgpack {
+		t.Fatalf("payload codec %v, want 1", payload)
+	}
 	base := &models.RawAction{Type: row.Type}
 	if err := DecodeActionPayload(payload, base); err != nil {
 		t.Fatalf("DecodeActionPayload: %v", err)
@@ -201,9 +203,9 @@ func TestPayloadConsumedKeysPlaceholderRow(t *testing.T) {
 		"asset":  "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 		"amount": "456",
 	}
-	body, err := msgpack.Marshal(map[string]interface{}{"data": map[string]interface{}{
+	payload, err := EncodeCompactForTest(map[string]interface{}{
 		"legs": []interface{}{nil, record},
-	}})
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +213,7 @@ func TestPayloadConsumedKeysPlaceholderRow(t *testing.T) {
 		FixtureID: "synthetic",
 		ActionID:  "legs-sol",
 		Type:      "dex_deposit_liquidity",
-		Payload:   hex.EncodeToString(append([]byte{actionPayloadCodecMsgpack}, body...)),
+		Payload:   hex.EncodeToString(payload),
 	}
 	scan := newConsumedScan()
 	scan.checkRow(t, row)
@@ -286,18 +288,14 @@ func (p keyPath) label() string {
 
 // payloadKeyPaths lists the payload keys to check (leaves of nested maps as dotted paths,
 // each `legs[i].<member>`, and any other value as its own key) and returns the decoded
-// `data` map, which the placeholder drop needs to re-encode the row.
+// payload map, which the placeholder drop needs to re-encode the row.
 func payloadKeyPaths(payload []byte) ([]keyPath, map[string]interface{}, error) {
 	if len(payload) == 0 || payload[0] != actionPayloadCodecMsgpack {
 		return nil, nil, fmt.Errorf("unsupported payload codec")
 	}
-	groups, err := msgpack.NewDecoder(bytes.NewReader(payload[1:])).DecodeMap()
+	data, err := decodeCompactPayload(payload[1:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("decode payload: %w", err)
-	}
-	data, ok := groups[actionPayloadGroup].(map[string]interface{})
-	if !ok {
-		return nil, nil, fmt.Errorf("payload has no %q map", actionPayloadGroup)
 	}
 	var paths []keyPath
 	for _, name := range sortedKeys(data) {
@@ -387,12 +385,12 @@ func payloadWithoutLegElement(typeName string, data map[string]interface{}, inde
 	kept = append(kept, items[:index]...)
 	kept = append(kept, items[index+1:]...)
 	clone["legs"] = kept
-	body, err := msgpack.Marshal(map[string]interface{}{actionPayloadGroup: clone})
+	body, err := EncodeCompactForTest(clone)
 	if err != nil {
 		return nil, err
 	}
 	raw := &models.RawAction{Type: typeName}
-	if err := DecodeActionPayload(append([]byte{actionPayloadCodecMsgpack}, body...), raw); err != nil {
+	if err := DecodeActionPayload(body, raw); err != nil {
 		return nil, err
 	}
 	return raw, nil

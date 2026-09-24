@@ -1,4 +1,5 @@
 #include "ClassifyCore.h"
+#include "ActionPayload.h"
 
 #include "BuildDriver.h"
 #include "EnginePrep.h"
@@ -597,6 +598,9 @@ SchemaClassifyResult classify_schema_trace(
         continue;
       }
       result.scrubbed += scrub_arena_refs(action);
+      // Validate while the classification failure handler can still report the
+      // key and value; storage and emulator serialization happen later.
+      encode_action_payload(action);
       result.rows.push_back(std::move(action));
     }
 

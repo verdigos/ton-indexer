@@ -33,6 +33,7 @@ set(MCH_EXPR_VECTORS "${MCH_GEN_DIR}/expr_vectors.json")
 set(MCH_INDEXER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../indexer" CACHE PATH
     "Path to the repository indexer/ directory used for MCH IR generation")
 file(MAKE_DIRECTORY "${MCH_GEN_DIR}")
+set(MCH_PAYLOAD_KEYS_HEADER "${MCH_GEN_DIR}/payload_keys_generated.h")
 
 find_package(Python3 3.10 QUIET COMPONENTS Interpreter)
 if(NOT Python3_Interpreter_FOUND)
@@ -93,6 +94,17 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${MCH_PAYLOAD_KEYS_HEADER}"
+    COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.payload_keys cpp
+            --out "${MCH_PAYLOAD_KEYS_HEADER}"
+    WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/payload-keys.yaml"
+            "${MCH_INDEXER_ROOT}/indexer/events/mch/payload_keys.py"
+    COMMENT "Generate MCH compact payload key table"
+    VERBATIM
+)
+
 # The document the CLASSIFY tables (matchers + builds + wheres) are generated
 # from. -DMCH_TESTBED_IR=<artifact.json> lets a build run classify against an
 # experimental artifact without replacing the generated production IR; the table
@@ -138,6 +150,7 @@ add_custom_command(
 )
 # The generated matcher, build and where tables are linked by the classify loop.
 set(MCH_GENERATED_SOURCES
+    ${MCH_PAYLOAD_KEYS_HEADER}
     ${MCH_GEN_DIR}/btypes_gen.h
     ${MCH_GEN_DIR}/matchers_ir_generated.cpp
     ${MCH_GEN_DIR}/builds_ir_generated.cpp

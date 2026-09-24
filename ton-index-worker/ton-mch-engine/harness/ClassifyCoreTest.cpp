@@ -129,6 +129,55 @@ BuildOutcome successful_build(BuildEnv &env) {
   return BuildOutcome::accepted();
 }
 
+bool g_bad_payload_address = true;
+BuildOutcome payload_address_build(BuildEnv &) {
+  BuildOutcome out = BuildOutcome::accepted();
+  out.data = Value::make_dict({
+      {"response_address", Value::make_account_raw(g_bad_payload_address ? "bad-address" :
+                                                    "0:" + std::string(64, 'A'))},
+      {"query_id", Value::make_int64(1)},
+  });
+  return out;
+}
+
+void test_payload_encode_failure_is_classification_failure() {
+  std::vector<CompiledMatcher> matchers{test_matcher("payload-encode", 0)};
+  matchers.front().produces = {"jetton_transfer"};
+  ClassifySetup setup;
+  setup.included = {0};
+  setup.build_fns.emplace(0, payload_address_build);
+  MchEnginePrep prep{&matchers, std::move(setup)};
+
+  schema::Transaction tx{};
+  tx.hash.set_zero();
+  tx.hash.data()[31] = 1;
+  tx.account = block::StdAddress(0, tx.hash);
+  tx.lt = 100;
+  tx.now = 200;
+  tx.mc_seqno = 300;
+  tx.orig_status = schema::AccountStatus::active;
+  tx.end_status = schema::AccountStatus::active;
+  tx.description = schema::TransactionDescr_ord{};
+  schema::Message message{};
+  message.hash.set_zero();
+  message.hash.data()[31] = 2;
+  message.source = "0:" + std::string(64, 'B');
+  message.destination = "0:" + tx.hash.to_hex();
+  message.opcode = 0x11223344;
+  message.value = schema::CurrencyCollection{td::make_refint(1000), {}};
+  tx.in_msg = std::move(message);
+  TieredLookupSource::InterfaceMap interfaces;
+  TieredLookupSource source(&interfaces);
+  g_bad_payload_address = true;
+  auto bad = classify_schema_trace(prep, "payload-bad", {tx}, source);
+  check("payload_failure/outcome", bad.outcome == TraceOutcome::terminal_failure_empty);
+  check("payload_failure/reason", bad.failure_reason.find("response_destination expects W:HEX address: bad-address") != std::string::npos);
+  check("payload_failure/no_rows", bad.rows.empty());
+  g_bad_payload_address = false;
+  auto good = classify_schema_trace(prep, "payload-good", {tx}, source);
+  check("payload_failure/process_continues", good.outcome == TraceOutcome::classified && !good.rows.empty());
+}
+
 const std::string kUncoveredWorkchainAddress = "1:" + std::string(64, 'A');
 
 BuildOutcome uncovered_workchain_lookup_build(BuildEnv &env) {
@@ -805,6 +854,7 @@ void test_engine_prep_has_no_skips() {
 }  // namespace
 
 int run_classify_core_test() {
+  test_payload_encode_failure_is_classification_failure();
   g_fail = 0;
   test_host_fn_exception_is_clean_rejection();
   test_host_fn_error_rejects_attempt_and_next_matcher_runs();

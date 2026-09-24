@@ -1,0 +1,513 @@
+package parse
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
+	"math/big"
+	"reflect"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
+	"github.com/vmihailenco/msgpack/v5"
+)
+
+// EncodeCompactForTest builds compact payload bytes (codec byte included) from a named
+// map whose values are in the text forms the decoder produces. It is the test-only
+// counterpart of the codec: it reads only the registry tables and shares no code with the
+// decoder. Keys are written in ascending id order, the order the engine's encoder writes.
+func EncodeCompactForTest(named map[string]interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte(actionPayloadCodecMsgpack)
+	if err := writeCompactRecordForTest(&buf, named); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+type compactTestEntry struct {
+	id   uint8
+	name string
+	info payloadKeyInfo
+}
+
+func writeCompactRecordForTest(buf *bytes.Buffer, named map[string]interface{}) error {
+	entries := make([]compactTestEntry, 0, len(named))
+	for name := range named {
+		id, ok := payloadKeyIDByName[name]
+		if !ok {
+			return fmt.Errorf("unknown payload key %q", name)
+		}
+		entries = append(entries, compactTestEntry{id: id, name: name, info: payloadKeys[id]})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].id < entries[j].id })
+	writeCompactHeaderForTest(buf, 0x80, 0xde, 0xdf, len(entries))
+	for _, entry := range entries {
+		writeCompactKeyForTest(buf, entry.id)
+		if err := writeCompactValueForTest(buf, entry.info.Type, named[entry.name]); err != nil {
+			return fmt.Errorf("payload key %s: %w", entry.name, err)
+		}
+	}
+	return nil
+}
+
+// writeCompactKeyForTest writes one key id: a positive fixint below 128, the uint8 form
+// from 128 up.
+func writeCompactKeyForTest(buf *bytes.Buffer, id uint8) {
+	if id < 0x80 {
+		buf.WriteByte(id)
+		return
+	}
+	buf.WriteByte(0xcc)
+	buf.WriteByte(id)
+}
+
+func writeCompactHeaderForTest(buf *bytes.Buffer, fixLow, code16, code32 byte, n int) {
+	switch {
+	case n < 16:
+		buf.WriteByte(fixLow | byte(n))
+	case n <= 0xffff:
+		buf.WriteByte(code16)
+		buf.WriteByte(byte(n >> 8))
+		buf.WriteByte(byte(n))
+	default:
+		buf.WriteByte(code32)
+		var raw [4]byte
+		binary.BigEndian.PutUint32(raw[:], uint32(n))
+		buf.Write(raw[:])
+	}
+}
+
+func writeCompactValueForTest(buf *bytes.Buffer, kind payloadKeyType, value interface{}) error {
+	if kind == payloadTypeOther {
+		return writeCompactOtherForTest(buf, value)
+	}
+	if value == nil {
+		buf.WriteByte(0xc0)
+		return nil
+	}
+	switch kind {
+	case payloadTypeAddress:
+		raw, err := compactTestAddress(value)
+		if err != nil {
+			return err
+		}
+		return writeCompactScalarForTest(buf, raw)
+	case payloadTypeBoc:
+		raw, err := compactTestBase64(value)
+		if err != nil {
+			return err
+		}
+		return writeCompactScalarForTest(buf, raw)
+	case payloadTypeUint:
+		return writeCompactUintTextForTest(buf, value)
+	case payloadTypeHash:
+		raw, err := compactTestHash(value, "hash", func(text string) ([]byte, error) { return base64.StdEncoding.DecodeString(text) })
+		if err != nil {
+			return err
+		}
+		return writeCompactScalarForTest(buf, raw)
+	case payloadTypeHashHex:
+		raw, err := compactTestHash(value, "hash_hex", hex.DecodeString)
+		if err != nil {
+			return err
+		}
+		return writeCompactScalarForTest(buf, raw)
+	case payloadTypeHash0x:
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("expected a string, got %T", value)
+		}
+		raw, err := compactTestHash(strings.TrimPrefix(text, "0x"), "hash_0x", hex.DecodeString)
+		if err != nil {
+			return err
+		}
+		return writeCompactScalarForTest(buf, raw)
+	case payloadTypeString:
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("expected a string, got %T", value)
+		}
+		return writeCompactScalarForTest(buf, text)
+	case payloadTypeBool:
+		flag, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("expected a bool, got %T", value)
+		}
+		return writeCompactScalarForTest(buf, flag)
+	}
+	return fmt.Errorf("unsupported payload key type %d", kind)
+}
+
+func writeCompactUintTextForTest(buf *bytes.Buffer, value interface{}) error {
+	text, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("expected a decimal string, got %T", value)
+	}
+	number, ok := new(big.Int).SetString(text, 10)
+	if !ok || text != number.String() {
+		return fmt.Errorf("invalid decimal %q", text)
+	}
+	if number.Sign() < 0 {
+		return fmt.Errorf("negative decimal %q", text)
+	}
+	if number.IsUint64() {
+		writeCompactUintForTest(buf, number.Uint64())
+		return nil
+	}
+	// Above uint64 the value travels as a minimal big-endian bin.
+	return writeCompactScalarForTest(buf, number.Bytes())
+}
+
+// writeCompactUintForTest writes one msgpack uint in its shortest form, the form the
+// engine's encoder uses: positive fixint, then uint8, uint16, uint32, uint64.
+func writeCompactUintForTest(buf *bytes.Buffer, number uint64) {
+	switch {
+	case number <= 0x7f:
+		buf.WriteByte(byte(number))
+	case number <= 0xff:
+		buf.WriteByte(0xcc)
+		buf.WriteByte(byte(number))
+	case number <= 0xffff:
+		buf.WriteByte(0xcd)
+		buf.WriteByte(byte(number >> 8))
+		buf.WriteByte(byte(number))
+	case number <= 0xffffffff:
+		buf.WriteByte(0xce)
+		buf.Write(compactUint32ForTest(uint32(number)))
+	default:
+		buf.WriteByte(0xcf)
+		buf.Write(compactUint32ForTest(uint32(number >> 32)))
+		buf.Write(compactUint32ForTest(uint32(number)))
+	}
+}
+
+func compactUint32ForTest(number uint32) []byte {
+	var raw [4]byte
+	binary.BigEndian.PutUint32(raw[:], number)
+	return raw[:]
+}
+
+func compactTestAddress(value interface{}) ([]byte, error) {
+	text, ok := value.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected an address string, got %T", value)
+	}
+	workchain, hash, ok := strings.Cut(text, ":")
+	if !ok {
+		return nil, fmt.Errorf("address %q has no workchain", text)
+	}
+	number, err := strconv.ParseInt(workchain, 10, 8)
+	if err != nil {
+		return nil, fmt.Errorf("address %q: %w", text, err)
+	}
+	raw, err := hex.DecodeString(hash)
+	if err != nil {
+		return nil, fmt.Errorf("address %q: %w", text, err)
+	}
+	if len(raw) != 32 {
+		return nil, fmt.Errorf("address %q carries a %d byte hash", text, len(raw))
+	}
+	return append([]byte{byte(int8(number))}, raw...), nil
+}
+
+func compactTestBase64(value interface{}) ([]byte, error) {
+	if raw, ok := value.([]byte); ok {
+		return raw, nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected base64 text or bytes, got %T", value)
+	}
+	raw, err := base64.StdEncoding.DecodeString(text)
+	if err != nil {
+		return nil, fmt.Errorf("boc %q: %w", text, err)
+	}
+	return raw, nil
+}
+
+func compactTestHash(value interface{}, what string, decode func(string) ([]byte, error)) ([]byte, error) {
+	text, ok := value.(string)
+	if !ok {
+		return nil, fmt.Errorf("expected a %s string, got %T", what, value)
+	}
+	raw, err := decode(text)
+	if err != nil {
+		return nil, fmt.Errorf("%s %q: %w", what, text, err)
+	}
+	if len(raw) != 32 {
+		return nil, fmt.Errorf("%s %q carries %d bytes", what, text, len(raw))
+	}
+	return raw, nil
+}
+
+func writeCompactOtherForTest(buf *bytes.Buffer, value interface{}) error {
+	switch value := value.(type) {
+	case nil:
+		buf.WriteByte(0xc0)
+		return nil
+	case map[string]interface{}:
+		return writeCompactRecordForTest(buf, value)
+	case []interface{}:
+		writeCompactHeaderForTest(buf, 0x90, 0xdc, 0xdd, len(value))
+		for index, item := range value {
+			if err := writeCompactOtherForTest(buf, item); err != nil {
+				return fmt.Errorf("element %d: %w", index, err)
+			}
+		}
+		return nil
+	default:
+		return writeCompactScalarForTest(buf, value)
+	}
+}
+
+func writeCompactScalarForTest(buf *bytes.Buffer, value interface{}) error {
+	raw, err := msgpack.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = buf.Write(raw)
+	return err
+}
+
+// addressHashForTest is a fixed 32 byte hash whose byte i is i.
+func addressHashForTest() []byte {
+	raw := make([]byte, 32)
+	for i := range raw {
+		raw[i] = byte(i)
+	}
+	return raw
+}
+
+func compactBodyForTest(t *testing.T, body string) []byte {
+	t.Helper()
+	raw, err := hex.DecodeString(strings.ReplaceAll(body, " ", ""))
+	if err != nil {
+		t.Fatalf("payload hex %q: %v", body, err)
+	}
+	return raw
+}
+
+// TestDecodeCompactTypes pins the byte form of every registry type to the text the router
+// receives.
+func TestDecodeCompactTypes(t *testing.T) {
+	hash := addressHashForTest()
+	hashHex := hex.EncodeToString(hash)
+	addressHex := "00" + hashHex
+	addressText := "0:" + strings.ToUpper(hashHex)
+	for _, tc := range []struct {
+		name string
+		body string
+		want map[string]interface{}
+	}{
+		{name: "empty", body: "80", want: map[string]interface{}{}},
+		{name: "address workchain 0", body: "81 06 c4 21 " + addressHex, want: map[string]interface{}{"asset": addressText}},
+		{name: "address workchain -1", body: "81 06 c4 21 ff" + hashHex, want: map[string]interface{}{"asset": "-1:" + strings.ToUpper(hashHex)}},
+		{name: "boc", body: "81 0f c4 03 010203", want: map[string]interface{}{"custom_payload": "AQID"}},
+		{name: "empty boc", body: "81 0f c4 00", want: map[string]interface{}{"custom_payload": ""}},
+		{name: "uint from a positive fixint", body: "81 02 05", want: map[string]interface{}{"amount": "5"}},
+		{name: "uint from uint8", body: "81 02 cc ff", want: map[string]interface{}{"amount": "255"}},
+		{name: "uint from uint16", body: "81 02 cd 0100", want: map[string]interface{}{"amount": "256"}},
+		{name: "uint from uint32", body: "81 02 ce 00010000", want: map[string]interface{}{"amount": "65536"}},
+		{name: "uint from uint64", body: "81 02 cf 0100000000000000", want: map[string]interface{}{"amount": "72057594037927936"}},
+		{name: "uint from uint64 max", body: "81 02 cf ffffffffffffffff", want: map[string]interface{}{"amount": "18446744073709551615"}},
+		{name: "uint from a 256 bit bin", body: "81 24 c4 20 " + hashHex, want: map[string]interface{}{"initial_price_x96": new(big.Int).SetBytes(hash).String()}},
+		{name: "hash", body: "81 47 c4 20 " + hashHex, want: map[string]interface{}{"parent_gasless_action": base64.StdEncoding.EncodeToString(hash)}},
+		{name: "hash hex", body: "81 0a c4 20 " + hashHex, want: map[string]interface{}{"btc_txid": hashHex}},
+		{name: "hash 0x", body: "81 07 c4 20 " + hashHex, want: map[string]interface{}{"asset_id": "0x" + hashHex}},
+		{name: "string", body: "81 0d a5 68656c6c6f", want: map[string]interface{}{"comment": "hello"}},
+		{name: "bool", body: "81 0e c3", want: map[string]interface{}{"comment_encrypted": true}},
+		{name: "null typed value", body: "81 0d c0", want: map[string]interface{}{"comment": nil}},
+		{name: "uint key in the uint8 form", body: "81 cc 7b c0", want: map[string]interface{}{"worker_tokens": nil}},
+		{name: "nested record", body: "81 13 82 02 05 06 c4 21 " + addressHex, want: map[string]interface{}{
+			"dex_incoming_transfer": map[string]interface{}{"amount": "5", "asset": addressText},
+		}},
+		{name: "claimed rewards records", body: "81 0c 91 81 02 07", want: map[string]interface{}{
+			"claimed_rewards": []interface{}{map[string]interface{}{"amount": "7"}},
+		}},
+		{name: "nil leg placeholder", body: "81 2c 92 c0 81 02 07", want: map[string]interface{}{
+			"legs": []interface{}{nil, map[string]interface{}{"amount": "7"}},
+		}},
+		{name: "empty array", body: "81 0c 90", want: map[string]interface{}{"claimed_rewards": []interface{}{}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeCompactPayload(compactBodyForTest(t, tc.body))
+			if err != nil {
+				t.Fatalf("decodeCompactPayload: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("decoded %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDecodeCompactErrors pins every rejection: a non-id key, an unknown id, a wrong
+// value type, a wrong bin length and a malformed frame.
+func TestDecodeCompactErrors(t *testing.T) {
+	hash31 := hex.EncodeToString(addressHashForTest()[:31])
+	hash32 := hex.EncodeToString(addressHashForTest())
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "string key", body: "81 a4 64617461 80", want: `payload map key "data" is not a registry id`},
+		{name: "unknown id", body: "81 7f c0", want: "payload key id 127 is not in the registry"},
+		{name: "unknown id in the uint8 form", body: "81 cc c8 c0", want: "payload key id 200 is not in the registry"},
+		{name: "unknown id in a nested record", body: "81 13 81 7f c0", want: "payload key id 127 is not in the registry"},
+		{name: "string key in a nested record", body: "81 13 81 a4 64617461 80", want: `payload map key "data" is not a registry id`},
+		{name: "short address", body: "81 06 c4 20 " + hash32, want: "expected a 33 byte address, got 32 bytes"},
+		{name: "long address", body: "81 06 c4 22 00" + hash32 + "00", want: "expected a 33 byte address, got 34 bytes"},
+		{name: "address as text", body: "81 06 a3 666f6f", want: "expected a 33 byte bin address, got string"},
+		{name: "short hash", body: "81 47 c4 1f " + hash31, want: "expected a 32 byte hash, got 31 bytes"},
+		{name: "hash as text", body: "81 47 a4 666f6f64", want: "expected a 32 byte bin hash, got string"},
+		{name: "uint from text", body: "81 02 a1 35", want: "expected a msgpack uint or a bin, got string"},
+		{name: "uint from a negative integer", body: "81 02 ff", want: "negative msgpack integer -1 for a uint key"},
+		{name: "string from an integer", body: "81 0d 05", want: "expected a msgpack string, got int8"},
+		{name: "bool from text", body: "81 0e a4 74727565", want: "expected a msgpack bool, got string"},
+		{name: "body is an array", body: "90", want: "expected a map"},
+		{name: "body is nil", body: "c0", want: "expected a map, got nil"},
+		{name: "trailing data", body: "80 00", want: "trailing data"},
+		{name: "truncated value", body: "81 06", want: "payload key asset (id 6)"},
+		{name: "truncated key", body: "81", want: "map key: EOF"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := decodeCompactPayload(compactBodyForTest(t, tc.body))
+			if err == nil {
+				t.Fatalf("body accepted, want an error containing %q", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestDecodeCompactRetiredKey checks a retired id still decodes: it resolves to its name,
+// which routes to no field downstream, exactly as the retired name behaved before.
+func TestDecodeCompactRetiredKey(t *testing.T) {
+	const id = 125
+	if payloadKeys[id].Name != "" {
+		t.Skipf("id %d gained a live registry entry", id)
+	}
+	saved := payloadKeys[id]
+	payloadKeys[id] = payloadKeyInfo{Name: "retired_key", Type: payloadTypeString, Retired: true}
+	t.Cleanup(func() { payloadKeys[id] = saved })
+
+	got, err := decodeCompactPayload(compactBodyForTest(t, "81 7d a2 6869"))
+	if err != nil {
+		t.Fatalf("decodeCompactPayload: %v", err)
+	}
+	if !reflect.DeepEqual(got, map[string]interface{}{"retired_key": "hi"}) {
+		t.Errorf("decoded %#v, want the retired key", got)
+	}
+}
+
+// TestEncodeCompactKeyForms pins the two key widths of the format and the ascending id
+// order of a record.
+func TestEncodeCompactKeyForms(t *testing.T) {
+	for _, tc := range []struct {
+		id   uint8
+		want string
+	}{
+		{id: 1, want: "01"},
+		{id: 127, want: "7f"},
+		{id: 128, want: "cc80"},
+		{id: 255, want: "ccff"},
+	} {
+		var buf bytes.Buffer
+		writeCompactKeyForTest(&buf, tc.id)
+		if got := hex.EncodeToString(buf.Bytes()); got != tc.want {
+			t.Errorf("key %d = %s, want %s", tc.id, got, tc.want)
+		}
+	}
+
+	// The registry ids are all below 128 today, so the encoder only writes the uint8 form
+	// once a key above 127 is added; the table above pins that branch.
+	named := map[string]interface{}{
+		"amount": "2", "asset": "0:" + strings.Repeat("AB", 32), "nft_index": "1",
+	}
+	payload, err := EncodeCompactForTest(named)
+	if err != nil {
+		t.Fatalf("EncodeCompactForTest: %v", err)
+	}
+	if payload[0] != actionPayloadCodecMsgpack || payload[1] != 0x83 || payload[2] != payloadKeyIDByName["amount"] {
+		t.Fatalf("payload prefix = %x, want the codec byte, a 3 entry map and amount first", payload[:3])
+	}
+	reordered, err := EncodeCompactForTest(map[string]interface{}{
+		"nft_index": "1", "asset": named["asset"], "amount": "2",
+	})
+	if err != nil {
+		t.Fatalf("EncodeCompactForTest: %v", err)
+	}
+	if !bytes.Equal(payload, reordered) {
+		t.Errorf("map order changed the bytes: %x / %x", payload, reordered)
+	}
+}
+
+// TestDecodeCompactPayloadThroughReader checks the decode layer reaches the typed
+// RawAction fields through the unchanged routing, for a string and a bool key.
+func TestDecodeCompactPayloadThroughReader(t *testing.T) {
+	payload, err := EncodeCompactForTest(map[string]interface{}{
+		"comment": "hello", "comment_encrypted": true,
+	})
+	if err != nil {
+		t.Fatalf("EncodeCompactForTest: %v", err)
+	}
+	raw := &models.RawAction{Type: "ton_transfer"}
+	if err := DecodeActionPayload(payload, raw); err != nil {
+		t.Fatalf("DecodeActionPayload: %v", err)
+	}
+	if raw.TonTransferContent == nil || *raw.TonTransferContent != "hello" {
+		t.Errorf("comment = %v", raw.TonTransferContent)
+	}
+	if raw.TonTransferEncrypted == nil || !*raw.TonTransferEncrypted {
+		t.Errorf("comment_encrypted = %v", raw.TonTransferEncrypted)
+	}
+}
+
+// TestEncodeCompactRoundTrip checks the test encoder and the decoder agree on every type:
+// the encoder output of a named map decodes back to that same map.
+func TestEncodeCompactRoundTrip(t *testing.T) {
+	hashHex := hex.EncodeToString(addressHashForTest())
+	named := map[string]interface{}{
+		"asset":                 "0:" + strings.ToUpper(hashHex),
+		"asset_in":              "-1:" + strings.ToUpper(hashHex),
+		"custom_payload":        base64.StdEncoding.EncodeToString([]byte{1, 2, 3}),
+		"amount":                "5",
+		"nft_index":             "44539844875053679214736801996276540153801342669507034858554041330399478546432",
+		"initial_price_x96":     "18446744073709551616",
+		"order_seqno":           "0",
+		"parent_gasless_action": base64.StdEncoding.EncodeToString(addressHashForTest()),
+		"btc_txid":              hashHex,
+		"asset_id":              "0x" + hashHex,
+		"comment":               "hello",
+		"comment_encrypted":     true,
+		"claimed_rewards":       []interface{}{map[string]interface{}{"asset": "0:" + strings.ToUpper(hashHex), "amount": "7"}},
+		"legs":                  []interface{}{nil, map[string]interface{}{"amount": "8", "asset": "0:" + strings.ToUpper(hashHex)}},
+		"dex_incoming_transfer": map[string]interface{}{"amount": "9", "comment": nil},
+		"accounts_added":        []interface{}{"0:" + strings.ToUpper(hashHex)},
+		"peer_swaps":            []interface{}{map[string]interface{}{"amount_in": "10"}},
+		"timestamp":             "1753800000",
+		"worker_state":          "state",
+	}
+	payload, err := EncodeCompactForTest(named)
+	if err != nil {
+		t.Fatalf("EncodeCompactForTest: %v", err)
+	}
+	got, err := decodeCompactPayload(payload[1:])
+	if err != nil {
+		t.Fatalf("decodeCompactPayload: %v", err)
+	}
+	// The empty bin of a zero uint never reaches the wire: the decoder returns "0" and the
+	// encoder writes uint 0, so the map round trips unchanged.
+	if !reflect.DeepEqual(got, named) {
+		t.Errorf("round trip = %#v\nwant %#v", got, named)
+	}
+}

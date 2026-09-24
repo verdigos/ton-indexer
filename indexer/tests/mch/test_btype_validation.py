@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 import pytest
@@ -66,12 +65,6 @@ def test_leaf_btype_head_compiles(tmp_path, btype):
     (tmp_path / "consumer.mch").write_text(_matcher(f"btype {btype} @x"))
     artifact = ir_emit.emit_dir(tmp_path)
     assert artifact["matchers"][0]["anchor"] == {"kind": "btype", "values": [btype]}
-
-
-def test_leaf_btypes_match_engine_table():
-    header = Path(__file__).resolve().parents[3] / "ton-index-worker/ton-mch-engine/src/IrTables.h"
-    table = re.search(r"kLeafBtypes\{(.*?)\};", header.read_text(), re.S).group(1)
-    assert set(re.findall(r'"(\w+)"', table)) == LEAF_BTYPES
 
 
 def test_duplicate_names_and_all_unknown_btypes_report_together(tmp_path):

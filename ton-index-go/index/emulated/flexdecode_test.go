@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -103,15 +107,89 @@ func naturalData() map[string]interface{} {
 	}
 }
 
+// payloadKeyIDsForTest maps the payload keys of these fixtures to their registry ids
+// (`ton-index-worker/ton-mch-engine/payload-keys.yaml`). The decoder resolves the ids
+// back, so a stale id here fails the test instead of passing silently.
+var payloadKeyIDsForTest = map[string]uint8{
+	"accounts_added":       1,
+	"comment":              13,
+	"comment_encrypted":    14,
+	"forward_amount":       32,
+	"query_id":             89,
+	"response_destination": 93,
+}
+
+// encodePayload builds a codec-1 payload: one msgpack map keyed by registry id, keys in
+// ascending id order. Only the value forms these fixtures carry are supported - a decimal
+// uint, an address, a string, a bool and the `accounts_added` pass-through list.
 func encodePayload(t *testing.T, data map[string]interface{}) []byte {
 	t.Helper()
-	var buf bytes.Buffer
-	encoder := msgpack.NewEncoder(&buf)
-	encoder.SetSortMapKeys(true)
-	if err := encoder.Encode(map[string]interface{}{"data": data}); err != nil {
-		t.Fatalf("marshal payload: %v", err)
+	names := make([]string, 0, len(data))
+	for name := range data {
+		if _, ok := payloadKeyIDsForTest[name]; !ok {
+			t.Fatalf("unknown payload key %q", name)
+		}
+		names = append(names, name)
 	}
-	return append([]byte{1}, buf.Bytes()...)
+	sort.Slice(names, func(i, j int) bool { return payloadKeyIDsForTest[names[i]] < payloadKeyIDsForTest[names[j]] })
+
+	var buf bytes.Buffer
+	buf.WriteByte(1)
+	buf.WriteByte(0x80 | byte(len(names)))
+	for _, name := range names {
+		buf.WriteByte(payloadKeyIDsForTest[name])
+		switch name {
+		case "response_destination":
+			appendEncoded(t, &buf, addressBytes(t, data[name].(string)))
+		case "comment":
+			appendEncoded(t, &buf, data[name].(string))
+		case "comment_encrypted":
+			appendEncoded(t, &buf, data[name].(bool))
+		case "accounts_added":
+			items := data[name].([]string)
+			buf.WriteByte(0x90 | byte(len(items)))
+			for _, item := range items {
+				appendEncoded(t, &buf, item)
+			}
+		default:
+			number, err := strconv.ParseUint(data[name].(string), 10, 64)
+			if err != nil {
+				t.Fatalf("payload %s: %v", name, err)
+			}
+			appendEncoded(t, &buf, number)
+		}
+	}
+	return buf.Bytes()
+}
+
+// addressBytes turns the canonical `W:HEX` text into the 33 byte form: signed workchain
+// then the hash.
+func addressBytes(t *testing.T, text string) []byte {
+	t.Helper()
+	workchain, hash, ok := strings.Cut(text, ":")
+	if !ok {
+		t.Fatalf("address %q has no workchain", text)
+	}
+	number, err := strconv.ParseInt(workchain, 10, 8)
+	if err != nil {
+		t.Fatalf("address %q: %v", text, err)
+	}
+	raw, err := hex.DecodeString(hash)
+	if err != nil || len(raw) != 32 {
+		t.Fatalf("address %q: %v (%d bytes)", text, err, len(raw))
+	}
+	return append([]byte{byte(int8(number))}, raw...)
+}
+
+func appendEncoded(t *testing.T, buf *bytes.Buffer, value interface{}) {
+	t.Helper()
+	raw, err := msgpack.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal payload value: %v", err)
+	}
+	if _, err := buf.Write(raw); err != nil {
+		t.Fatalf("write payload value: %v", err)
+	}
 }
 
 func mustMarshal(t *testing.T, v interface{}) []byte {

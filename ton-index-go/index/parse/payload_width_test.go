@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 func TestPayloadNumericWidthsMatchABI(t *testing.T) {
@@ -157,19 +156,16 @@ func hasNamedField(typ reflect.Type, name string) bool {
 
 func TestPayloadDecodesAndMarshalsMaxLayerZeroWidths(t *testing.T) {
 	const maxUint128 = "340282366920938463463374607431768211455"
-	payloadMap := map[string]interface{}{
-		"data": map[string]interface{}{
-			"dst_eid":    "4294967295",
-			"nonce":      "18446744073709551615",
-			"native_fee": maxUint128,
-		},
-	}
-	encoded, err := msgpack.Marshal(payloadMap)
+	payload, err := EncodeCompactForTest(map[string]interface{}{
+		"dst_eid":    "4294967295",
+		"nonce":      "18446744073709551615",
+		"native_fee": maxUint128,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw := &models.RawAction{Type: "layerzero_send"}
-	if err := DecodeActionPayload(append([]byte{actionPayloadCodecMsgpack}, encoded...), raw); err != nil {
+	if err := DecodeActionPayload(payload, raw); err != nil {
 		t.Fatalf("DecodeActionPayload: %v", err)
 	}
 	if raw.LayerzeroPacketDstEid == nil || *raw.LayerzeroPacketDstEid != math.MaxUint32 {
