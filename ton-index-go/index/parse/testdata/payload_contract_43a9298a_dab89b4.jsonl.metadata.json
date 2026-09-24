@@ -1,0 +1,510 @@
+{
+  "api_bytes": 4907296,
+  "api_reference": "generated with HEAD Go reader",
+  "api_sha256": "c1d33c04596e862462e627a78ce62241ba2e56adbff9912c7bc336a10eb556a9",
+  "engine_binary_mtime_utc": "2026-09-24T13:52:05.405911+00:00",
+  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-43a9298a-dab89b4.jsonl -T indexer/tests/traces",
+  "generator": "_analysis-scratch/payload-wave/generate_baseline.py",
+  "generator_command": "python3 _analysis-scratch/payload-wave/generate_baseline.py --create-head-api",
+  "golden_files": 294,
+  "golden_set_sha256": "9db5cf4c9be22d97c7d0d24c5f698e5fe53e0fbe2f043eb4e28f4d521702619b",
+  "gzip_bytes": 840560,
+  "gzip_sha256": "a1a342496e175bf3adea0fc76a6f5de16a2ad1682273ebb09af5f13788c79a21",
+  "main_sha": "43a9298a",
+  "overlay_sha": "dab89b4",
+  "payload_bytes": 3402143,
+  "payload_sha256": "b4e1fbc28fc3957c0095fb9b2dec2d42339cdf40d9b21e25095bbc590bf0397d",
+  "render_command": "GOCACHE=/home/verdigos/dev/ton-indexer-private/build/go-cache GOPROXY=off go run ../_analysis-scratch/payload-wave/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-43a9298a-dab89b4.jsonl ../_analysis-scratch/payload-wave/baseline/api-43a9298a-dab89b4.jsonl",
+  "repo_data": "ton-index-go/index/parse/testdata/payload_contract_43a9298a_dab89b4.jsonl.gz",
+  "rows": 1220,
+  "rows_by_type": {
+    "auction_bid": 3,
+    "auction_outbid": 2,
+    "call_contract": 594,
+    "change_dns": 5,
+    "change_wallet_key": 2,
+    "cocoon_client_change_secret_hash": 1,
+    "cocoon_client_increase_stake": 1,
+    "cocoon_client_register": 1,
+    "cocoon_client_request_refund": 2,
+    "cocoon_client_top_up": 1,
+    "cocoon_client_withdraw": 1,
+    "cocoon_grant_refund": 1,
+    "cocoon_proxy_charge": 1,
+    "cocoon_proxy_payout": 1,
+    "cocoon_register_proxy": 1,
+    "cocoon_unregister_proxy": 1,
+    "cocoon_worker_payout": 2,
+    "coffee_create_pool": 2,
+    "coffee_create_pool_creator": 5,
+    "coffee_create_vault": 1,
+    "coffee_mev_protect_hold_funds": 1,
+    "coffee_staking_claim_rewards": 2,
+    "coffee_staking_deposit": 2,
+    "coffee_staking_withdraw": 1,
+    "contract_deploy": 110,
+    "dedust_v2_claim_fees": 5,
+    "dedust_v2_claim_reward": 3,
+    "delete_dns": 1,
+    "dex_deposit_liquidity": 39,
+    "dex_withdraw_liquidity": 17,
+    "dns_purchase": 9,
+    "dns_release": 5,
+    "election_recover": 1,
+    "evaa_liquidate": 11,
+    "evaa_supply": 4,
+    "evaa_withdraw": 7,
+    "gasless_request": 6,
+    "jetton_burn": 4,
+    "jetton_mint": 10,
+    "jetton_swap": 52,
+    "jetton_transfer": 68,
+    "jvault_claim": 1,
+    "jvault_stake": 5,
+    "jvault_unstake": 2,
+    "jvault_unstake_request": 4,
+    "layerzero_commit_packet": 2,
+    "layerzero_dvn_verify": 1,
+    "layerzero_receive": 2,
+    "layerzero_send": 3,
+    "layerzero_send_tokens": 1,
+    "multisig_approve": 2,
+    "multisig_create_order": 5,
+    "multisig_execute": 5,
+    "nft_cancel_auction": 1,
+    "nft_cancel_sale": 1,
+    "nft_mint": 5,
+    "nft_purchase": 7,
+    "nft_put_on_auction": 1,
+    "nft_put_on_sale": 1,
+    "nft_transfer": 29,
+    "nft_update_sale": 1,
+    "renew_dns": 1,
+    "stake_deposit": 10,
+    "stake_withdrawal": 16,
+    "stake_withdrawal_request": 10,
+    "subscribe": 3,
+    "teleitem_cancel_auction": 4,
+    "teleitem_start_auction": 2,
+    "tgbtc_burn": 4,
+    "tgbtc_burn_fallback": 1,
+    "tgbtc_dkg_log_fallback": 1,
+    "tgbtc_mint": 4,
+    "tgbtc_mint_fallback": 1,
+    "tgbtc_new_key": 2,
+    "tgbtc_new_key_fallback": 1,
+    "ton_transfer": 81,
+    "tonco_deploy_pool": 5,
+    "unknown": 3,
+    "unsubscribe": 2,
+    "vesting_add_whitelist": 1,
+    "vesting_send_message": 3
+  },
+  "type_breakdown": {
+    "auction_bid": {
+      "bytes": 10346,
+      "gzip_bytes": 3066,
+      "rows": 3
+    },
+    "auction_outbid": {
+      "bytes": 6751,
+      "gzip_bytes": 2115,
+      "rows": 2
+    },
+    "call_contract": {
+      "bytes": 1533303,
+      "gzip_bytes": 253813,
+      "rows": 594
+    },
+    "change_dns": {
+      "bytes": 19559,
+      "gzip_bytes": 3241,
+      "rows": 5
+    },
+    "change_wallet_key": {
+      "bytes": 4653,
+      "gzip_bytes": 1486,
+      "rows": 2
+    },
+    "cocoon_client_change_secret_hash": {
+      "bytes": 3728,
+      "gzip_bytes": 1514,
+      "rows": 1
+    },
+    "cocoon_client_increase_stake": {
+      "bytes": 3297,
+      "gzip_bytes": 1419,
+      "rows": 1
+    },
+    "cocoon_client_register": {
+      "bytes": 3326,
+      "gzip_bytes": 1429,
+      "rows": 1
+    },
+    "cocoon_client_request_refund": {
+      "bytes": 6812,
+      "gzip_bytes": 2540,
+      "rows": 2
+    },
+    "cocoon_client_top_up": {
+      "bytes": 3390,
+      "gzip_bytes": 1445,
+      "rows": 1
+    },
+    "cocoon_client_withdraw": {
+      "bytes": 3512,
+      "gzip_bytes": 1547,
+      "rows": 1
+    },
+    "cocoon_grant_refund": {
+      "bytes": 4472,
+      "gzip_bytes": 1848,
+      "rows": 1
+    },
+    "cocoon_proxy_charge": {
+      "bytes": 3915,
+      "gzip_bytes": 1609,
+      "rows": 1
+    },
+    "cocoon_proxy_payout": {
+      "bytes": 3325,
+      "gzip_bytes": 1416,
+      "rows": 1
+    },
+    "cocoon_register_proxy": {
+      "bytes": 2469,
+      "gzip_bytes": 1134,
+      "rows": 1
+    },
+    "cocoon_unregister_proxy": {
+      "bytes": 2535,
+      "gzip_bytes": 1167,
+      "rows": 1
+    },
+    "cocoon_worker_payout": {
+      "bytes": 8572,
+      "gzip_bytes": 2903,
+      "rows": 2
+    },
+    "coffee_create_pool": {
+      "bytes": 15904,
+      "gzip_bytes": 5486,
+      "rows": 2
+    },
+    "coffee_create_pool_creator": {
+      "bytes": 23206,
+      "gzip_bytes": 6839,
+      "rows": 5
+    },
+    "coffee_create_vault": {
+      "bytes": 3476,
+      "gzip_bytes": 1567,
+      "rows": 1
+    },
+    "coffee_mev_protect_hold_funds": {
+      "bytes": 2898,
+      "gzip_bytes": 1314,
+      "rows": 1
+    },
+    "coffee_staking_claim_rewards": {
+      "bytes": 8529,
+      "gzip_bytes": 3195,
+      "rows": 2
+    },
+    "coffee_staking_deposit": {
+      "bytes": 10950,
+      "gzip_bytes": 3839,
+      "rows": 2
+    },
+    "coffee_staking_withdraw": {
+      "bytes": 5540,
+      "gzip_bytes": 2212,
+      "rows": 1
+    },
+    "contract_deploy": {
+      "bytes": 270269,
+      "gzip_bytes": 66346,
+      "rows": 110
+    },
+    "dedust_v2_claim_fees": {
+      "bytes": 34280,
+      "gzip_bytes": 8822,
+      "rows": 5
+    },
+    "dedust_v2_claim_reward": {
+      "bytes": 18896,
+      "gzip_bytes": 4927,
+      "rows": 3
+    },
+    "delete_dns": {
+      "bytes": 3134,
+      "gzip_bytes": 1110,
+      "rows": 1
+    },
+    "dex_deposit_liquidity": {
+      "bytes": 306642,
+      "gzip_bytes": 77679,
+      "rows": 39
+    },
+    "dex_withdraw_liquidity": {
+      "bytes": 133530,
+      "gzip_bytes": 26730,
+      "rows": 17
+    },
+    "dns_purchase": {
+      "bytes": 42360,
+      "gzip_bytes": 7137,
+      "rows": 9
+    },
+    "dns_release": {
+      "bytes": 21463,
+      "gzip_bytes": 3880,
+      "rows": 5
+    },
+    "election_recover": {
+      "bytes": 2349,
+      "gzip_bytes": 1126,
+      "rows": 1
+    },
+    "evaa_liquidate": {
+      "bytes": 62338,
+      "gzip_bytes": 18809,
+      "rows": 11
+    },
+    "evaa_supply": {
+      "bytes": 22731,
+      "gzip_bytes": 5908,
+      "rows": 4
+    },
+    "evaa_withdraw": {
+      "bytes": 36206,
+      "gzip_bytes": 8778,
+      "rows": 7
+    },
+    "gasless_request": {
+      "bytes": 14904,
+      "gzip_bytes": 3445,
+      "rows": 6
+    },
+    "jetton_burn": {
+      "bytes": 12480,
+      "gzip_bytes": 3884,
+      "rows": 4
+    },
+    "jetton_mint": {
+      "bytes": 34008,
+      "gzip_bytes": 11063,
+      "rows": 10
+    },
+    "jetton_swap": {
+      "bytes": 558012,
+      "gzip_bytes": 102218,
+      "rows": 52
+    },
+    "jetton_transfer": {
+      "bytes": 592770,
+      "gzip_bytes": 138976,
+      "rows": 68
+    },
+    "jvault_claim": {
+      "bytes": 4938,
+      "gzip_bytes": 2136,
+      "rows": 1
+    },
+    "jvault_stake": {
+      "bytes": 28461,
+      "gzip_bytes": 10437,
+      "rows": 5
+    },
+    "jvault_unstake": {
+      "bytes": 9693,
+      "gzip_bytes": 4206,
+      "rows": 2
+    },
+    "jvault_unstake_request": {
+      "bytes": 16760,
+      "gzip_bytes": 5976,
+      "rows": 4
+    },
+    "layerzero_commit_packet": {
+      "bytes": 14126,
+      "gzip_bytes": 4492,
+      "rows": 2
+    },
+    "layerzero_dvn_verify": {
+      "bytes": 5897,
+      "gzip_bytes": 2122,
+      "rows": 1
+    },
+    "layerzero_receive": {
+      "bytes": 12614,
+      "gzip_bytes": 3877,
+      "rows": 2
+    },
+    "layerzero_send": {
+      "bytes": 31043,
+      "gzip_bytes": 9231,
+      "rows": 3
+    },
+    "layerzero_send_tokens": {
+      "bytes": 12704,
+      "gzip_bytes": 4818,
+      "rows": 1
+    },
+    "multisig_approve": {
+      "bytes": 6955,
+      "gzip_bytes": 2631,
+      "rows": 2
+    },
+    "multisig_create_order": {
+      "bytes": 26607,
+      "gzip_bytes": 6489,
+      "rows": 5
+    },
+    "multisig_execute": {
+      "bytes": 32507,
+      "gzip_bytes": 9132,
+      "rows": 5
+    },
+    "nft_cancel_auction": {
+      "bytes": 4921,
+      "gzip_bytes": 1736,
+      "rows": 1
+    },
+    "nft_cancel_sale": {
+      "bytes": 4906,
+      "gzip_bytes": 1758,
+      "rows": 1
+    },
+    "nft_mint": {
+      "bytes": 15447,
+      "gzip_bytes": 4449,
+      "rows": 5
+    },
+    "nft_purchase": {
+      "bytes": 51277,
+      "gzip_bytes": 9596,
+      "rows": 7
+    },
+    "nft_put_on_auction": {
+      "bytes": 7259,
+      "gzip_bytes": 2651,
+      "rows": 1
+    },
+    "nft_put_on_sale": {
+      "bytes": 7189,
+      "gzip_bytes": 2426,
+      "rows": 1
+    },
+    "nft_transfer": {
+      "bytes": 229767,
+      "gzip_bytes": 41856,
+      "rows": 29
+    },
+    "nft_update_sale": {
+      "bytes": 5950,
+      "gzip_bytes": 1872,
+      "rows": 1
+    },
+    "renew_dns": {
+      "bytes": 2495,
+      "gzip_bytes": 902,
+      "rows": 1
+    },
+    "stake_deposit": {
+      "bytes": 34009,
+      "gzip_bytes": 9829,
+      "rows": 10
+    },
+    "stake_withdrawal": {
+      "bytes": 48990,
+      "gzip_bytes": 9888,
+      "rows": 16
+    },
+    "stake_withdrawal_request": {
+      "bytes": 30269,
+      "gzip_bytes": 7543,
+      "rows": 10
+    },
+    "subscribe": {
+      "bytes": 9450,
+      "gzip_bytes": 2902,
+      "rows": 3
+    },
+    "teleitem_cancel_auction": {
+      "bytes": 17786,
+      "gzip_bytes": 4107,
+      "rows": 4
+    },
+    "teleitem_start_auction": {
+      "bytes": 10667,
+      "gzip_bytes": 2791,
+      "rows": 2
+    },
+    "tgbtc_burn": {
+      "bytes": 17241,
+      "gzip_bytes": 6127,
+      "rows": 4
+    },
+    "tgbtc_burn_fallback": {
+      "bytes": 1732,
+      "gzip_bytes": 944,
+      "rows": 1
+    },
+    "tgbtc_dkg_log_fallback": {
+      "bytes": 2337,
+      "gzip_bytes": 974,
+      "rows": 1
+    },
+    "tgbtc_mint": {
+      "bytes": 23829,
+      "gzip_bytes": 9176,
+      "rows": 4
+    },
+    "tgbtc_mint_fallback": {
+      "bytes": 3114,
+      "gzip_bytes": 999,
+      "rows": 1
+    },
+    "tgbtc_new_key": {
+      "bytes": 7638,
+      "gzip_bytes": 2570,
+      "rows": 2
+    },
+    "tgbtc_new_key_fallback": {
+      "bytes": 2981,
+      "gzip_bytes": 1013,
+      "rows": 1
+    },
+    "ton_transfer": {
+      "bytes": 225335,
+      "gzip_bytes": 46062,
+      "rows": 81
+    },
+    "tonco_deploy_pool": {
+      "bytes": 30318,
+      "gzip_bytes": 5688,
+      "rows": 5
+    },
+    "unknown": {
+      "bytes": 28626,
+      "gzip_bytes": 2894,
+      "rows": 3
+    },
+    "unsubscribe": {
+      "bytes": 5914,
+      "gzip_bytes": 2068,
+      "rows": 2
+    },
+    "vesting_add_whitelist": {
+      "bytes": 3211,
+      "gzip_bytes": 1286,
+      "rows": 1
+    },
+    "vesting_send_message": {
+      "bytes": 11493,
+      "gzip_bytes": 3391,
+      "rows": 3
+    }
+  }
+}
