@@ -5,7 +5,7 @@ RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get update -y && apt-get -y in
 RUN apt-get update -y \
     && apt-get install -y build-essential cmake clang-20 openssl libssl-dev zlib1g-dev \
                    gperf wget git curl ccache libcurl4-openssl-dev libmicrohttpd-dev liblz4-dev \
-                   pkg-config libsecp256k1-dev libsodium-dev libhiredis-dev python3-dev libpq-dev \
+                   pkg-config libsecp256k1-dev libsodium-dev libhiredis-dev python3-dev python3-yaml libpq-dev \
                    automake libjemalloc-dev lsb-release software-properties-common gnupg \
                    autoconf libtool \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
