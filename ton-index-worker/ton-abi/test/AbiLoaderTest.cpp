@@ -56,6 +56,12 @@ TEST_CASE("AbiLoader accept: all 18 committed fixture ABIs load") {
   }
 }
 
+TEST_CASE("AbiLoader reject: malformed JSON syntax") {
+  auto r = ton_abi::load_abi_from_json("not json");
+  REQUIRE(r.is_error());
+  CHECK(r.error().message().str().find("abi JSON parse error") != std::string::npos);
+}
+
 TEST_CASE("AbiLoader reject: unknown Ty kind") {
   auto r = ton_abi::load_abi_from_json(R"JSON({
     "contract_name": "X", "abi_schema_version": "1.0",
