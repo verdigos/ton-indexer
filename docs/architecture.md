@@ -10,16 +10,13 @@ TON Indexer состоит из нескольких независимо зап
 ```mermaid
 flowchart LR
     subgraph NodeWorkerHost["TON node + worker host"]
-        Node["TON node DB"] --> Worker["ton-index-postgres"]
+        Node["TON node DB"] --> Worker["ton-index-postgres: indexing + classification"]
     end
     Node --> Scanner["ton-smc-scanner"]
     Worker --> PG["PostgreSQL"]
     Worker --> KV["Kvrocks"]
     Scanner --> PG
     Scanner --> KV
-    PG --> Classifier["event classifier"]
-    KV --> Classifier
-    Classifier --> PG
     PG --> API["ton-index-go"]
     KV --> API
 ```
@@ -60,7 +57,8 @@ transactions, messages, traces, actions, NFT/Jetton/staking data, служебн
 очереди и состояние progress.
 
 Схема управляется отдельным бинарником `ton-index-postgres-migrate`. Версия схемы
-должна быть совместима с версиями worker, classifier и API.
+должна быть совместима с версиями worker и API: классификация выполняется внутри
+`ton-index-postgres` (`--enable-classifier`), отдельного сервиса классификации нет.
 
 ### Kvrocks
 
@@ -76,8 +74,10 @@ PostgreSQL и Kvrocks являются независимыми системам
 ### Redis
 
 Redis используется как временное и событийное хранилище. В зависимости от
-включённых подсистем он содержит classifier/emulation tasks, pending traces и
-Pub/Sub channels для streaming API. Redis не заменяет Kvrocks и PostgreSQL.
+включённых подсистем он содержит emulation tasks, pending traces и Pub/Sub
+channels для streaming API. Очередь задач классификации (queued replay) хранится
+не в Redis, а в таблице `_classifier_tasks` в PostgreSQL. Redis не заменяет
+Kvrocks и PostgreSQL.
 
 ### ClickHouse
 
@@ -96,14 +96,15 @@ Snapshot не создаёт исторические blocks, transactions, mess
 
 ## Traces и actions
 
-Index worker связывает транзакции и сообщения в traces. Python classifier читает
-готовые traces, распознаёт высокоуровневые действия — например transfers, swaps
-и multisig operations — и записывает actions обратно в PostgreSQL.
+Index worker связывает транзакции и сообщения в traces. Классификация выполняется
+внутри `ton-index-postgres`: с флагом `--enable-classifier` worker распознаёт
+готовые traces, находит высокоуровневые действия — например transfers, swaps и
+multisig operations — и записывает actions обратно в PostgreSQL в отдельной
+post-commit транзакции.
 
-Classifier является отдельным сервисом, потому что правила классификации и его
-масштабирование не совпадают с задачами чтения блоков. Для работы ему нужны
-PostgreSQL, Redis event-cache и, в конфигурациях с вынесенными contents/current
-data, доступ к тому же Kvrocks.
+Отдельного сервиса классификации нет. Явные задачи классификации (queued replay)
+обрабатывает тот же бинарник в режиме `--mch-task-mode`: он забирает задачи из
+таблицы `_classifier_tasks` в PostgreSQL и заменяет их результаты.
 
 ## API
 
@@ -142,11 +143,11 @@ Streaming API позволяет подписаться на pending -> confirme
 ## Масштабирование и отказоустойчивость
 
 API масштабируется горизонтально как преимущественно stateless-сервис.
-Classifier может обрабатывать общую очередь несколькими процессами. Несколько
-live workers означают несколько пар TON-нода/worker: в каждой паре worker
-работает на машине своей ноды и читает её локальную DB. Эти workers используют
-координацию leader/standby, поэтому наличие трёх пар не означает, что live-блоки
-автоматически делятся между ними.
+Процессы `--mch-task-mode` могут параллельно обрабатывать общую очередь
+`_classifier_tasks`. Несколько live workers означают несколько пар
+TON-нода/worker: в каждой паре worker работает на машине своей ноды и читает её
+локальную DB. Эти workers используют координацию leader/standby, поэтому наличие
+трёх пар не означает, что live-блоки автоматически делятся между ними.
 
 Историческую загрузку можно ускорять workers с непересекающимися диапазонами.
 Каждый такой worker также должен быть запущен на машине с TON-нодой, содержащей

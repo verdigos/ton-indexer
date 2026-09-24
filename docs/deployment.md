@@ -7,10 +7,11 @@ TON Indexer поддерживает три базовых варианта ра
 
 1. **Docker Compose.** Подходит для локальной разработки и тестовых окружений и
    не рекомендуется для production. PostgreSQL, Kvrocks, Redis event-cache,
-   index worker, API и action classifier запускаются на одной машине с
+   index worker и API запускаются на одной машине с
    TON-нодой. Индексация начинается с текущей или явно выбранной точки и
-   продолжается вперёд без архивной истории и shard state snapshot. Action
-   classifier входит в стандартный Compose stack и запускается по умолчанию.
+   продолжается вперёд без архивной истории и shard state snapshot. Классификация
+   actions входит в стандартный Compose stack и включена по умолчанию: сервис
+   `index-worker` запускается с `--enable-classifier`.
    См. [Docker Compose runbook](runbooks/docker-compose.md).
 
 2. **Standard deployment.** Компоненты запускаются через systemd без
@@ -56,12 +57,13 @@ indexes.
 
 ### Action classifier
 
-Action classifier преобразует traces в высокоуровневые actions. В standard и
-HA deployment он опционален; в Docker Compose запускается по умолчанию. Для
-исторических данных classifier можно запустить после archive backfill, а затем
-оставить работать в continuous mode.
+Классификация преобразует traces в высокоуровневые actions. Live-классификация
+включается в самом worker флагом `--enable-classifier`; в standard и HA deployment
+она опциональна, в Docker Compose включена по умолчанию. Для исторических данных
+задачи классификации заносятся в очередь командой `--mch-enqueue-range A B`, после
+чего обрабатываются тем же бинарником в режиме `--mch-task-mode`.
 
-Подготовка Python environment, минимальных indexes и monitoring очереди описаны
+Минимальные indexes и monitoring очереди описаны
 в [action classifier procedure](runbooks/procedures/action-classifier.md).
 
 ### Hot/cold разделение

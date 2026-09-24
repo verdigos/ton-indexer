@@ -14,4 +14,4 @@ Run the following commands on machine with PostgreSQL:
 * Create build directory: `mkdir build && cd build`.
 * Configure and build: `cmake -DPGTON=ON -DCMAKE_BUILD_TYPE=Release -GNinja .. && ninja pgton`.
 * Install binaries: `cd build/ton-index-worker/pgton && sudo cmake --install .`.
-* Drop existing database and start TON Index worker with flag `--custom-types` to create a scheme with custom types.
+* Drop existing database and run the migration binary `ton-index-postgres-migrate` with flag `--custom-types` to create a scheme with custom types.
