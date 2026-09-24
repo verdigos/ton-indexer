@@ -517,6 +517,8 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                 raise ValueError("jetton master returned another wallet address")
             found["JettonWallet"] = {"balance": fixture_int(stack_number(s[0])), "address": address,
                                       "owner": owner, "jetton": master}
+    except ApiError:
+        raise
     except Exception:
         pass
     try:
@@ -541,6 +543,8 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                                 "index": fixture_int(stack_number(s[1])), "collection_address": collection,
                                 "owner_address": stack_address(s[3]), "content": content,
                                 "code_hash": code_hash}
+    except ApiError:
+        raise
     except Exception:
         pass
     try:
@@ -549,18 +553,24 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
             found["NftSale"] = _sale(address, s, code_hash)
         elif s and len(s) >= 20 and stack_number(s[0]) == 0x415543:
             found["NftAuction"] = _auction(s, code_hash)
+    except ApiError:
+        raise
     except Exception:
         pass
     try:
         s = stacks["get_fix_price_data_v4"]
         if s and len(s) == 13:
             found["NftSale"] = _sale(address, s, code_hash, offset=-1)
+    except ApiError:
+        raise
     except Exception:
         pass
     try:
         s = stacks["get_auction_data_v4"]
         if s and len(s) == 26:
             found["NftAuction"] = _auction(s, code_hash)
+    except ApiError:
+        raise
     except Exception:
         pass
     try:
@@ -580,6 +590,8 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                 "signers": _signers(s[4]), "order_boc": order_boc, "last_transaction_lt": None,
                 "code_hash": code_hash, "data_hash": None,
             }
+    except ApiError:
+        raise
     except Exception:
         pass
     try:
@@ -594,6 +606,8 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                 if not verified or len(verified) != 1 or stack_address(verified[0]) != address:
                     raise ValueError("DeDust factory returned another pool address")
             found["DedustPool"] = {"assets": [_asset(item, v2) for item in pair]}
+    except ApiError:
+        raise
     except Exception:
         pass
     try:
@@ -612,6 +626,8 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
         stack_number(royalty[1])
         stack_address(royalty[2])
         found["Telemint"] = {"address": address}
+    except ApiError:
+        raise
     except Exception:
         pass
     return found
@@ -674,10 +690,9 @@ def collect_interfaces(client: ApiClient, addresses: Iterable[str], seqno: int,
             return
         record: dict[str, Any] = {}
         result[address] = record
-        try:
-            state = client.get_address_information(address, seqno)
-        except ApiError:
-            return
+        # An ApiError (state fetch failed after retries) must fail the fixture build;
+        # only a gc'd/absent state degrades to an empty record.
+        state = client.get_address_information(address, seqno)
         if state is None:
             return
         states[address] = state

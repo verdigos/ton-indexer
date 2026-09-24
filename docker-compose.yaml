@@ -68,7 +68,7 @@ services:
       TON_WORKER_BINARY: ton-index-postgres-migrate
     networks:
       internal:
-    command: ton-index-postgres-migrate --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --custom-types
+    command: --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --custom-types
     restart: on-failure
 
   index-worker:
@@ -99,7 +99,7 @@ services:
       TON_INDEXER_IS_TESTNET: ${TON_INDEXER_IS_TESTNET:-0}
     networks:
       internal:
-    command: ton-index-postgres --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --kvrocks tcp://kvrocks:6666/0 --kvrocks-password "${KVROCKS_PASSWORD:?Set KVROCKS_PASSWORD in .env}" --db /tondb --working-dir /ton_index_workdir --from ${TON_WORKER_FROM:?} --enable-classifier --mch-workers 4 --mch-trace-cap 8000 --mch-slow-job-threshold 5 --mch-rss-budget-gb 16 ${TON_WORKER_ADDITIONAL_ARGS:-}
+    command: --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --kvrocks tcp://kvrocks:6666/0 --kvrocks-password "${KVROCKS_PASSWORD:?Set KVROCKS_PASSWORD in .env}" --db /tondb --working-dir /ton_index_workdir --from ${TON_WORKER_FROM:?} --enable-classifier --mch-workers 4 --mch-trace-cap 8000 --mch-slow-job-threshold 5 --mch-rss-budget-gb 16 ${TON_WORKER_ADDITIONAL_ARGS:-}
     restart: unless-stopped
 
   postgres:

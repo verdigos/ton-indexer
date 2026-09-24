@@ -23,6 +23,8 @@
           - libsodium-dev
           - libhiredis-dev
           - python3-dev
+          - python3-yaml
+          - patch
           - libpq-dev
           - automake
           - libjemalloc-dev
@@ -154,6 +156,18 @@
     - name: Refresh linker cache
       ansible.builtin.command: ldconfig
       changed_when: false
+
+    - name: Stop and disable legacy action classifier service
+      ansible.builtin.systemd:
+        name: "{{ stack_name }}__action_classifier"
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Remove legacy action classifier service
+      ansible.builtin.file:
+        path: "{{ systemd_service_path }}/{{ stack_name }}__action_classifier.service"
+        state: absent
 
     - name: Setup emulate_api and trace_task_emulator services 
       ansible.builtin.template:

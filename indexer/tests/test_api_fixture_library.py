@@ -47,3 +47,27 @@ def test_method_propagates_library_api_error():
 
     with pytest.raises(api_fixture.ApiError, match="library fetch failed"):
         api_fixture._method(Client(), "0:00", "get_wallet_data", 1)
+
+
+def test_interface_methods_propagates_nested_api_error():
+    class Client:
+        def run_get_method(self, address, method, seqno, stack):
+            if method == "get_assets":
+                return {"stack": [api_fixture._number_entry(0), api_fixture._number_entry(0)]}
+            if method == "is_stable":
+                return {"stack": [api_fixture._number_entry(1)]}
+            if method == "get_pool_address":
+                raise api_fixture.ApiError("factory fetch failed")
+            return None
+
+    with pytest.raises(api_fixture.ApiError, match="factory fetch failed"):
+        api_fixture._interface_methods(Client(), "0:" + "AB" * 32, 1, "code-hash")
+
+
+def test_collect_interfaces_propagates_state_api_error():
+    class Client:
+        def get_address_information(self, address, seqno):
+            raise api_fixture.ApiError("state fetch failed")
+
+    with pytest.raises(api_fixture.ApiError, match="state fetch failed"):
+        api_fixture.collect_interfaces(Client(), ["0:" + "AB" * 32], 1)
