@@ -46,6 +46,10 @@ _Avoid_: pool type, formula
 **Reserves**:
 The amounts of both Assets a Pool holds at a moment; together with the Curve they determine the Spot price.
 
+**Pool snapshot**:
+A Pool's Reserves and Spot price as of the end of one shard block.
+_Avoid_: pool state row, tick
+
 **Spot price**:
 The marginal price of one Asset in terms of the other, derived from a Pool's Reserves and Curve at a moment.
 _Avoid_: rate, execution price
@@ -63,3 +67,7 @@ _Avoid_: USD, base currency
 **Anchor pools**:
 The configured set of USDT/TON Pools whose Spot prices define the Price of TON in USDT.
 _Avoid_: base pool, reference pool, hardcoded pool
+
+**Candle**:
+Open, high, low and close of a Price over one fixed interval. Only intervals that contain at least one Pool snapshot exist.
+_Avoid_: bar, OHLC row
