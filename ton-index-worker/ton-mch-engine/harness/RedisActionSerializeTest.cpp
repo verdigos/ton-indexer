@@ -514,10 +514,12 @@ void test_compact_types_and_errors() {
   check("compact/uint_big_known_bytes", encoded({{"query_id", Value::make_str("18446744073709551616")}}) ==
         std::string("\x01\x81\x59\xc4\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00", 14));
   const std::string huge = "57896044618658097711785492504343953926634992332820282019728792003956564819968";
-  const std::string big_payload = encoded({{"nft_index", Value::make_str(huge)}});
-  check("compact/uint256", big_payload.size() == 37 && big_payload.substr(0, 5) == "\x01\x81\x43\xc4\x20" &&
+  const std::string big_payload = encoded({{"order_seqno", Value::make_str(huge)}});
+  check("compact/uint256", big_payload.size() == 37 && big_payload.substr(0, 5) == "\x01\x81\x46\xc4\x20" &&
         static_cast<unsigned char>(big_payload[5]) == 0x80 &&
         std::all_of(big_payload.begin() + 6, big_payload.end(), [](char c) { return c == 0; }));
+  check("compact/nft_index_signed", encoded({{"nft_index", Value::make_str("-1")}}) ==
+        "\x01\x81\x43\xa2-1");
   check("compact/boc_base64", encoded({{"custom_payload", Value::make_str("AQID")}}) ==
         "\x01\x81\x0f\xc4\x03\x01\x02\x03");
   check("compact/boc_binary", encoded({{"custom_payload", Value::make_bytes("\x01\x02\x03")}}) ==

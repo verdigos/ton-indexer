@@ -169,7 +169,7 @@ keys:
   uses: NFT and jetton transfers
 - id: 34
   name: full_price
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT sales
 - id: 35
@@ -239,7 +239,7 @@ keys:
   uses: NFT markets
 - id: 48
   name: marketplace_fee
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT sales
 - id: 49
@@ -259,7 +259,7 @@ keys:
   uses: EVAA
 - id: 52
   name: max_bid
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT auctions
 - id: 53
@@ -274,7 +274,7 @@ keys:
   uses: vesting
 - id: 55
   name: min_bid
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT auctions
 - id: 56
@@ -284,12 +284,12 @@ keys:
   uses: jetton swap
 - id: 57
   name: mp_fee_base
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT auctions
 - id: 58
   name: mp_fee_factor
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT auctions
 - id: 59
@@ -334,7 +334,7 @@ keys:
   uses: NFT, DEX, staking
 - id: 67
   name: nft_index
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT, DEX, Coffee
 - id: 68
@@ -414,7 +414,7 @@ keys:
   uses: Coffee
 - id: 83
   name: price
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT
 - id: 84
@@ -474,12 +474,12 @@ keys:
   uses: NFT markets
 - id: 95
   name: royalty_amount
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT markets
 - id: 96
   name: royalty_fee_base
-  type: uint
+  type: string
   shape: integer_string
   uses: NFT auctions
 - id: 97

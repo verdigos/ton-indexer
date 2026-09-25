@@ -18,6 +18,7 @@
 #include "vm/boc.h"
 #include "vm/cells/CellBuilder.h"
 #include "vm/excno.hpp"
+#include <msgpack.hpp>
 
 #include <cstdint>
 #include <cstdio>
@@ -144,6 +145,15 @@ BuildOutcome payload_address_build(BuildEnv &) {
   return out;
 }
 
+BuildOutcome negative_nft_index_build(BuildEnv &) {
+  BuildOutcome out = BuildOutcome::accepted();
+  out.data = Value::make_dict({
+      {"new_owner", Value::make_account_raw("0:" + std::string(64, 'A'))},
+      {"nft", Value::make_dict({{"index", Value::make_int64(-1)}})},
+  });
+  return out;
+}
+
 void test_payload_encode_failure_skips_one_action() {
   std::vector<CompiledMatcher> matchers{test_matcher("payload-encode", 0)};
   matchers.front().produces = {"jetton_transfer"};
@@ -206,6 +216,28 @@ void test_payload_encode_failure_skips_one_action() {
   auto good = classify_schema_trace(prep, "payload-good", {tx}, source);
   check("payload_failure/process_continues", good.outcome == TraceOutcome::classified &&
         !good.rows.empty() && good.skipped_payload_actions == 0 && good.failure_reason.empty());
+
+  std::vector<CompiledMatcher> nft_matchers{test_matcher("negative-nft-index", 0)};
+  nft_matchers.front().produces = {"nft_transfer"};
+  ClassifySetup nft_setup;
+  nft_setup.included = {0};
+  nft_setup.build_fns.emplace(0, negative_nft_index_build);
+  MchEnginePrep nft_prep{&nft_matchers, std::move(nft_setup)};
+  auto nft_result = classify_schema_trace(nft_prep, "negative-nft-index", {tx}, source);
+  check("nft_index/negative/not_skipped", nft_result.skipped_payload_actions == 0 &&
+        nft_result.rows.size() == 1 && nft_result.rows.front().type == "nft_transfer");
+  if (nft_result.rows.size() == 1 && nft_result.rows.front().type == "nft_transfer") {
+    const auto &payload = nft_result.rows.front().encoded_payload;
+    auto obj = msgpack::unpack(payload.data() + 1, payload.size() - 1).get();
+    bool round_trip = false;
+    if (obj.type == msgpack::type::MAP) {
+      for (std::uint32_t i = 0; i < obj.via.map.size; ++i) {
+        const auto &entry = obj.via.map.ptr[i];
+        if (entry.key.as<int>() == 67) round_trip = entry.val.as<std::string>() == "-1";
+      }
+    }
+    check("nft_index/negative/payload_round_trip", round_trip);
+  }
 }
 
 const std::string kUncoveredWorkchainAddress = "1:" + std::string(64, 'A');

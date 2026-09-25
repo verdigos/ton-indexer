@@ -1,20 +1,20 @@
 {
-  "api_bytes": 4367192,
-  "api_reference": "_analysis-scratch/payload-wave/election/preserve-reference.jsonl",
-  "api_sha256": "6a64e2e9d1485ba19b71021e51638e3295ff4414836e8218bf2976ba92b88367",
-  "engine_binary_mtime_utc": "2026-09-24T23:35:47.545278+00:00",
-  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-ebccb943-401e51e.jsonl -T indexer/tests/traces",
+  "api_bytes": 4375326,
+  "api_reference": "_analysis-scratch/payload-wave/nftidx/old-contract.jsonl.gz",
+  "api_sha256": "e9bc88e7bc3f13dd8fe8a725f7cac087444e47599f96c5329da6484973603f76",
+  "engine_binary_mtime_utc": "2026-09-25T01:59:19.854957+00:00",
+  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-025ea474-49f96f2.jsonl -T indexer/tests/traces",
   "generator": "devtools/bk-tools/generate_baseline.py",
-  "generator_command": "python3 devtools/bk-tools/generate_baseline.py --preserve-api-from _analysis-scratch/payload-wave/election/preserve-reference.jsonl",
+  "generator_command": "python3 devtools/bk-tools/generate_baseline.py --preserve-api-from _analysis-scratch/payload-wave/nftidx/old-contract.jsonl.gz",
   "golden_files": 296,
   "golden_set_sha256": "c46265213b90eca0087e7843b346223baecf298634277cc8424e9d2b0cc6667a",
-  "gzip_bytes": 807543,
-  "gzip_sha256": "8fd95ea0fd4da99ae6f9fa01b47733ab5d91b46efbd6c01fb865a50ebe1fe195",
-  "main_sha": "ebccb943",
-  "overlay_sha": "401e51e",
-  "payload_bytes": 2857013,
-  "payload_sha256": "213512ccc812d5c539803d456d8e3562ead4263632f027f7953ebe192ff72f2b",
-  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-ebccb943-401e51e.jsonl ../_analysis-scratch/payload-wave/baseline/api-ebccb943-401e51e.jsonl ../_analysis-scratch/payload-wave/election/preserve-reference.jsonl",
+  "gzip_bytes": 808500,
+  "gzip_sha256": "57f34b7af88854fe1e1cb786b92c0f7c8822055a3220b0b832804de4fe3fb6d5",
+  "main_sha": "025ea474",
+  "overlay_sha": "49f96f2",
+  "payload_bytes": 2865147,
+  "payload_sha256": "d51adf2120cd4a53b54309cec65bcd342aec0c4242177a421034c2af18f05f65",
+  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-025ea474-49f96f2.jsonl ../_analysis-scratch/payload-wave/baseline/api-025ea474-49f96f2.jsonl ../_analysis-scratch/payload-wave/nftidx/old-contract.jsonl.gz",
   "render_cwd": "ton-index-go",
   "repo_data": "ton-index-go/index/parse/testdata/payload_contract.jsonl.gz",
   "repo_metadata": "ton-index-go/index/parse/testdata/payload_contract.metadata.json",
@@ -105,8 +105,8 @@
   },
   "type_breakdown": {
     "auction_bid": {
-      "bytes": 9360,
-      "gzip_bytes": 2937,
+      "bytes": 9908,
+      "gzip_bytes": 3005,
       "rows": 3
     },
     "auction_outbid": {
@@ -215,13 +215,13 @@
       "rows": 2
     },
     "coffee_staking_deposit": {
-      "bytes": 10164,
-      "gzip_bytes": 3857,
+      "bytes": 10180,
+      "gzip_bytes": 3860,
       "rows": 2
     },
     "coffee_staking_withdraw": {
-      "bytes": 5152,
-      "gzip_bytes": 2184,
+      "bytes": 5156,
+      "gzip_bytes": 2185,
       "rows": 1
     },
     "contract_deploy": {
@@ -245,23 +245,23 @@
       "rows": 1
     },
     "dex_deposit_liquidity": {
-      "bytes": 256320,
-      "gzip_bytes": 77075,
+      "bytes": 256348,
+      "gzip_bytes": 77082,
       "rows": 39
     },
     "dex_withdraw_liquidity": {
-      "bytes": 106546,
-      "gzip_bytes": 26768,
+      "bytes": 106566,
+      "gzip_bytes": 26773,
       "rows": 17
     },
     "dns_purchase": {
-      "bytes": 28800,
-      "gzip_bytes": 6340,
+      "bytes": 30024,
+      "gzip_bytes": 6624,
       "rows": 9
     },
     "dns_release": {
-      "bytes": 13937,
-      "gzip_bytes": 3229,
+      "bytes": 14493,
+      "gzip_bytes": 3415,
       "rows": 5
     },
     "election_deposit": {
@@ -385,33 +385,33 @@
       "rows": 1
     },
     "nft_mint": {
-      "bytes": 14385,
-      "gzip_bytes": 4250,
+      "bytes": 14597,
+      "gzip_bytes": 4294,
       "rows": 5
     },
     "nft_purchase": {
-      "bytes": 40213,
-      "gzip_bytes": 9310,
+      "bytes": 40699,
+      "gzip_bytes": 9417,
       "rows": 7
     },
     "nft_put_on_auction": {
-      "bytes": 5821,
-      "gzip_bytes": 2320,
+      "bytes": 6041,
+      "gzip_bytes": 2348,
       "rows": 1
     },
     "nft_put_on_sale": {
-      "bytes": 5653,
-      "gzip_bytes": 2182,
+      "bytes": 5849,
+      "gzip_bytes": 2233,
       "rows": 1
     },
     "nft_transfer": {
-      "bytes": 167007,
-      "gzip_bytes": 38691,
+      "bytes": 171087,
+      "gzip_bytes": 39249,
       "rows": 29
     },
     "nft_update_sale": {
-      "bytes": 3471,
-      "gzip_bytes": 1348,
+      "bytes": 3567,
+      "gzip_bytes": 1336,
       "rows": 1
     },
     "renew_dns": {
@@ -445,8 +445,8 @@
       "rows": 4
     },
     "teleitem_start_auction": {
-      "bytes": 8051,
-      "gzip_bytes": 2471,
+      "bytes": 8499,
+      "gzip_bytes": 2530,
       "rows": 2
     },
     "tgbtc_burn": {

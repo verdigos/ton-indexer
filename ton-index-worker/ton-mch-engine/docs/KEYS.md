@@ -54,7 +54,7 @@ remaining hashes sorted ascending.
 | 31 | `flags` | uint | integer_string | DNS |
 | 32 | `forward_amount` | uint | integer_string | NFT and jetton transfers |
 | 33 | `forward_payload` | boc | bytes_base64 | NFT and jetton transfers |
-| 34 | `full_price` | uint | integer_string | NFT sales |
+| 34 | `full_price` | string | integer_string | NFT sales |
 | 35 | `guid` | string | string | LayerZero |
 | 36 | `initial_price_x96` | uint | integer_string | Tonco |
 | 37 | `initiator` | address | ton_address | Coffee legs |
@@ -68,17 +68,17 @@ remaining hashes sorted ascending.
 | 45 | `lp_fee_base` | uint | integer_string | Tonco |
 | 46 | `lp_fee_current` | uint | integer_string | Tonco |
 | 47 | `marketplace_address` | address | ton_address | NFT markets |
-| 48 | `marketplace_fee` | uint | integer_string | NFT sales |
+| 48 | `marketplace_fee` | string | integer_string | NFT sales |
 | 49 | `marketplace_fee_address` | address | ton_address | NFT markets |
 | 50 | `master` | address | ton_address | EVAA |
 | 51 | `master_jetton_wallet` | address | ton_address | EVAA |
-| 52 | `max_bid` | uint | integer_string | NFT auctions |
+| 52 | `max_bid` | string | integer_string | NFT auctions |
 | 53 | `message` | string | string | LayerZero |
 | 54 | `message_boc` | boc | bytes_base64 | vesting |
-| 55 | `min_bid` | uint | integer_string | NFT auctions |
+| 55 | `min_bid` | string | integer_string | NFT auctions |
 | 56 | `min_out_amount` | uint | integer_string | jetton swap |
-| 57 | `mp_fee_base` | uint | integer_string | NFT auctions |
-| 58 | `mp_fee_factor` | uint | integer_string | NFT auctions |
+| 57 | `mp_fee_base` | string | integer_string | NFT auctions |
+| 58 | `mp_fee_factor` | string | integer_string | NFT auctions |
 | 59 | `msglib` | string | string | LayerZero |
 | 60 | `msglib_connection` | address | ton_address | LayerZero |
 | 61 | `msglib_manager` | string | string | LayerZero |
@@ -87,7 +87,7 @@ remaining hashes sorted ascending.
 | 64 | `new_tokens` | uint | integer_string | Cocoon |
 | 65 | `new_tokens_used` | uint | integer_string | Cocoon |
 | 66 | `nft_address` | address | ton_address | NFT, DEX, staking |
-| 67 | `nft_index` | uint | integer_string | NFT, DEX, Coffee |
+| 67 | `nft_index` | string | integer_string | NFT, DEX, Coffee |
 | 68 | `nonce` | uint | integer_string | LayerZero and Cocoon |
 | 69 | `order_boc` | boc | bytes_base64 | multisig |
 | 70 | `order_seqno` | uint | integer_string | multisig |
@@ -103,7 +103,7 @@ remaining hashes sorted ascending.
 | 80 | `pool_active` | bool | boolean | Tonco |
 | 81 | `pool_first` | address | ton_address | Coffee |
 | 82 | `pool_second` | address | ton_address | Coffee |
-| 83 | `price` | uint | integer_string | NFT |
+| 83 | `price` | string | integer_string | NFT |
 | 84 | `protocol` | string | string | DEX and staking |
 | 85 | `protocol_fee` | uint | integer_string | Tonco |
 | 86 | `provided_asset` | address | ton_address | Coffee |
@@ -115,8 +115,8 @@ remaining hashes sorted ascending.
 | 92 | `record_value` | string | string | DNS |
 | 93 | `response_destination` | address | ton_address | NFT and jetton transfers |
 | 94 | `royalty_address` | address | ton_address | NFT markets |
-| 95 | `royalty_amount` | uint | integer_string | NFT markets |
-| 96 | `royalty_fee_base` | uint | integer_string | NFT auctions |
+| 95 | `royalty_amount` | string | integer_string | NFT markets |
+| 96 | `royalty_fee_base` | string | integer_string | NFT auctions |
 | 97 | `send_request_id` | uint | integer_string | LayerZero |
 | 98 | `sender` | address | ton_address | jetton swap |
 | 99 | `seqno` | uint | integer_string | Cocoon |
