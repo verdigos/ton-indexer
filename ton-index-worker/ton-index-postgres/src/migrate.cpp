@@ -84,337 +84,6 @@ void run_1_3_0_migrations(const std::string& connection_string, bool custom_type
     exec_query("create type pool_type as enum ('stable', 'volatile');");
     exec_query("create type dex_type as enum ('dedust');");
 
-    exec_query(R"SQL(create type change_dns_record_details as
-(
-    key          varchar,
-    value_schema varchar,
-    value        varchar,
-    flags        integer
-);)SQL");
-    exec_query(R"SQL(create type liquidity_vault_excess_details as
-(
-    asset  tonaddr,
-    amount NUMERIC
-);)SQL");
-    exec_query(R"SQL(create type dex_deposit_liquidity_details as
-(
-    dex                  varchar,
-    amount1              numeric,
-    amount2              numeric,
-    asset1               tonaddr,
-    asset2               tonaddr,
-    user_jetton_wallet_1 tonaddr,
-    user_jetton_wallet_2 tonaddr,
-    lp_tokens_minted     numeric,
-    target_asset_1       tonaddr,
-    target_asset_2       tonaddr,
-    target_amount_1      numeric,
-    target_amount_2      numeric,
-    vault_excesses       liquidity_vault_excess_details[],
-    tick_lower           numeric,
-    tick_upper           numeric,
-    nft_index            numeric,
-    nft_address          tonaddr
-);)SQL");
-    exec_query(R"SQL(create type dex_transfer_details as
-(
-    amount                    numeric,
-    asset                     tonaddr,
-    source                    tonaddr,
-    destination               tonaddr,
-    source_jetton_wallet      tonaddr,
-    destination_jetton_wallet tonaddr
-);)SQL");
-    exec_query(R"SQL(create type dex_withdraw_liquidity_details as
-(
-    dex                  varchar,
-    amount1              numeric,
-    amount2              numeric,
-    asset1_out           tonaddr,
-    asset2_out           tonaddr,
-    user_jetton_wallet_1 tonaddr,
-    user_jetton_wallet_2 tonaddr,
-    dex_jetton_wallet_1  tonaddr,
-    dex_jetton_wallet_2  tonaddr,
-    lp_tokens_burnt      numeric,
-    dex_wallet_1         tonaddr,
-    dex_wallet_2         tonaddr,
-    burned_nft_index     numeric,
-    burned_nft_address   tonaddr,
-    tick_lower           numeric,
-    tick_upper           numeric
-);)SQL");
-    exec_query(R"SQL(create type jetton_transfer_details as
-(
-    response_destination tonaddr,
-    forward_amount       numeric,
-    query_id             numeric,
-    custom_payload       tonbytes,
-    forward_payload      tonbytes,
-    comment              text,
-    is_encrypted_comment boolean
-);)SQL");
-    exec_query(R"SQL(create type nft_mint_details as
-(
-    nft_item_index numeric
-);)SQL");
-    exec_query(R"SQL(create type nft_transfer_details as
-(
-    is_purchase              boolean,
-    price                    numeric,
-    query_id                 numeric,
-    custom_payload           tonbytes,
-    forward_payload          tonbytes,
-    forward_amount           numeric,
-    response_destination     tonaddr,
-    nft_item_index           numeric,
-    marketplace              varchar,
-    real_prev_owner          tonaddr,
-    marketplace_address      tonaddr,
-    payout_amount            numeric,
-    payout_comment_encrypted boolean,
-    payout_comment_encoded   boolean,
-    payout_comment           text,
-    royalty_amount           numeric
-);)SQL");
-    exec_query(R"SQL(create type peer_swap_details as
-(
-    asset_in   tonaddr,
-    amount_in  numeric,
-    asset_out  tonaddr,
-    amount_out numeric
-);)SQL");
-    exec_query(R"SQL(create type jetton_swap_details as
-(
-    dex                   varchar,
-    sender                tonaddr,
-    dex_incoming_transfer dex_transfer_details,
-    dex_outgoing_transfer dex_transfer_details,
-    peer_swaps            peer_swap_details[],
-    min_out_amount        numeric
-);)SQL");
-    exec_query(R"SQL(create type staking_details as
-(
-    provider      varchar,
-    ts_nft        tonaddr,
-    tokens_burnt  numeric,
-    tokens_minted numeric
-);)SQL");
-    exec_query(R"SQL(create type ton_transfer_details as
-(
-    content   text,
-    encrypted boolean
-);)SQL");
-    exec_query(R"SQL(create type multisig_create_order_details as
-(
-    query_id             numeric,
-    order_seqno          numeric,
-    is_created_by_signer boolean,
-    is_signed_by_creator boolean,
-    creator_index        numeric,
-    expiration_date      numeric,
-    order_boc            tonbytes
-);)SQL");
-    exec_query(R"SQL(create type multisig_approve_details as
-(
-    signer_index numeric,
-    exit_code    numeric
-);)SQL");
-    exec_query(R"SQL(create type multisig_execute_details as
-(
-    query_id        numeric,
-    order_seqno     numeric,
-    expiration_date numeric,
-    approvals_num   numeric,
-    signers_hash    tonhash,
-    order_boc       tonbytes
-);)SQL");
-    exec_query(R"SQL(create type vesting_send_message_details as
-(
-    query_id    numeric,
-    message_boc tonbytes
-);)SQL");
-    exec_query(R"SQL(create type vesting_add_whitelist_details as
-(
-    query_id       numeric,
-    accounts_added tonaddr[]
-);)SQL");
-    exec_query(R"SQL(create type evaa_supply_details as
-(
-    sender_jetton_wallet    tonaddr,
-    recipient_jetton_wallet tonaddr,
-    master_jetton_wallet    tonaddr,
-    master                  tonaddr,
-    asset_id                varchar,
-    is_ton                  boolean
-);)SQL");
-    exec_query(R"SQL(create type evaa_withdraw_details as
-(
-    sender_jetton_wallet    tonaddr,
-    recipient_jetton_wallet tonaddr,
-    master_jetton_wallet    tonaddr,
-    master                  tonaddr,
-    fail_reason             varchar,
-    asset_id                varchar
-);)SQL");
-    exec_query(R"SQL(create type evaa_liquidate_details as
-(
-    fail_reason text,
-    debt_amount numeric,
-    asset_id    varchar
-);)SQL");
-    exec_query(R"SQL(create type jvault_claim_details as
-(
-    claimed_jettons tonaddr[],
-    claimed_amounts numeric[]
-);)SQL");
-    exec_query(R"SQL(create type jvault_stake_details as
-(
-    period               numeric,
-    minted_stake_jettons numeric,
-    stake_wallet         tonaddr
-);)SQL");
-    exec_query(R"SQL(create type tonco_deploy_pool_details as
-(
-    jetton0_router_wallet tonaddr,
-    jetton1_router_wallet tonaddr,
-    jetton0_minter        tonaddr,
-    jetton1_minter        tonaddr,
-    tick_spacing          integer,
-    initial_price_x96     numeric,
-    protocol_fee          integer,
-    lp_fee_base           integer,
-    lp_fee_current        integer,
-    pool_active           boolean
-);)SQL");
-    exec_query(R"SQL(create type coffee_create_pool_details as
-(
-    amount_1              numeric,
-    amount_2              numeric,
-    initiator_1           tonaddr,
-    initiator_2           tonaddr,
-    provided_asset        tonaddr,
-    lp_tokens_minted      numeric,
-    pool_creator_contract tonaddr
-);)SQL");
-    exec_query(R"SQL(create type coffee_staking_deposit_details as
-(
-    minted_item_address tonaddr,
-    minted_item_index   numeric
-);)SQL");
-    exec_query(R"SQL(create type coffee_staking_withdraw_details as
-(
-    nft_address tonaddr,
-    nft_index   numeric,
-    points      numeric
-);)SQL");
-    exec_query(R"SQL(create type nft_listing_details as
-(
-    nft_item_index          numeric,
-    full_price              numeric,
-    marketplace_fee         numeric,
-    royalty_amount          numeric,
-    mp_fee_factor           numeric,
-    mp_fee_base             numeric,
-    royalty_fee_base        numeric,
-    max_bid                 numeric,
-    min_bid                 numeric,
-    marketplace_fee_address tonaddr,
-    royalty_address         tonaddr,
-    marketplace             varchar
-);)SQL");
-    exec_query(R"SQL(create type layerzero_send_details as
-(
-    send_request_id numeric,
-    msglib_manager  varchar,
-    msglib          varchar,
-    uln             tonaddr,
-    native_fee      numeric,
-    zro_fee         numeric,
-    endpoint        tonaddr,
-    channel         tonaddr
-);)SQL");
-    exec_query(R"SQL(create type layerzero_packet_details as
-(
-    src_oapp varchar,
-    dst_oapp varchar,
-    src_eid  integer,
-    dst_eid  integer,
-    nonce    numeric,
-    guid     varchar,
-    message  varchar
-);)SQL");
-    exec_query(R"SQL(create type layerzero_dvn_verify_details as
-(
-    nonce          numeric,
-    status         varchar,
-    dvn            tonaddr,
-    proxy          tonaddr,
-    uln            tonaddr,
-    uln_connection tonaddr
-);)SQL");
-    exec_query(R"SQL(create type cocoon_worker_payout_details as
-(
-    payout_type   varchar,
-    query_id      numeric,
-    new_tokens    numeric,
-    worker_state  integer,
-    worker_tokens numeric
-);)SQL");
-    exec_query(R"SQL(create type cocoon_proxy_payout_details as
-(
-    query_id numeric
-);)SQL");
-    exec_query(R"SQL(create type cocoon_proxy_charge_details as
-(
-    query_id         numeric,
-    new_tokens_used  numeric,
-    expected_address varchar
-);)SQL");
-    exec_query(R"SQL(create type cocoon_client_top_up_details as
-(
-    query_id numeric
-);)SQL");
-    exec_query(R"SQL(create type cocoon_register_proxy_details as
-(
-    query_id numeric
-);)SQL");
-    exec_query(R"SQL(create type cocoon_unregister_proxy_details as
-(
-    query_id numeric,
-    seqno    integer
-);)SQL");
-    exec_query(R"SQL(create type cocoon_client_register_details as
-(
-    query_id numeric,
-    nonce    numeric
-);)SQL");
-    exec_query(R"SQL(create type cocoon_client_change_secret_hash_details as
-(
-    query_id        numeric,
-    new_secret_hash varchar
-);)SQL");
-    exec_query(R"SQL(create type cocoon_client_request_refund_details as
-(
-    query_id   numeric,
-    via_wallet boolean
-);)SQL");
-    exec_query(R"SQL(create type cocoon_grant_refund_details as
-(
-    query_id         numeric,
-    new_tokens_used  numeric,
-    expected_address varchar
-);)SQL");
-    exec_query(R"SQL(create type cocoon_client_increase_stake_details as
-(
-    query_id  numeric,
-    new_stake numeric
-);)SQL");
-    exec_query(R"SQL(create type cocoon_client_withdraw_details as
-(
-    query_id        numeric,
-    withdraw_amount numeric
-);)SQL");
   }
 
   LOG(INFO) << "Creating tables...";
@@ -874,58 +543,19 @@ create table if not exists actions
     opcode                                bigint,
     tx_hashes                             tonhash[],
     type                                  varchar,
-    ton_transfer_data                     ton_transfer_details,
     value                                 numeric,
     amount                                numeric,
-    jetton_transfer_data                  jetton_transfer_details,
-    nft_transfer_data                     nft_transfer_details,
-    jetton_swap_data                      jetton_swap_details,
-    change_dns_record_data                change_dns_record_details,
-    nft_mint_data                         nft_mint_details,
     success                               boolean   default true,
-    dex_withdraw_liquidity_data           dex_withdraw_liquidity_details,
-    dex_deposit_liquidity_data            dex_deposit_liquidity_details,
-    staking_data                          staking_details,
-    tonco_deploy_pool_data                tonco_deploy_pool_details,
     trace_end_lt                          bigint,
     trace_external_hash                   tonhash,
     trace_external_hash_norm              tonhash,
     trace_end_utime                       integer,
     mc_seqno_end                          integer,
     trace_mc_seqno_end                    integer not null,
-    multisig_create_order_data            multisig_create_order_details,
-    multisig_approve_data                 multisig_approve_details,
-    multisig_execute_data                 multisig_execute_details,
-    vesting_send_message_data             vesting_send_message_details,
-    vesting_add_whitelist_data            vesting_add_whitelist_details,
-    evaa_supply_data                      evaa_supply_details,
-    evaa_withdraw_data                    evaa_withdraw_details,
-    evaa_liquidate_data                   evaa_liquidate_details,
-    jvault_claim_data                     jvault_claim_details,
-    jvault_stake_data                     jvault_stake_details,
     parent_action_id                      varchar,
     ancestor_type                         varchar[] default '{}',
     value_extra_currencies                jsonb     default '{}'::jsonb,
-    coffee_create_pool_data               coffee_create_pool_details,
-    coffee_staking_deposit_data           coffee_staking_deposit_details,
-    coffee_staking_withdraw_data          coffee_staking_withdraw_details,
-    nft_listing_data                      nft_listing_details,
-    layerzero_send_data                   layerzero_send_details,
-    layerzero_packet_data                 layerzero_packet_details,
-    layerzero_dvn_verify_data             layerzero_dvn_verify_details,
-    cocoon_worker_payout_data             cocoon_worker_payout_details,
-    cocoon_proxy_payout_data              cocoon_proxy_payout_details,
-    cocoon_proxy_charge_data              cocoon_proxy_charge_details,
-    cocoon_client_top_up_data             cocoon_client_top_up_details,
-    cocoon_register_proxy_data            cocoon_register_proxy_details,
-    cocoon_unregister_proxy_data          cocoon_unregister_proxy_details,
-    cocoon_client_register_data           cocoon_client_register_details,
-    cocoon_client_change_secret_hash_data cocoon_client_change_secret_hash_details,
-    cocoon_client_request_refund_data     cocoon_client_request_refund_details,
-    cocoon_grant_refund_data              cocoon_grant_refund_details,
-    cocoon_client_increase_stake_data     cocoon_client_increase_stake_details,
-    cocoon_client_withdraw_data           cocoon_client_withdraw_details,
-    extra                                 jsonb,
+    payload                               bytea not null,
     primary key (trace_id, action_id, trace_mc_seqno_end)
 ) partition by range (trace_mc_seqno_end);
 create table if not exists actions_default partition of actions default;
@@ -1227,6 +857,15 @@ create table if not exists _blocks_classified
 (
     mc_seqno integer not null primary key
 );
+
+create table if not exists _classifier_block_issues
+(
+    id         serial primary key,
+    mc_seqno   integer not null,
+    reason     varchar not null,
+    created_at timestamp not null default now()
+);
+create index if not exists _classifier_block_issues_mc_seqno_idx on _classifier_block_issues (mc_seqno);
 
 create table if not exists _classifier_tasks
 (
@@ -1575,6 +1214,50 @@ EXECUTE FUNCTION update_nft_real_owner();
   LOG(INFO) << "Migration to version 1.3.0 completed successfully.";
 }
 
+void run_1_3_1_migrations(const std::string& connection_string, bool dry_run) {
+  const auto query = "ALTER TABLE blocks DISABLE TRIGGER on_new_mc_block;\n" + set_version_query({1, 3, 1});
+  if (dry_run) {
+    std::cout << query << std::endl;
+    return;
+  }
+  try {
+    pqxx::connection c(connection_string);
+    pqxx::work txn(c);
+    txn.exec(query).no_rows();
+    txn.commit();
+  } catch (const std::exception &e) {
+    LOG(ERROR) << "Error while migrating database: " << e.what();
+    std::exit(1);
+  }
+  LOG(INFO) << "Migration to version 1.3.1 completed; classifier task trigger disabled.";
+}
+
+void run_1_3_2_migrations(const std::string& connection_string, bool dry_run) {
+  const auto query = R"SQL(create table if not exists _classifier_block_issues
+(
+    id         serial primary key,
+    mc_seqno   integer not null,
+    reason     varchar not null,
+    created_at timestamp not null default now()
+);
+create index if not exists _classifier_block_issues_mc_seqno_idx on _classifier_block_issues (mc_seqno);
+)SQL" + set_version_query({1, 3, 2});
+  if (dry_run) {
+    std::cout << query << std::endl;
+    return;
+  }
+  try {
+    pqxx::connection c(connection_string);
+    pqxx::work txn(c);
+    txn.exec(query).no_rows();
+    txn.commit();
+  } catch (const std::exception &e) {
+    LOG(ERROR) << "Error while migrating database: " << e.what();
+    std::exit(1);
+  }
+  LOG(INFO) << "Migration to version 1.3.2 completed; classifier block issues table created.";
+}
+
 void create_indexes(std::string connection_string, bool dry_run) {
   try {
     pqxx::connection c(connection_string);
@@ -1782,28 +1465,34 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
-  if (current_version.has_value()) {
-    if (current_version->major != latest_version.major || current_version->minor != latest_version.minor) {
-      LOG(ERROR) << "Migration to a different major.minor version is not supported. Existing DB version: "
-                 << current_version->str() << ", latest version: " << latest_version.str();
-      LOG(ERROR) << "Please create an new empty database to start indexing with the this version of indexer.";
-      std::exit(1);
+  if (current_version.has_value() && *current_version != latest_version) {
+    if (*current_version < latest_version) {
+      LOG(ERROR) << "Database version " << current_version->str() << " cannot be migrated to "
+                 << latest_version.str() << "; a fresh database is required.";
+    } else {
+      LOG(ERROR) << "Database version " << current_version->str() << " is newer than supported version "
+                 << latest_version.str() << ".";
     }
+    std::exit(1);
   }
 
   if (current_version.has_value() && *current_version == latest_version && !rerun_last_migration) {
     LOG(INFO) << "Database is already at the latest version. No migrations needed.";
   } else {
-    if (!current_version.has_value() || rerun_last_migration || migration_needed(current_version, Version{1, 3, 0})) {
+    if (!current_version.has_value() || migration_needed(current_version, Version{1, 3, 0})) {
       run_1_3_0_migrations(pg_connection_string, custom_types, dry_run);
       current_version = Version{1, 3, 0};
     }
 
-    // In future, more migrations will be added here
-    // not every version must have migrations
-    // name of a function should have target version of migration,
-    // f.e. run_1_3_1_migrations sets version to 1.3.1
-    // and so on...
+    if (migration_needed(current_version, Version{1, 3, 1})) {
+      run_1_3_1_migrations(pg_connection_string, dry_run);
+      current_version = Version{1, 3, 1};
+    }
+
+    if (rerun_last_migration || migration_needed(current_version, Version{1, 3, 2})) {
+      run_1_3_2_migrations(pg_connection_string, dry_run);
+      current_version = Version{1, 3, 2};
+    }
 
     // finally, we bump a version to the latest
     ensure_latest_version(pg_connection_string, dry_run);
