@@ -57,8 +57,12 @@ _Avoid_: rate, execution price
 **Execution price**:
 The ratio of amounts actually exchanged in one swap. Not used as a price; it includes fees, slippage and routing.
 
+**Eligible pool**:
+A Pool whose latest Pool snapshot is at most 7 days old and whose liquidity is above the threshold. Only Eligible pools contribute to a Price; a dormant Pool becomes eligible again with its next snapshot.
+_Avoid_: active pool, liquid pool
+
 **Price**:
-The Spot price of an Asset aggregated across its Pools, weighted by liquidity, expressed in a Quote asset.
+The Spot price of an Asset aggregated across its Eligible pools, weighted by liquidity, expressed in a Quote asset.
 
 **Quote asset**:
 The Asset a Price is expressed in. Every Price exists in two Quote assets at once: TON and USDT.
