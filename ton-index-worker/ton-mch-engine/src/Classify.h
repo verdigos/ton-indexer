@@ -11,8 +11,7 @@ namespace mch {
 
 struct ClassifyRun {
   SchemaClassifyResult classified;
-  TieredLookupSource::LookupStats lookup_stats;
-  Tier2Stats tier2_stats;
+  ClassifyStats stats;
 };
 
 // Merge this transaction account's detected interfaces into one trace's memo.

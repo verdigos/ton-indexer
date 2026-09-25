@@ -162,12 +162,8 @@ add_custom_target(mch_generate_sources
             ${MCH_GENERATED_SOURCES})
 add_custom_target(mch_generate_test_vectors DEPENDS ${MCH_EXPR_VECTORS})
 
-# --- mch-classify: the classification CORE static library (Phase G step 3,
-# The pure pipeline TUs (no CLI/dump/harness) - ton-index-
-# postgres links THIS; the CLI exe below links it + the harness TUs. Action-row
-# construction (Action struct + build_action + the fill_*) lives here in
-# ActionBuild.cpp; only the dump-side render_action + stdout printing stayed
-# with the harness ClassifyDump.cpp.
+# --- mch-classify: the pure pipeline TUs (no CLI/dump/harness) that
+# ton-index-postgres links; the CLI exe below links them plus the harness TUs.
 # ton-abi generated pairs live here (fixture pairs for the harness test below;
 # the PRODUCTION pairs compiled into mch-classify).
 set(TON_ABI_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/../ton-abi/generated)
@@ -344,7 +340,6 @@ add_executable(ton-mch-engine
 target_include_directories(ton-mch-engine PRIVATE src harness ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 target_compile_definitions(ton-mch-engine PRIVATE
-    MCH_ACTION_DDL="${CMAKE_CURRENT_SOURCE_DIR}/../ton-index-postgres/src/migrate.cpp"
     MCH_ACTION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/goldens/fixtures.json"
     MCH_ACTION_TRACES="${CMAKE_CURRENT_SOURCE_DIR}/../../indexer/tests/traces"
 )
@@ -362,7 +357,6 @@ add_dependencies(ton-mch-engine mch-smc-pruned-cells-test)
 
 # Deliberately NOT install()ed: this is the gate/dev harness, not a product
 # binary, and it has no place in the production bin dir
-#
 
 # --- CTest wiring --------------------------------------------------------------
 # The deterministic, self-contained gate modes as native tests (`ctest -R mch`).

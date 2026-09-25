@@ -105,6 +105,19 @@ std::string format_counts(const std::map<std::string, Count> &counts) {
   return format_counts(counts, [](const std::string &key) -> const std::string & { return key; });
 }
 
+struct ClassifyStats {
+  TieredLookupSource::LookupStats lookups;
+  Tier2Stats tier2;
+
+  ClassifyStats &operator+=(const ClassifyStats &other) {
+    lookups += other.lookups;
+    tier2 += other.tier2;
+    return *this;
+  }
+
+  std::string format() const;
+};
+
 struct TraceClassificationResult {
   schema::Trace trace;
   TraceOutcome outcome;
@@ -114,8 +127,7 @@ struct TraceClassificationResult {
   // The unknown action for the whole trace; ClassifierWriter writes it instead of
   // `rows` when empty, rejected by PostgreSQL or unrenderable.
   Action rescue;
-  TieredLookupSource::LookupStats lookups;
-  Tier2Stats tier2;
+  ClassifyStats stats;
   std::size_t skipped_payload_actions{0};
 };
 
@@ -199,15 +211,13 @@ struct ClassifySetup {
   std::unordered_map<int, BuildFn> build_fns;
   WhereTable where_fns;  // node global_id -> where fn
   std::set<std::string> kinds;
-  bool table_missing = false;  // the three generated tables disagree on their source
-  bool fn_missing = false;     // an included matcher has no generated fn
-  std::string error;           // populated when table_missing/fn_missing
+  std::string error;
 };
 
 // Build the run prep from the compiled-in matcher table. No I/O. Pass the SAME
 // table classify_trace will get. `included` indexes into it. On a table/fn
-// mismatch, sets the *_missing flags + error and returns what it has (adapter
-// reports + exits; production is startup-fatal).
+// mismatch, sets error and returns what it has (adapter reports + exits;
+// production is startup-fatal).
 ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 
 // Classify one trace with the matcher loop and post-processing passes. The
@@ -215,9 +225,9 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 
-// Engine exceptions become terminal outcomes with no rows. Payload validation
-// skips only that action and retains a failure reason. Rescue
-// construction precedes classification and may throw on allocation failure.
+// Engine exceptions become terminal outcomes with no rows. Action construction
+// or payload validation skips only that action and retains a failure reason.
+// Rescue construction precedes classification and may throw on allocation failure.
 // Tier-2 read errors are lookup misses (logged once per address); they never change the outcome.
 // `prep` is process-lifetime const and shareable across threads.
 // The interface map behind `src` is shareable iff immutable.

@@ -60,8 +60,7 @@ private:
   std::uint64_t rss_over_budget_blocks_{0};
   std::optional<mch::TracePayloadBuffer> payload_buffer_;
   std::map<mch::TraceOutcome, std::uint64_t> classify_outcomes_;
-  mch::TieredLookupSource::LookupStats lookup_stats_;
-  mch::Tier2Stats tier2_stats_;
+  mch::ClassifyStats classify_stats_;
   std::shared_ptr<td::Destructor> watcher_;
 
   std::string working_dir_;

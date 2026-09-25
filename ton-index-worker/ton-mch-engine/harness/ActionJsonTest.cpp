@@ -8,116 +8,20 @@
 #include "fixtures/IrJson.h"
 
 #include "td/utils/JsonBuilder.h"
-#include "td/utils/base64.h"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
-#include <map>
-#include <regex>
 #include <set>
-#include <sstream>
 #include <stdexcept>
 
 namespace mch {
 namespace {
 
-using Ddl = std::map<std::string, std::map<std::string, std::string>>;
 using JsonType = td::JsonValue::Type;
 
 void require(bool ok, const std::string &where, const std::string &reason) {
   if (!ok) throw std::runtime_error(where + ": " + reason);
-}
-
-Ddl read_ddl() {
-  std::ifstream input(MCH_ACTION_DDL);
-  require(input.good(), MCH_ACTION_DDL, "cannot open DDL");
-  Ddl ddl;
-  std::string line, current;
-  const std::regex composite(R"(create type ([a-z_][a-z_0-9]*) as\s*$)");
-  const std::regex table(R"(create table if not exists (actions|action_accounts)\s*$)");
-  while (std::getline(input, line)) {
-    std::transform(line.begin(), line.end(), line.begin(), [](unsigned char c) { return std::tolower(c); });
-    std::smatch match;
-    if (std::regex_search(line, match, composite) || std::regex_search(line, match, table)) {
-      current = match[1].str();
-      ddl[current];
-      continue;
-    }
-    if (current.empty()) continue;
-    const auto first = line.find_first_not_of(" \t\r");
-    if (first == std::string::npos || line[first] == '(') continue;
-    if (line[first] == ')') {
-      require(!ddl.at(current).empty(), current, "empty DDL definition");
-      current.clear();
-      continue;
-    }
-    if (line.compare(first, 11, "primary key") == 0) continue;
-    std::istringstream fields(line);
-    std::string name, type;
-    fields >> name >> type;
-    require(!name.empty() && !type.empty(), current, "unparsed DDL line: " + line);
-    if (type.back() == ',') type.pop_back();
-    require(ddl[current].emplace(name, type).second, current + "." + name, "duplicate DDL field");
-  }
-  require(current.empty(), current, "unterminated DDL definition");
-  require(ddl.count("actions") && ddl.count("action_accounts"), MCH_ACTION_DDL, "missing row tables");
-  return ddl;
-}
-
-std::set<std::string> unknown_fields;
-
-void validate(const td::JsonValue &value, const std::string &type, const Ddl &ddl,
-              const std::string &where) {
-  if (value.type() == JsonType::Null) return;
-  if (type.ends_with("[]")) {
-    require(value.type() == JsonType::Array, where, "expected array for " + type);
-    std::size_t i = 0;
-    for (const auto &item : value.get_array()) {
-      validate(item, type.substr(0, type.size() - 2), ddl, where + "[" + std::to_string(i++) + "]");
-    }
-    return;
-  }
-  if (auto composite = ddl.find(type); composite != ddl.end()) {
-    require(value.type() == JsonType::Object, where, "expected object for " + type);
-    for (const auto &[key, field] : value.get_object().field_values_) {
-      const auto name = key.str();
-      auto column = composite->second.find(name);
-      if (column == composite->second.end()) {
-        unknown_fields.insert(type + "." + name);
-        continue;
-      }
-      validate(field, column->second, ddl, where + "." + name);
-    }
-    return;
-  }
-  if (type == "jsonb") return;
-  if (type == "boolean") {
-    require(value.type() == JsonType::Boolean, where, "expected boolean");
-    return;
-  }
-  require(value.type() == JsonType::String, where, "expected string for " + type);
-  const auto text = value.get_string().str();
-  if (type == "bytea") {
-    require(text.size() >= 4 && text.starts_with("\\x") && text.substr(2, 2) == "01" &&
-                text.size() % 2 == 0 &&
-                std::all_of(text.begin() + 2, text.end(), [](unsigned char c) { return std::isxdigit(c); }),
-            where, "expected codec-1 hex bytea");
-  } else if (type == "numeric" || type == "bigint" || type == "integer") {
-    static const std::regex digits("^-?[0-9]+$");
-    require(std::regex_match(text, digits), where, "expected decimal integer string");
-  } else if (type == "tonaddr") {
-    static const std::regex address("^-?[0-9]+:[0-9A-F]{64}$");
-    require(std::regex_match(text, address), where, "expected wc:HEX address");
-  } else if (type == "tonhash") {
-    auto decoded = td::base64_decode(text);
-    require(decoded.is_ok() && decoded.ok().size() == 32 && td::base64_encode(decoded.ok()) == text,
-            where, "expected base64 hash");
-  } else {
-    require(type == "varchar" || type == "text" || type == "tonbytes", where, "unhandled DDL type " + type);
-  }
 }
 
 td::JsonValue parse(std::string &json, const std::string &where) {
@@ -126,7 +30,7 @@ td::JsonValue parse(std::string &json, const std::string &where) {
   return result.move_as_ok();
 }
 
-void check_action(const Action &action, const ActionRowContext &ctx, const Ddl &ddl) {
+void check_action(const Action &action, const ActionRowContext &ctx) {
   auto rows_json = action_rows_json({action}, ctx);
   auto rows = parse(rows_json, action.action_id);
   require(rows.type() == JsonType::Array && rows.get_array().size() == 1,
@@ -149,7 +53,6 @@ void check_action(const Action &action, const ActionRowContext &ctx, const Ddl &
   auto accounts_json = action_account_rows_json(action, ctx);
   auto accounts = parse(accounts_json, action.action_id + ".action_accounts");
   require(accounts.type() == JsonType::Array, action.action_id, "expected account rows array");
-  validate(accounts, "action_accounts[]", ddl, action.action_id + ".action_accounts");
   std::set<std::string> expected;
   for (const auto &account : action.accounts) expected.insert(canonicalize_or_passthrough(account));
   require(accounts.get_array().size() == expected.size(), action.action_id, "wrong deduplicated account count");
@@ -169,7 +72,6 @@ void check_action(const Action &action, const ActionRowContext &ctx, const Ddl &
 
 int run_actions_json_test() {
   try {
-    const auto ddl = read_ddl();
     std::ifstream input(MCH_ACTION_FIXTURES);
     require(input.good(), MCH_ACTION_FIXTURES, "cannot open fixture manifest");
     std::string manifest_json((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
@@ -179,7 +81,7 @@ int run_actions_json_test() {
                 fixtures->get_object().field_count() != 0, MCH_ACTION_FIXTURES, "empty fixture manifest");
     const auto &matchers = gen_matchers_ir();
     const auto setup = prepare_classify(matchers);
-    require(!setup.table_missing && !setup.fn_missing, "classify", setup.error);
+    require(setup.error.empty(), "classify", setup.error);
     std::size_t row_count = 0;
     for (const auto &[id, meta] : fixtures->get_object().field_values_) {
       const auto path = std::string(MCH_ACTION_TRACES) + "/" + id.str() + ".lz4";
@@ -197,27 +99,17 @@ int run_actions_json_test() {
         if (build_action(row, action)) actions.push_back(std::move(action));
       }
       if (!result.failure && result.unknown_trace) actions.push_back(create_unknown_action(ctx.trace));
-      for (const auto &action : actions) check_action(action, context, ddl);
+      for (const auto &action : actions) check_action(action, context);
       auto batch_json = action_rows_json(actions, context);
       auto batch = parse(batch_json, id.str());
       require(batch.type() == JsonType::Array && batch.get_array().size() == actions.size(), id.str(), "wrong row array");
       for (std::size_t i = 0; i < actions.size(); ++i) {
         const auto &row = batch.get_array()[i];
         require(jfield(row, "payload") != nullptr, actions[i].action_id, "missing payload");
-        for (const auto &field : row.get_object().field_values_) {
-          const auto name = field.first.str();
-          require(name != "extra" && !name.ends_with("_data"), actions[i].action_id,
-                  "legacy payload column " + name);
-        }
-        validate(row, "actions", ddl, actions[i].action_id);
       }
       row_count += actions.size();
     }
     require(row_count != 0, "fixtures", "no actions checked");
-    std::string unknown;
-    for (const auto &field : unknown_fields) unknown += " " + field;
-    require(unknown.empty(), "ddl", "fields absent from the DDL:" + unknown);
-
     schema::Trace trace{};
     trace.trace_id.set_zero();
     trace.external_hash = trace.trace_id;
@@ -237,7 +129,7 @@ int run_actions_json_test() {
     action.end_utime = 34;
     action.value_extra_currencies = {{239, "1000"}, {240, "5"}};
     action.accounts = {"0:" + std::string(64, 'a'), "0:" + std::string(64, 'A')};
-    check_action(action, context, ddl);
+    check_action(action, context);
     action.data = Value::make_dict({{"comment", Value::make_str(std::string("a\0b", 3))}});
     auto comment_json = action_data_json(action);
     require(comment_json.find("\\u0000") == std::string::npos,

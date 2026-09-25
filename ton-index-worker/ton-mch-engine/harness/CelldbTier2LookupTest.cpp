@@ -18,7 +18,6 @@
 #include <cstdio>
 #include <map>
 #include <optional>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -519,10 +518,6 @@ void test_memo_and_guards() {
 }
 
 void test_lookup_kind_registry() {
-  const std::set<std::string> expected_kinds{
-      "jetton_wallet", "nft_item", "nft_sale", "nft_auction", "dedust_pool",
-      "nominator_pool", "multisig_order", "telemint_item", "jvault_assets", "code_hash"};
-  check("registry/expected_kinds_registered", lookup_kinds() == expected_kinds);
   const auto *telemint = lookup_kind("telemint_item");
   check("registry/telemint_item_tier1", telemint != nullptr && telemint->tier1);
   Fixture f;

@@ -187,7 +187,7 @@ int run_dump(const std::vector<std::string> &paths,
     generated_setup = prepare_classify(matchers);
   }
   const ClassifySetup &setup = injected_setup != nullptr ? *injected_setup : generated_setup;
-  if (setup.table_missing || setup.fn_missing) {
+  if (!setup.error.empty()) {
     std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;
   }
@@ -348,7 +348,7 @@ int run_action_payload_dump(const std::vector<std::string> &paths, const std::st
   }
   const auto &matchers = gen_matchers_ir();
   const auto setup = prepare_classify(matchers);
-  if (setup.table_missing || setup.fn_missing) {
+  if (!setup.error.empty()) {
     std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;
   }

@@ -389,7 +389,6 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
   // programs — a hard setup error.
   const std::string sha = gen_matchers_ir_source_sha();
   if (sha != gen_builds_ir_source_sha() || sha != gen_wheres_ir_source_sha()) {
-    s.table_missing = true;
     s.error = "generated tables disagree on their source document (matchers " + sha + ", builds " +
               gen_builds_ir_source_sha() + ", wheres " + gen_wheres_ir_source_sha() +
               ") — reconfigure and rebuild ton-mch-engine";
@@ -417,7 +416,6 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
   for (int idx : s.included) {
     const CompiledMatcher &m = matchers[idx];
     if (s.build_fns.find(m.artifact_index) == s.build_fns.end()) {
-      s.fn_missing = true;
       s.error = "generated build table has no fn for matcher '" + m.name + "' (artifact index " +
                 std::to_string(m.artifact_index) + ") — rebuild ton-mch-engine";
       return s;
@@ -427,7 +425,6 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
     // test (a wrong match, not a loud error).
     for (const CompiledNode &n : m.nodes) {
       if (n.has_where_expr && s.where_fns.find(n.global_id) == s.where_fns.end()) {
-        s.fn_missing = true;
         s.error = "generated where table has no fn for node " + std::to_string(n.global_id) +
                   " (matcher '" + m.name + "') — rebuild ton-mch-engine";
         return s;
@@ -568,13 +565,13 @@ SchemaClassifyResult classify_schema_trace(
         classified.failure ? classified.fallback_rows : classified.action_rows;
     for (const ActionRow &row : core) {
       Action action;
-      if (!build_action(row, action)) {
-        continue;
-      }
-      scrub_arena_refs(action);
-      // Only payload validation is isolated per action. Engine faults still
-      // reach the trace-level handler below.
+      // Action construction and payload validation are isolated per action.
+      // Other engine faults still reach the trace-level handler below.
       try {
+        if (!build_action(row, action)) {
+          continue;
+        }
+        scrub_arena_refs(action);
         action.encoded_payload = encode_action_payload(action);
       } catch (const std::runtime_error &error) {
         ++result.skipped_payload_actions;
@@ -589,7 +586,7 @@ SchemaClassifyResult classify_schema_trace(
 
     if (classified.unknown_trace ||
         (!classified.failure && result.rows.empty() && result.skipped_payload_actions > 0)) {
-      result.rows.push_back(create_unknown_action(ctx.trace));
+      result.rows.push_back(result.rescue);
       result.unknown_row = true;
     }
     if (classified.failure && result.rows.empty()) {

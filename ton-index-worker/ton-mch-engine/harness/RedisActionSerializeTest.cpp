@@ -49,29 +49,6 @@ class Decoded {
   bool ok_{false};
 };
 
-const msgpack::object *at(const msgpack::object &map, const char *key) {
-  if (map.type != msgpack::type::MAP) return nullptr;
-  const auto n = std::strlen(key);
-  for (std::uint32_t i = 0; i < map.via.map.size; i++) {
-    const auto &candidate = map.via.map.ptr[i].key;
-    if (candidate.type == msgpack::type::STR && candidate.via.str.size == n &&
-        std::memcmp(candidate.via.str.ptr, key, n) == 0) {
-      return &map.via.map.ptr[i].val;
-    }
-  }
-  return nullptr;
-}
-
-const msgpack::object *at_id(const msgpack::object &map, std::uint8_t id) {
-  if (map.type != msgpack::type::MAP) return nullptr;
-  for (std::uint32_t i = 0; i < map.via.map.size; ++i) {
-    const auto &entry = map.via.map.ptr[i];
-    if (entry.key.type == msgpack::type::POSITIVE_INTEGER && entry.key.via.u64 == id)
-      return &entry.val;
-  }
-  return nullptr;
-}
-
 const msgpack::object *elem(const msgpack::object *array, std::uint32_t index) {
   if (array == nullptr || array->type != msgpack::type::ARRAY || index >= array->via.array.size) {
     return nullptr;
@@ -376,6 +353,9 @@ void test_compact_types_and_errors() {
   fails("compact/hash_error", {{"signers_hash", Value::make_str("short")}}, "signers_hash expects 32-byte");
   fails("compact/hash_hex_error", {{"btc_txid", Value::make_str("0x" + std::string(64, 'a'))}}, "btc_txid expects lowercase");
   fails("compact/hash_0x_error", {{"asset_id", Value::make_str(std::string(64, 'a'))}}, "asset_id expects 0x");
+  fails("compact/hash_uppercase_error", {{"btc_txid", Value::make_str(std::string(64, 'A'))}}, "btc_txid expects lowercase");
+  fails("compact/address_lowercase_error", {{"asset", Value::make_str("0:" + std::string(64, 'a'))}}, "asset expects W:HEX");
+  fails("compact/address_workchain_error", {{"asset", Value::make_str("007:" + std::string(64, 'A'))}}, "asset expects W:HEX");
   for (const char *key : {"asset", "custom_payload", "signers_hash", "btc_txid", "asset_id", "pubkey", "new_secret_hash"}) {
     fails((std::string("compact/type_error/") + key).c_str(),
           {{key, Value::make_int64(123)}}, "expects");

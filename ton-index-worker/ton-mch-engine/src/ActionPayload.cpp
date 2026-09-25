@@ -2,6 +2,7 @@
 #include "Value.h"
 #include "payload_keys_generated.h"
 #include "td/utils/base64.h"
+#include "td/utils/misc.h"
 #include <msgpack.hpp>
 #include <algorithm>
 #include <charconv>
@@ -25,7 +26,6 @@ void pack_binary(Packer &pk, std::string_view s) {
 }
 std::string value_text(const Value &v) {
   if (v.t == VType::Int || v.t == VType::Amount) return v.num->to_dec_string();
-  if (v.t == VType::Account || v.t == VType::Asset) return canonicalize_or_passthrough(v.str);
   return v.str;
 }
 [[noreturn]] void invalid(std::string_view name, std::string_view expected, std::string_view text) {
@@ -53,25 +53,10 @@ const PayloadKeyInfo &key_info(std::string_view name) {
   if (it == payload_keys.end() || it->name != name) invalid(name, "registered key", name);
   return *it;
 }
-int hex_digit(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-std::string hex_bytes(std::string_view text, bool uppercase) {
-  if (text.size() % 2) return {};
-  std::string bytes;
-  bytes.reserve(text.size() / 2);
-  for (std::size_t i = 0; i < text.size(); i += 2) {
-    if (uppercase ? ((text[i] >= 'a' && text[i] <= 'f') || (text[i + 1] >= 'a' && text[i + 1] <= 'f'))
-                  : ((text[i] >= 'A' && text[i] <= 'F') || (text[i + 1] >= 'A' && text[i + 1] <= 'F')))
-      return {};
-    int a = hex_digit(text[i]), b = hex_digit(text[i + 1]);
-    if (a < 0 || b < 0) return {};
-    bytes.push_back(static_cast<char>((a << 4) | b));
-  }
-  return bytes;
+std::string hex_bytes(std::string_view text) {
+  auto decoded = td::hex_decode(td::Slice(text.data(), text.size()));
+  if (decoded.is_error() || td::hex_encode(td::Slice(decoded.ok())) != text) return {};
+  return decoded.move_as_ok();
 }
 std::string base64_bytes(std::string_view name, std::string_view text, bool hash) {
   auto decoded = td::base64_decode(td::Slice(text.data(), text.size()));
@@ -84,7 +69,7 @@ void pack_fields(Packer &pk, const Value::Fields &fields);
 void pack_plain(Packer &pk, const Value &v, std::string_view name) {
   switch (v.t) {
     case VType::Null: pk.pack_nil(); return;
-    case VType::Str: pack_string(pk, typed_text(v, name, "string")); return;
+    case VType::Str: pack_string(pk, v.str); return;
     case VType::List: {
       pk.pack_array(static_cast<std::uint32_t>(v.items->size()));
       for (const auto &item : *v.items) pack_plain(pk, item, name);
@@ -107,6 +92,8 @@ void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
       auto text = v.t == VType::Account || v.t == VType::Asset
                       ? canonicalize_or_passthrough(v.str)
                       : typed_str(v, name, "W:HEX address");
+      auto normalized = normalize_raw_address(text);
+      if (!normalized || *normalized != text) invalid(name, "W:HEX address", text);
       auto colon = text.find(':');
       if (colon == std::string::npos || text.size() != colon + 65) invalid(name, "W:HEX address", text);
       int wc = 0;
@@ -114,10 +101,10 @@ void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
       if (ec != std::errc{} || ptr != text.data() + colon ||
           std::to_string(wc) != text.substr(0, colon) || wc < -128 || wc > 127)
         invalid(name, "W:HEX address", text);
-      auto hash = hex_bytes(std::string_view(text).substr(colon + 1), true);
-      if (hash.size() != 32) invalid(name, "W:HEX address", text);
+      auto hash = td::hex_decode(td::Slice(text).substr(colon + 1));
+      if (hash.is_error() || hash.ok().size() != 32) invalid(name, "W:HEX address", text);
       std::string bytes(1, static_cast<char>(wc));
-      bytes += hash;
+      bytes += hash.move_as_ok();
       pack_binary(pk, bytes); return;
     }
     case PayloadKeyType::Boc:
@@ -129,7 +116,7 @@ void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
       if (key.type == PayloadKeyType::Hash) { pack_binary(pk, base64_bytes(name, text, true)); return; }
       bool prefixed = key.type == PayloadKeyType::Hash0x;
       if (prefixed && !text.starts_with("0x")) invalid(name, "0x lowercase 32-byte hash", text);
-      auto bytes = hex_bytes(std::string_view(text).substr(prefixed ? 2 : 0), false);
+      auto bytes = hex_bytes(std::string_view(text).substr(prefixed ? 2 : 0));
       if (bytes.size() != 32) invalid(name, prefixed ? "0x lowercase 32-byte hash" : "lowercase 32-byte hash", text);
       pack_binary(pk, bytes); return;
     }

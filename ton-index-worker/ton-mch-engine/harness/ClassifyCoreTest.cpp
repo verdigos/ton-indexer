@@ -42,17 +42,6 @@ void check(const std::string &name, bool ok) {
   if (!ok) g_fail++;
 }
 
-const msgpack::object *at_id(const msgpack::object &map, std::uint8_t id) {
-  if (map.type != msgpack::type::MAP) return nullptr;
-  for (std::uint32_t i = 0; i < map.via.map.size; ++i) {
-    const auto &entry = map.via.map.ptr[i];
-    if (entry.key.type == msgpack::type::POSITIVE_INTEGER && entry.key.via.u64 == id) {
-      return &entry.val;
-    }
-  }
-  return nullptr;
-}
-
 enum class HostThrow { vm_error, std_error, bad_alloc, no_gas, virt_error, unknown };
 HostThrow g_serious_kind = HostThrow::bad_alloc;
 
@@ -199,11 +188,8 @@ void test_payload_encode_failure_skips_one_action() {
   if (published.type == msgpack::type::ARRAY && published.via.array.size == 1) {
     const auto &row = published.via.array.ptr[0];
     if (row.type == msgpack::type::MAP) {
-      for (std::uint32_t i = 0; i < row.via.map.size; ++i) {
-        const auto &entry = row.via.map.ptr[i];
-        if (entry.key.as<std::string>() == "type")
-          unknown_wire = entry.val.as<std::string>() == "unknown";
-      }
+      const auto *type = at(row, "type");
+      unknown_wire = type != nullptr && type->as<std::string>() == "unknown";
     }
   }
   check("payload_failure/unknown_on_wire", unknown_wire);
@@ -711,31 +697,7 @@ ClassifyResult classify_with_forced_failure(TraceContext &ctx) {
 // A single-transaction trace that fails classification still owns its root: the
 // basic fallback serializes it, so no unknown action is minted.
 void test_childless_root_failure_serializes_root() {
-  TraceContext ctx;
-  ctx.trace.trace_id = "childless-root-failure";
-  auto tx = std::make_unique<Transaction>();
-  tx->hash = "childless-root-tx";
-  tx->lt = 100;
-  tx->now = 200;
-  tx->mc_block_seqno = 300;
-  tx->account = "0:" + std::string(64, 'B');
-  tx->descr = "ord";
-  tx->orig_status = "active";
-  tx->end_status = "active";
-  auto in = std::make_unique<Message>();
-  in->msg_hash = "childless-root-message";
-  in->tx_hash = tx->hash;
-  in->tx_lt = tx->lt;
-  in->direction = "in";
-  in->source = "0:" + std::string(64, 'A');
-  in->destination = tx->account;
-  in->opcode = 0x11223344;
-  in->value = 1000;
-  in->tx = tx.get();
-  tx->messages.push_back(std::move(in));
-  ctx.trace.transactions.push_back(std::move(tx));
-  ctx.tree = to_tree(ctx.trace);
-  ctx.root = init_block(ctx.arena, ctx.tree.root);
+  TraceContext ctx = make_host_test_context("childless-root-failure");
   check("classify/childless_root_failure/no_children", ctx.tree.root->children.empty());
 
   ClassifyResult result = classify_with_forced_failure(ctx);
@@ -743,7 +705,7 @@ void test_childless_root_failure_serializes_root() {
   check("classify/childless_root_failure/one_fallback_row", result.fallback_rows.size() == 1);
   check("classify/childless_root_failure/row_is_the_root",
         result.fallback_rows.size() == 1 && result.fallback_rows.front().block != nullptr &&
-            result.fallback_rows.front().block->anchor_tx_hash() == "childless-root-tx");
+            result.fallback_rows.front().block->anchor_tx_hash() == "childless-root-failure-tx");
   check("classify/childless_root_failure/no_unknown_trace", !result.unknown_trace);
 }
 

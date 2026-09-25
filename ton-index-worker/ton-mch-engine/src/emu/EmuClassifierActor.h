@@ -27,8 +27,7 @@ struct EmuClassifierStats {
   std::size_t serialize_us_max{0}, serialize_us_total{0}, actions_blob_bytes{0};
   std::array<std::size_t, 3> by_finality{};  // root-node EmuFinality of the emission
   std::map<FailureCategory, std::size_t> by_category;
-  TieredLookupSource::LookupStats lookups;  // tier1 / tier2 / miss
-  Tier2Stats tier2;  // celldb reads / memo hits
+  ClassifyStats classify_stats;
 };
 
 class EmuClassifierActor : public td::actor::Actor {

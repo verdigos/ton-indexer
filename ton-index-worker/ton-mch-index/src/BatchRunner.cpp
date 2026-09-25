@@ -209,8 +209,7 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   auto run = mch::classify(*prep_, trace_key, txs, tier1_map,
                            tier2_enabled_ ? &view.shard_states : nullptr, view.config);
   auto &classified = run.classified;
-  lookup_stats_ += run.lookup_stats;
-  tier2_stats_ += run.tier2_stats;
+  classify_stats_ += run.stats;
 
   ++classification_outcomes_[classified.outcome];
   skipped_payload_actions_ += classified.skipped_payload_actions;
@@ -267,8 +266,6 @@ void BatchRunner::finish() {
   const auto range_seqnos = static_cast<std::uint64_t>(seqno_to_) - seqno_from_ + 1;
   const auto pending_at_eof = payloads_by_trace_.size();
 
-  const std::string tier2_hits_by_kind = mch::format_counts(lookup_stats_.tier2_hits_by_kind);
-  const std::string misses_by_kind = mch::format_counts(lookup_stats_.misses_by_kind);
   const std::string outcomes = mch::format_counts(classification_outcomes_, mch::trace_outcome_name);
   const std::string failures =
       mch::format_counts(classification_failures_by_category_, mch::failure_category_name);
@@ -283,12 +280,7 @@ void BatchRunner::finish() {
           << " failures{" << failures << "}"
           << "; actions emitted=" << total_actions_emitted_
           << "; skipped payload actions=" << skipped_payload_actions_
-          << "; lookups{tier1_hits=" << lookup_stats_.tier1_hits
-          << ",tier2_hits=" << lookup_stats_.tier2_hits << ",misses=" << lookup_stats_.misses
-          << ",misses_by_kind={" << misses_by_kind << "}}"
-          << ";tier2_by_kind={" << tier2_hits_by_kind << "}"
-          << ";tier2{fetched=" << tier2_stats_.fetched
-          << ",memo_hits=" << tier2_stats_.memo_hits << "}";
+          << "; " << classify_stats_.format();
   const double wall = now_s() - run_started_;
   const double other = wall - (t_fetch_ + t_parse_ + t_assemble_ + t_interfaces_ + t_classify_);
   char perf[512];

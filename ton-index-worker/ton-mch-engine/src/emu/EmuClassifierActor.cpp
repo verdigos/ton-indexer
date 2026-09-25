@@ -114,8 +114,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       res.failure_reason = std::move(classified.failure_reason);
       res.used_fallback = classified.outcome == TraceOutcome::fallback;
       res.skipped_payload_actions = classified.skipped_payload_actions;
-      stats_.lookups += run.lookup_stats;
-      stats_.tier2 += run.tier2_stats;
+      stats_.classify_stats += run.stats;
       // AAI uses the minimum transaction LT as the trace-start score. Redis
       // sorted-set scores lose integer precision above 2^53.
       const auto first_tx = std::min_element(txs.begin(), txs.end(),
@@ -188,9 +187,6 @@ void EmuClassifierActor::alarm() {
   const std::string cats = format_counts(stats_.by_category, failure_category_name);
   // Per-kind miss attribution: the total alone cannot separate a kind with no
   // source (an expected gap) from a real resolution failure.
-  const std::string miss_kinds = format_counts(stats_.lookups.misses_by_kind);
-  const std::string tier2_hit_kinds = format_counts(stats_.lookups.tier2_hits_by_kind);
-  std::size_t resolved = stats_.lookups.tier1_hits + stats_.lookups.tier2_hits;
   LOG(INFO) << "[mch-emu-w" << worker_index_ << "] emissions=" << stats_.emissions << " (+"
             << (stats_.emissions - prev_.emissions) << ")"
             << " reemissions=" << stats_.reemissions
@@ -204,15 +200,7 @@ void EmuClassifierActor::alarm() {
             << " finality{emulated=" << stats_.by_finality[0]
             << " confirmed=" << stats_.by_finality[1]
             << " finalized=" << stats_.by_finality[2] << "}"
-            << " [" << cats << "]"
-            << " lookups{tier1=" << stats_.lookups.tier1_hits
-            << " tier2=" << stats_.lookups.tier2_hits << " miss=" << stats_.lookups.misses
-            << " miss_by_kind={" << miss_kinds << "}"
-            << " tier2_hit_by_kind={" << tier2_hit_kinds << "}"
-            << " tier2_rate=" << (resolved ? (100 * stats_.lookups.tier2_hits / resolved) : 0)
-            << "%}"
-            << " tier2{fetched=" << stats_.tier2.fetched
-            << " memo_hits=" << stats_.tier2.memo_hits << "}"
+            << " [" << cats << "] " << stats_.classify_stats.format()
             << " queue_us{max=" << stats_.queue_us_max << "}"
             << " classify_us{avg="
             << (stats_.latency_samples ? stats_.classify_us_total / stats_.latency_samples : 0)

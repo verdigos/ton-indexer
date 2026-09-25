@@ -5,6 +5,16 @@
 
 namespace mch {
 
+std::string ClassifyStats::format() const {
+  return "lookups{tier1=" + std::to_string(lookups.tier1_hits) +
+         " tier2=" + std::to_string(lookups.tier2_hits) +
+         " miss=" + std::to_string(lookups.misses) +
+         " miss_by_kind={" + format_counts(lookups.misses_by_kind) + "}" +
+         " tier2_hit_by_kind={" + format_counts(lookups.tier2_hits_by_kind) + "}}" +
+         " tier2{fetched=" + std::to_string(tier2.fetched) +
+         " memo_hits=" + std::to_string(tier2.memo_hits) + "}";
+}
+
 namespace {
 
 TieredLookupSource::StableAddressSet compute_status_stable_accounts(
@@ -65,8 +75,7 @@ ClassifyRun classify(
 
   ClassifyRun result;
   result.classified = classify_schema_trace(prep, trace_id, txs, src);
-  result.lookup_stats = src.stats();
-  result.tier2_stats = tier2.stats();
+  result.stats = {src.stats(), tier2.stats()};
   return result;
 }
 

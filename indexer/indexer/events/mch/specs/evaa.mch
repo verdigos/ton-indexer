@@ -34,6 +34,12 @@ fn evaa_refund_reason(code) = (
     "liquidation_prices_missing" if code == 0x31f7 else
     "liquidation_execution_crashed" if code == 0x31fe else null
 )
+fn evaa_liquidate_fail(immediate, refund, unsatisfied) = (
+    "immediate_rejection" if immediate != null else
+    evaa_refund_reason(refund.msg.opcode) if refund != null else
+    (evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied != null else
+    "master_not_enough_liquidity"
+)
 fn evaa_withdraw_reason(code) = (
     "withdraw_locked_excess" if code == 0x21e6 else
     "withdraw_not_collateralized_excess" if code == 0x21e7 else
@@ -194,7 +200,7 @@ matcher evaa_liquidate {
         collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
         collateral_amount:   s.collateral_reward if success else 0
         is_success:          success
-        fail_reason:         null if success else ("immediate_rejection" if immediate != null else ((evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied != null else "master_not_enough_liquidity"))
+        fail_reason:         null if success else evaa_liquidate_fail(immediate, null, unsatisfied)
         debt_amount:         s.liquidatable_amount if success else l.amount.value
     }
 }
@@ -213,6 +219,8 @@ matcher evaa_liquidate_ton {
     reject when v7 == null and master.body == null
     reject when success and satisfied_success.body == null
     let m = v7 if v7 != null else master.body
+    # EvaaLiquidateMaster carries borrower_address for both outcomes; the ABI does not
+    # equate it with the success reply's owner_address.
     out {
         liquidator:          master.msg.source
         borrower:            account(m.borrower_address) ?? addr_none()
@@ -220,7 +228,7 @@ matcher evaa_liquidate_ton {
         collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
         collateral_amount:   s.collateral_reward if success else 0
         is_success:          success
-        fail_reason:         null if success else ("immediate_rejection" if immediate != null else (evaa_refund_reason(refund.msg.opcode) if refund != null else ((evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied != null else "master_not_enough_liquidity")))
+        fail_reason:         null if success else evaa_liquidate_fail(immediate, refund, unsatisfied)
         debt_amount:         s.liquidatable_amount if success else m.liquidate_incoming_amount
     }
 }

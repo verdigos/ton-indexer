@@ -15,7 +15,7 @@ td::Result<std::shared_ptr<const MchEnginePrep>> make_engine_prep() {
   auto prep = std::make_shared<MchEnginePrep>();
   prep->matchers = &gen_matchers_ir();
   prep->setup = prepare_classify(*prep->matchers);
-  if (prep->setup.table_missing || prep->setup.fn_missing) {
+  if (!prep->setup.error.empty()) {
     // An unrunnable generated table is a build bug. Surface it
     // as an error so the caller can be startup-fatal in production.
     return td::Status::Error(prep->setup.error);

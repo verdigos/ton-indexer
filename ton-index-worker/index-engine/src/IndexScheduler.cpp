@@ -732,8 +732,7 @@ void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, schema::Trac
     auto trace = result.move_as_ok();
     ++jobs_done_;
     slow_jobs_ += trace.slow;
-    lookup_stats_ += trace.lookups;
-    tier2_stats_ += trace.tier2;
+    classify_stats_ += trace.stats;
     ++classify_outcomes_[trace.outcome];
     block_results_[mc_seqno].traces.push_back(std::move(trace));
     promise.set_value(td::Unit());
@@ -959,12 +958,7 @@ void IndexScheduler::print_stats() {
         sb << "]";
     }
     if (payload_buffer_) {
-        sb << "\tlookups{tier1=" << lookup_stats_.tier1_hits
-           << " tier2=" << lookup_stats_.tier2_hits << " miss=" << lookup_stats_.misses
-           << " miss_by_kind={" << mch::format_counts(lookup_stats_.misses_by_kind) << "}"
-           << " tier2_hit_by_kind={" << mch::format_counts(lookup_stats_.tier2_hits_by_kind) << "}}"
-           << " tier2{fetched=" << tier2_stats_.fetched
-           << " memo_hits=" << tier2_stats_.memo_hits << "}";
+        sb << "\t" << classify_stats_.format();
     }
     if (run_) {
         sb << "\trun[scan=" << run_->scan_from << ".." << run_->scan_to
