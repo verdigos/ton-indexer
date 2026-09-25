@@ -12,7 +12,7 @@
 - Curves:
   - volatile — все четыре DEX;
   - stable — STON.fi v2 `stableswap` и DeDust v1 stable;
-  - weighted — STON.fi v2 `weighted_const_product`.
+  - weighted — STON.fi v2 `weighted_const_product` и `weighted_stableswap`.
 - Live-индексация Pool snapshots в ClickHouse.
 - Агрегация в Price и Candles 1m / 5m / 1h / 1d.
 - Два эндпоинта в `ton-index-go`.
@@ -22,7 +22,7 @@
 
 - Полная история с 2022-11.
 - Объём торгов. Задел под него закладывается сразу (§4.2).
-- STON.fi v2 `weighted_stableswap` и `constant_sum`.
+- STON.fi v2 `constant_sum` (в выборке из 413 пулов не встретился).
 - Tonco, Coffee и остальные DEX.
 - Фильтр выбросов.
 - Стриминг цен.
@@ -167,7 +167,7 @@ DexPoolState {
 | Solidly `x³y + xy³ = k` | DeDust v1 stable | `y(3x² + y²) / (x(x² + 3y²))` |
 | Curve StableSwap (n=2) | STON.fi v2 `stableswap` | `y(4·amp·x²y + D³) / (x(4·amp·xy² + D³))`; D — итерации Ньютона по `amp(x+y) + D = amp·D + D³/(4xy)` |
 | Weighted CP | STON.fi v2 `weighted_const_product` | `w0·y / ((1−w0)·x)` |
-| Weighted StableSwap (кандидат, §12) | STON.fi v2 `weighted_stableswap` | инвариант `amp(x + r·y) + x^w·(r·y)^(1−w)`; p = `(amp + w·x^(w−1)·(r·y)^(1−w)) / (amp·r + (1−w)·r·x^w·(r·y)^(−w))` (все параметры в 1e18) |
+| Weighted StableSwap | STON.fi v2 `weighted_stableswap` | инвариант `amp(x + r·y) + x^w·(r·y)^(1−w)`; p = `(amp + w·x^(w−1)·(r·y)^(1−w)) / (amp·r + (1−w)·r·x^w·(r·y)^(−w))` (все параметры в 1e18) |
 
 - Точности `long double` достаточно: D³ ~ 1e60 умещается в диапазон, итерации Ньютона сходятся за 5–10 шагов.
 - Хранится `Float64`.
@@ -338,9 +338,10 @@ ORDER BY (jetton, minute);
 
 | Этап | Содержание | Дни |
 |---|---|---|
+| M-1 | Мостик worker → Python и замеры на ноде (§13); код готов, нужен прогон | 1–3 (прогон) |
 | M0 | ~~Скрипт фикстур пулов~~ (готов); довести набор фикстур: пулы с малым TVL, исторические seqno | 1 |
 | M1 | Детекторы STON.fi v1/v2, доработка DeDust, проверка подлинности, кошелёк → мастер | 6 |
-| M2 | PoolMath и юнит-тесты (эталоны уже собраны) | 3 |
+| M2 | PoolMath и юнит-тесты (эталоны уже собраны; формулы уже есть в `dex-tap/dex_tap/curves.py`) | 3 |
 | M3 | DDL, DexSnapshotBuilder и Sink, флаги в обоих бинарниках | 4 |
 | M4 | MV, задача агрегации, свечи, конфиг якорей | 4 |
 | M5 | API: два эндпоинта, клиент ClickHouse, decimals, тесты | 3 |
@@ -356,7 +357,7 @@ ORDER BY (jetton, minute);
 | DeDust v1 stable: не проверена нормализация по decimals | Оба ликвидных stable-пула — 9/9, на них формула совпала; при появлении пары с разными decimals проверить по `estimate_swap_out` |
 | ~~Расположение данных STON.fi v2 stableswap/weighted~~ | Снято: номера полей и формулы проверены на живых пулах (§12) |
 | ~~Мастер `0:7019…3979` из `DexPton.cpp:13`~~ | Снято: это wGRAM, прокси-контракт Tonco для TON; Tonco вне MVP |
-| STON.fi v2 `weighted_stableswap` вне MVP, хотя у 3 пулов ~$406k TVL | Решение за пользователем (§12) |
+| ~~STON.fi v2 `weighted_stableswap` вне MVP~~ | Снято: включён в MVP |
 | Манипуляция ценой тонкого пула | Порог ликвидности плюс вес по TVL; фильтр выбросов — фаза 2 |
 | High/low свечи jetton'а — приближение при нескольких пулах | Задокументировано; точный вариант — пересчёт цены на каждый снапшот (фаза 2) |
 | USDT отвязался от доллара | Котировка по определению в USDT, не в USD (ADR-0002) |
@@ -388,4 +389,42 @@ ORDER BY (jetton, minute);
 - **Якоря.** Все три дают ~1,43 USDT за TON с расхождением около 0,2%.
 - **Параметры кривых.** `amp` у stableswap = 100. У weighted_const_product w0 = 0,25. У weighted_stableswap amp = 50, rate = 1,304, w0 = 0,25 — похоже на пару liquid staking token / TON.
 
-**Открытый вопрос.** У `weighted_stableswap` TVL (~$406k в 3 пулах) больше, чем у stableswap и weighted_const_product вместе. Формула проверена, поэтому его можно включить в MVP почти без доплаты (~0,5 дня в M2).
+**Решение.** `weighted_stableswap` (~$406k TVL в 3 пулах — больше, чем у stableswap и weighted_const_product вместе) включён в MVP: формула проверена.
+
+## 13. Этап M-1: мостик worker → Python
+
+Перед MVP — дешёвый прототип, чтобы измерить на реальной ноде поток событий, стоимость обработки, качество цен и размер данных в ClickHouse. Код не выбрасывается: точка подключения в worker'е — та же, где будет `DexSnapshotBuilder`, формулы и SQL переходят в MVP.
+
+```text
+ton-index-postgres / ton-index-clickhouse --dex-tap-socket PATH
+  └─ IndexScheduler::seqno_interfaces_processed → DexTap::publish
+       последнее за мастерчейн-блок состояние каждого пула из белого списка code hash
+       → одна JSON-датаграмма на пул, неблокирующий SOCK_DGRAM (при отсутствии слушателя — drop и счётчик)
+dex-tap (Python)
+  └─ get-методы в эмуляторе TVM → PoolState → spot → ClickHouse dex_prices.*
+ton-index-go -clickhouse-dex-prices DSN
+  └─ /api/v3/experimental/dex/prices, /api/v3/experimental/dex/pool_snapshots
+```
+
+**Датаграмма** (`index-engine/src/DexTap.cpp`): `session`, `seq` (по ним слушатель считает потери), `mc_seqno`, `utime`, `account`, `last_trans_lt`, `balance`, `code_hash`, `data_hash`, `code`, `data` (BoC base64), `tx_count`. Около 1–3 КБ, ~35 тыс. в день.
+
+**Где код:**
+
+| Часть | Путь |
+|---|---|
+| Worker | `ton-index-worker/index-engine/src/DexTap.{h,cpp}`, вызов в `IndexScheduler.cpp`, флаг `--dex-tap-socket` в обоих `main.cpp`, тест `index-engine/test/DexTapTest.cpp` (`ctest -R dex_tap`) |
+| Python | `dex-tap/` (слушатель, пулы, кривые, toncenter-кеш, запись в ClickHouse, replay фикстур, тесты) |
+| ClickHouse | `dex-tap/sql/schema.sql`, `dex-tap/sql/prices.sql` |
+| API | `ton-index-go/index/dexprices/`, `ton-index-go/dex_prices.go`, флаг `-clickhouse-dex-prices` |
+
+**Проверено в облачной сессии без ноды:** replay 9 фикстур всех типов пулов → слушатель → ClickHouse 26.10 → `prices.sql` и Go-клиент. Цены: TON ≈ 1,429 USDT, USDe ≈ 1,0004 USDT, wsTON ≈ 1,156 TON, tsUSDe ≈ 1,307 USDT (через второй шаг), STON ≈ 0,49 USDT.
+
+**Что измерить на ноде** (инструкция — `dex-tap/README.md`):
+
+1. Несколько дней live: события в секунду и в день, всплески по блокам, потери датаграмм.
+2. Тот же worker на историческом диапазоне с пиковым днём (2026-05-05, ~347 тыс. сделок), если архивная нода его покрывает.
+3. `process_us` в установившемся режиме — стоимость get-методов и Ньютона на событие.
+4. Сжатие в ClickHouse: `SELECT table, sum(rows), formatReadableSize(sum(data_compressed_bytes)) FROM system.parts WHERE database = 'dex_prices' AND active GROUP BY table`.
+5. Сверка цен с ton-etl и якорями.
+
+**Ограничения прототипа:** пул распознаётся только по code hash (без проверки роутера из ADR-0007); `op_flags` не передаются; сопоставление кошелёк → мастер и decimals берутся из toncenter и кешируются на диске.
