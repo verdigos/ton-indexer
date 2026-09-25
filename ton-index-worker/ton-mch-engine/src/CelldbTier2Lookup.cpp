@@ -1,0 +1,263 @@
+#include "CelldbTier2Lookup.h"
+
+#include "ClassifyCore.h"
+#include "DetectorInterfaceAdapter.h"
+#include "JvaultLookup.h"
+#include "LookupKinds.h"
+
+#include "smc-interfaces/Multisig.h"
+#include "smc-interfaces/NominatorPool.h"
+#include "smc-interfaces/NftSale.h"
+#include "smc-interfaces/NftSaleV4.h"
+#include "smc-interfaces/Telemint.h"
+#include "smc-interfaces/Tokens.h"
+
+#include "td/utils/base64.h"
+#include "td/utils/logging.h"
+
+#include <exception>
+#include <new>
+#include <utility>
+
+namespace mch {
+
+namespace {
+
+// The NUL separates lookup kind from the canonical raw address without aliasing.
+std::string memo_key(const std::string &kind, const block::StdAddress &addr) {
+  return kind + std::string(1, '\0') + std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
+}
+
+std::string raw_address(const block::StdAddress &addr) {
+  return std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
+}
+
+}  // namespace
+
+CelldbTier2Lookup::CelldbTier2Lookup(const AllShardStates *shard_states,
+                               std::shared_ptr<block::ConfigInfo> config,
+                               TelemintDetector telemint_detector)
+    : shard_states_(shard_states)
+    , config_(std::move(config))
+    // Capture the states pointer so the source survives moving this object.
+    , account_source_([states = shard_states](const block::StdAddress &a) {
+      return lookup_account(*states, a);
+    })
+    , telemint_detector_(std::move(telemint_detector)) {
+}
+
+const schema::AccountState *CelldbTier2Lookup::account(const block::StdAddress &addr) {
+  auto it = account_memo_.find(addr);
+  if (it != account_memo_.end()) {
+    return it->second ? &*it->second : nullptr;
+  }
+  stats_.fetched++;
+  std::optional<schema::AccountState> state;
+  try {
+    auto r = account_source_(addr);
+    if (r.is_error()) {
+      LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                   << " status=" << r.error();
+    } else {
+      state = r.move_as_ok();
+    }
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (...) {
+    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
+                 << " status=exception: " << exception_message(std::current_exception());
+  }
+  auto [pos, _] = account_memo_.emplace(addr, std::move(state));
+  return pos->second ? &*pos->second : nullptr;
+}
+
+Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddress &addr) {
+  bool fault_logged = false;
+  auto log_detector_error = [&](const auto &error) {
+    if (!fault_logged) {
+      LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                   << " address=" << raw_address(addr) << " status=" << error;
+      fault_logged = true;
+    }
+  };
+  // One arm for every detector whose result maps straight through to_schema.
+  // The telemint_item arm, nft_sale V1 leg, and code_hash arm keep their own
+  // shape; the nft_sale V4 fallback shares only this tail.
+  auto run_detector = [&](const auto &detect) -> std::optional<schema::BlockchainInterfaceV2> {
+    auto r = detect();
+    if (r.is_error()) {
+      log_detector_error(r.error());
+      return std::nullopt;
+    }
+    return to_schema(r.move_as_ok());
+  };
+
+  // The kind table is the one registry; a kind missing from it is a miss.
+  const LookupKind *row = lookup_kind(kind);
+  if (row == nullptr) {
+    return Value::null();
+  }
+  if (row->handler == LookupHandler::JvaultAssets) {
+    return jvault_assets(addr);
+  }
+
+  const schema::AccountState *st = account(addr);
+  if (st == nullptr) {
+    return Value::null();
+  }
+
+  // Detectors that execute get-methods require config.
+  std::optional<schema::BlockchainInterfaceV2> iface;
+  switch (row->handler) {
+    case LookupHandler::NftItem:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return NftItemDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
+      break;
+    case LookupHandler::NftAuction:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector(
+          [&] { return GetGemsNftAuction::detect(addr, st->code, st->data, config_); });
+      break;
+    case LookupHandler::JettonWallet:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
+      break;
+    case LookupHandler::DedustPool:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return DedustPoolDetector::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
+      break;
+    case LookupHandler::NominatorPool:
+      iface = run_detector(
+          [&] { return NominatorPoolContract::detect(addr, st->code, st->data); });
+      break;
+    case LookupHandler::TelemintItem: {
+      if (config_ == nullptr && !telemint_detector_) {
+        return Value::null();
+      }
+      auto r = telemint_detector_
+                   ? telemint_detector_(addr, st->code, st->data, config_)
+                   : TelemintContract::detect(addr, st->code, st->data, config_);
+      if (r.is_ok()) {
+        iface = to_schema(r.move_as_ok());
+      } else {
+        log_detector_error(r.error());
+      }
+      break;
+    }
+    case LookupHandler::CodeHash:
+      return st->code.is_null() ? Value::null()
+                                : Value::make_str(td::base64_encode(st->code->get_hash().as_slice()));
+    case LookupHandler::NftSale: {
+      if (config_ == nullptr && !nft_sale_v4_detector_) {
+        return Value::null();
+      }
+      auto r = GetGemsNftFixPriceSale::detect(addr, st->code, st->data, config_);
+      if (r.is_ok()) {
+        iface = to_schema(r.move_as_ok());
+        break;
+      }
+      iface = run_detector([&] {
+        return nft_sale_v4_detector_
+                   ? nft_sale_v4_detector_(addr, st->code, st->data, config_)
+                   : GetGemsNftFixPriceSaleV4::detect(addr, st->code, st->data, config_);
+      });
+      break;
+    }
+    case LookupHandler::MultisigOrder:
+      if (config_ == nullptr) return Value::null();
+      iface = run_detector([&] {
+        return MultisigOrder::detect(addr, st->code, st->data, *shard_states_, config_);
+      });
+      break;
+    case LookupHandler::JvaultAssets:
+      break;
+  }
+  if (!iface) {
+    return Value::null();
+  }
+  // Tier 1 fills the NFT code hash from the trace's account state; here it comes
+  // from the cell-db state the detector just ran on.
+  set_nft_code_hash(*iface, *st);
+  return TieredLookupSource::iface_value(kind, *iface);
+}
+
+Value CelldbTier2Lookup::jvault_assets(const block::StdAddress &stake_wallet) {
+  const schema::AccountState *wallet = account(stake_wallet);
+  if (wallet == nullptr) {
+    return Value::null();
+  }
+  auto r_wallet = parse_jvault_stake_wallet(wallet->data);
+  if (r_wallet.is_error()) {
+    return Value::null();
+  }
+  auto parts = r_wallet.move_as_ok();
+  Value jvault_asset = jvault_asset_of(parts.minter);
+
+  auto r_pool_addr = block::StdAddress::parse(td::Slice(parts.staking_pool_raw));
+  if (r_pool_addr.is_error()) {
+    return Value::null();
+  }
+  const schema::AccountState *pool = account(r_pool_addr.move_as_ok());
+  if (pool == nullptr) {
+    // A missing pool state yields a valid record with a null asset.
+    return jvault_record(parts.staking_pool, Value::null(), std::move(jvault_asset));
+  }
+
+  auto r_lock = parse_jvault_pool_lock_wallet(pool->data);
+  if (r_lock.is_error()) {
+    return Value::null();
+  }
+  Value jw = fetch("jetton_wallet", {Value::make_str(r_lock.move_as_ok())});
+  const Value *jetton = jw.field("jetton");
+  if (jetton == nullptr || jetton->t != VType::Str) {
+    return Value::null();
+  }
+  auto master = canonicalize_or_passthrough(jetton->str);
+  return jvault_record(parts.staking_pool, Value::make_asset_jetton(master),
+                       std::move(jvault_asset));
+}
+
+Value CelldbTier2Lookup::fetch(const std::string &kind, const std::vector<Value> &args) {
+  if (shard_states_ == nullptr || shard_states_->empty()) {
+    return Value::null();
+  }
+  if (args.size() != 1 ||
+      !(args[0].t == VType::Str ||
+        (args[0].t == VType::Account && !args[0].addr_none))) {
+    return Value::null();
+  }
+  auto r_addr = block::StdAddress::parse(td::Slice(args[0].str));
+  if (r_addr.is_error()) {
+    return Value::null();
+  }
+  block::StdAddress addr = r_addr.move_as_ok();
+
+  const std::string key = memo_key(kind, addr);
+  auto it = value_memo_.find(key);
+  if (it != value_memo_.end()) {
+    stats_.memo_hits++;
+    return it->second;
+  }
+  // Detector parse failures remain misses.
+  Value v;
+  try {
+    v = resolve(kind, addr);
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (...) {
+    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
+                 << " address=" << raw_address(addr) << " status=exception: "
+                 << exception_message(std::current_exception());
+    v = Value::null();
+  }
+  value_memo_.emplace(key, v);
+  return std::move(v);
+}
+
+}  // namespace mch

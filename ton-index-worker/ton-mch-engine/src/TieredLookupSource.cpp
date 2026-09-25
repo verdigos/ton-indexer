@@ -1,8 +1,10 @@
-#include "ParsedBlockLookupSource.h"
+#include "TieredLookupSource.h"
+#include "LookupKinds.h"
 
 #include "Value.h"
 
 #include "convert-utils.h"  // convert::to_raw_address(block::StdAddress)
+#include "td/utils/misc.h"
 
 #include <map>
 #include <variant>
@@ -10,11 +12,16 @@
 namespace mch {
 
 namespace {
+const std::map<std::string, LookupHandler> kInterfaceHandlers = [] {
+  std::map<std::string, LookupHandler> handlers;
+  for (const auto &kind : kLookupKindTable) {
+    if (kind.tier1) handlers.emplace(kind.name, kind.handler);
+  }
+  return handlers;
+}();
 
-// StdAddress -> the canonical uppercase raw "wc:HEX" string the fixtures store
-// and normalize_raw_address produces (SchemaTraceLoader normalises tx accounts
-// the same way). Interface addresses render as Str (VType::Str), matching
-// FixtureLookupSource's iface_obj which copies the fixture's raw string verbatim.
+// StdAddress -> the canonical uppercase raw "wc:HEX" string used by lookup values.
+// Interface addresses render as Str (VType::Str).
 Value addr_str(const block::StdAddress &a) {
   std::string raw = convert::to_raw_address(a);
   return Value::make_str(canonicalize_or_passthrough(raw));
@@ -62,34 +69,16 @@ Value dedust_asset(const std::optional<block::StdAddress> &a) {
 
 }  // namespace
 
-Value ParsedBlockLookupSource::iface_value(const std::string &kind,
+Value TieredLookupSource::iface_value(const std::string &kind,
                                            const schema::BlockchainInterfaceV2 &iface) {
-  enum class Handler {
-    JettonWallet,
-    NftItem,
-    NftSale,
-    NftAuction,
-    DedustPool,
-    NominatorPool,
-    MultisigOrder,
-  };
-  static const std::map<std::string, Handler> handlers = {
-      {"jetton_wallet", Handler::JettonWallet},
-      {"nft_item", Handler::NftItem},
-      {"nft_sale", Handler::NftSale},
-      {"nft_auction", Handler::NftAuction},
-      {"dedust_pool", Handler::DedustPool},
-      {"nominator_pool", Handler::NominatorPool},
-      {"multisig_order", Handler::MultisigOrder},
-  };
-  auto handler = handlers.find(kind);
-  if (handler == handlers.end()) {
+  auto handler = kInterfaceHandlers.find(kind);
+  if (handler == kInterfaceHandlers.end()) {
     return Value::null();
   }
   switch (handler->second) {
-    case Handler::JettonWallet:
+    case LookupHandler::JettonWallet:
       if (const auto *jw = std::get_if<schema::JettonWalletDataV2>(&iface)) {
-        // FixtureLookupSource shape: Obj{balance, address, owner, jetton}.
+        // Obj{balance, address, owner, jetton}.
         Value::Fields f;
         f.emplace_back("balance", jw->balance.is_null() ? Value::null()
                                                         : Value::make_int(jw->balance));
@@ -99,7 +88,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         return Value::make_obj(std::move(f));
       }
       break;
-    case Handler::NftItem:
+    case LookupHandler::NftItem:
       if (const auto *nft = std::get_if<schema::NFTItemDataV2>(&iface)) {
         // Obj{address, init, index, collection_address, owner_address, content,
         // code_hash}.
@@ -115,11 +104,11 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         return Value::make_obj(std::move(f));
       }
       break;
-    case Handler::NftSale:
+    case LookupHandler::NftSale: {
       // Two GetGems sale variants share the fields the nft host fns read
       // (marketplace_address / nft_address / full_price / nft_owner_address /
       // code_hash).
-      if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleData>(&iface)) {
+      const auto sale_value = [](const auto &s) {
         Value::Fields f;
         f.emplace_back("marketplace_address", addr_str(s->marketplace_address));
         f.emplace_back("nft_address", addr_str(s->nft_address));
@@ -128,19 +117,16 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("nft_owner_address", addr_str_opt(s->nft_owner_address));
         f.emplace_back("code_hash", code_hash_str(s->code_hash));
         return Value::make_obj(std::move(f));
+      };
+      if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleData>(&iface)) {
+        return sale_value(s);
       }
       if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleV4Data>(&iface)) {
-        Value::Fields f;
-        f.emplace_back("marketplace_address", addr_str(s->marketplace_address));
-        f.emplace_back("nft_address", addr_str(s->nft_address));
-        f.emplace_back("full_price",
-                       s->full_price.is_null() ? Value::null() : Value::make_int(s->full_price));
-        f.emplace_back("nft_owner_address", addr_str_opt(s->nft_owner_address));
-        f.emplace_back("code_hash", code_hash_str(s->code_hash));
-        return Value::make_obj(std::move(f));
+        return sale_value(s);
       }
       break;
-    case Handler::NftAuction:
+    }
+    case LookupHandler::NftAuction:
       if (const auto *a = std::get_if<schema::GetGemsNftAuctionData>(&iface)) {
         // Obj{mp_addr, nft_addr, last_bid, nft_owner, code_hash}.
         Value::Fields f;
@@ -153,7 +139,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         return Value::make_obj(std::move(f));
       }
       break;
-    case Handler::DedustPool:
+    case LookupHandler::DedustPool:
       if (const auto *p = std::get_if<schema::DedustPoolData>(&iface)) {
         // Obj{assets: [ {is_ton, address}, ... ]}, HostDedust reads is_ton +
         // address per element; a nullopt asset slot is the TON side.
@@ -165,18 +151,15 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         return Value::make_obj(std::move(f));
       }
       break;
-    case Handler::NominatorPool:
+    case LookupHandler::NominatorPool:
       if (const auto *p = std::get_if<schema::NominatorPoolData>(&iface)) {
-        // Obj{address}. The whole semantics is set membership: the one spec
-        // that reads this lookup rejects on null and never touches a field
-        // (ir/mch_ir.json nominator_pool_withdraw), which is also why Python's
-        // registered fn just hands back the account's interfaces dict.
+        // Obj{address}; callers use the lookup as a membership check.
         Value::Fields f;
         f.emplace_back("address", addr_str(p->address));
         return Value::make_obj(std::move(f));
       }
       break;
-    case Handler::MultisigOrder:
+    case LookupHandler::MultisigOrder:
       if (const auto *p = std::get_if<schema::MultisigOrderData>(&iface)) {
         std::vector<Value> signers;
         for (const auto &s : p->signers) {
@@ -187,21 +170,33 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         return Value::make_obj(std::move(f));
       }
       break;
+    case LookupHandler::TelemintItem:
+      if (const auto *p = std::get_if<schema::TelemintData>(&iface)) {
+        Value::Fields f;
+        f.emplace_back("address", addr_str(p->address));
+        return Value::make_obj(std::move(f));
+      }
+      break;
+    case LookupHandler::JvaultAssets:
+    case LookupHandler::CodeHash:
+      break;
   }
   return Value::null();  // no matching variant for this kind
 }
 
-Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string &addr) const {
+std::optional<Value> TieredLookupSource::tier1(const std::string &kind,
+                                                    const std::string &addr) const {
+  if (kInterfaceHandlers.find(kind) == kInterfaceHandlers.end()) return std::nullopt;
   if (account_interfaces_ == nullptr) {
-    return Value::null();
+    return std::nullopt;
   }
   auto r_addr = block::StdAddress::parse(td::Slice(addr));
   if (r_addr.is_error()) {
-    return Value::null();  // malformed key: clean miss
+    return std::nullopt;  // malformed key: clean miss
   }
   auto it = account_interfaces_->find(r_addr.move_as_ok());
   if (it == account_interfaces_->end()) {
-    return Value::null();
+    return std::nullopt;
   }
   for (const schema::BlockchainInterfaceV2 &iface : it->second) {
     Value v = iface_value(kind, iface);
@@ -209,28 +204,30 @@ Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string 
       return v;
     }
   }
-  return Value::null();  // account present, no matching variant: miss
+  return Value::null();  // account present, no matching variant
 }
 
-Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
-  // FixtureLookupSource agreement guard: every registered lookup passes exactly one
-  // address, Str, or the Account a `.data` address field yields (same raw
-  // uppercase text); anything else is a null result on both sources.
+Value TieredLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
+  // Every registered lookup accepts one address argument; malformed input is a null result.
   if (args.size() != 1 ||
       !(args[0].t == VType::Str ||
         (args[0].t == VType::Account && !args[0].addr_none))) {
     return Value::null();
   }
-  // Tier 1 resolves from account_interfaces_; a miss falls through to tier 2.
-  // No kind whitelist here: tier1() self-gates (every branch tests `kind ==`,
-  // an unhandled kind falls through to null), so a second hand-kept kind list
-  // could only drift out of sync with it.
-  Value v = tier1(kind, args[0].str);
-  if (!v.is_null()) {
+  std::optional<Value> v = tier1(kind, args[0].str);
+  if (v && !v->is_null()) {
     stats_.tier1_hits++;
-    return v;
+    return std::move(*v);
   }
-  // Tier-2-only kinds (nominator_pool, jvault_assets) and every tier-1 miss.
+  if (v && status_stable_accounts_ != nullptr && kInterfaceHandlers.find(kind) != kInterfaceHandlers.end()) {
+    auto r_addr = block::StdAddress::parse(td::Slice(args[0].str));
+    if (r_addr.is_ok() && status_stable_accounts_->count(r_addr.ok()) != 0) {
+      stats_.misses++;
+      stats_.misses_by_kind[kind]++;
+      return Value::null();
+    }
+  }
+  // Tier-2-only kinds and misses for accounts absent from tier 1 fall through.
   Value r = tier2_ ? tier2_(kind, args) : Value::null();
   if (!r.is_null()) {
     stats_.tier2_hits++;

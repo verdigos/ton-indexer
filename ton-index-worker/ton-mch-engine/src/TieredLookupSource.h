@@ -10,21 +10,27 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace mch {
 
-class ParsedBlockLookupSource : public LookupSource {
+class TieredLookupSource : public LookupSource {
  public:
-  // Tier-2 resolver hook, same signature as fetch. Empty == no fallback.
+  // Empty hook means no fallback.
   using Tier2Hook = std::function<Value(const std::string &kind, const std::vector<Value> &args)>;
 
   using InterfaceMap =
       std::unordered_map<block::StdAddress, std::vector<schema::BlockchainInterfaceV2>>;
+  using StableAddressSet = std::unordered_set<block::StdAddress>;
 
-  explicit ParsedBlockLookupSource(const InterfaceMap *account_interfaces, Tier2Hook tier2 = {})
-      : account_interfaces_(account_interfaces), tier2_(std::move(tier2)) {
+  explicit TieredLookupSource(const InterfaceMap *account_interfaces, Tier2Hook tier2 = {},
+                                   const StableAddressSet *status_stable_accounts = nullptr)
+      : account_interfaces_(account_interfaces),
+        tier2_(std::move(tier2)),
+        status_stable_accounts_(status_stable_accounts) {
   }
 
   Value fetch(const std::string &kind, const std::vector<Value> &args) const override;
@@ -35,15 +41,28 @@ class ParsedBlockLookupSource : public LookupSource {
   // (tier2_hits / (tier1_hits + tier2_hits)). Does not affect fetch() results.
   struct LookupStats {
     std::size_t tier1_hits{0};  // served from account_interfaces_ (in-block)
-    std::size_t tier2_hits{0};  // served from the tier-2 fallback (DB/kvrocks / fixture)
+    std::size_t tier2_hits{0};  // served from the cell-db fallback
     // Tier-2 hit attribution per lookup kind. Only served kinds get an entry,
     // and the values sum to `tier2_hits` exactly.
     std::map<std::string, std::size_t> tier2_hits_by_kind;
-    std::size_t misses{0};      // unresolved after both tiers (null result)
+    std::size_t misses{0};      // null results
     // Miss attribution per lookup kind, so a production run can tell an expected
     // gap (a kind with no tier-1 source) from a real resolution failure. Only
     // missed kinds get an entry, and the values sum to `misses` exactly.
     std::map<std::string, std::size_t> misses_by_kind;
+
+    LookupStats &operator+=(const LookupStats &other) {
+      tier1_hits += other.tier1_hits;
+      tier2_hits += other.tier2_hits;
+      misses += other.misses;
+      for (const auto &[kind, count] : other.tier2_hits_by_kind) {
+        tier2_hits_by_kind[kind] += count;
+      }
+      for (const auto &[kind, count] : other.misses_by_kind) {
+        misses_by_kind[kind] += count;
+      }
+      return *this;
+    }
   };
   const LookupStats &stats() const { return stats_; }
 
@@ -55,12 +74,13 @@ class ParsedBlockLookupSource : public LookupSource {
   static Value iface_value(const std::string &kind, const schema::BlockchainInterfaceV2 &iface);
 
  private:
-  // Tier-1 resolve from account_interfaces_ (null == miss). Only the tier-1
-  // kinds are handled; everything else returns null so fetch() routes to tier 2.
-  Value tier1(const std::string &kind, const std::string &addr) const;
+  // Tier-1 resolve from account_interfaces_. nullopt means no map entry; an
+  // engaged null Value means the entry has no matching kind.
+  std::optional<Value> tier1(const std::string &kind, const std::string &addr) const;
 
   const InterfaceMap *account_interfaces_;
   Tier2Hook tier2_;
+  const StableAddressSet *status_stable_accounts_;
   mutable LookupStats stats_;  // fetch() is const; counters are telemetry
 };
 

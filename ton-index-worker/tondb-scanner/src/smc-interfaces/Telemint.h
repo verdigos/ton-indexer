@@ -19,11 +19,11 @@ public:
         uint32_t end_time;
         // Auction config
         std::optional<block::StdAddress> beneficiary_address;
-        td::RefInt256 initial_min_bid;
-        td::RefInt256 max_bid;
-        td::RefInt256 min_bid_step;
-        uint32_t min_extend_time;
-        uint32_t duration;
+        std::optional<td::RefInt256> initial_min_bid;
+        std::optional<td::RefInt256> max_bid;
+        std::optional<td::RefInt256> min_bid_step;
+        std::optional<uint32_t> min_extend_time;
+        std::optional<uint32_t> duration;
         // Royalty
         int royalty_numerator;
         int royalty_denominator;
@@ -38,6 +38,11 @@ public:
                      td::Promise<Result> promise);
 
     void start_up() override;
+
+    static td::Result<Result> detect(const block::StdAddress& address,
+                                     const td::Ref<vm::Cell>& code_cell,
+                                     const td::Ref<vm::Cell>& data_cell,
+                                     const std::shared_ptr<block::ConfigInfo>& config);
 
 private:
     block::StdAddress address_;

@@ -2,15 +2,16 @@
 #include <block/block.h>
 #include <td/actor/actor.h>
 #include <mc-config.h>
+#include <optional>
 
 #include "IndexData.h"
 
 
 using AllShardStates = std::vector<td::Ref<vm::Cell>>;
 
-// Performs the synchronous shard-state dictionary lookup and TLB unpack used by
-// both actors and direct callers.
-td::Result<schema::AccountState> lookup_account(const AllShardStates& shard_states,
+// Found = engaged; absent from the covering dictionary or account_none = nullopt.
+// Missing shard coverage, unpack failure or an unknown account tag = error.
+td::Result<std::optional<schema::AccountState>> lookup_account(const AllShardStates& shard_states,
                                                 const block::StdAddress& address);
 
 class FetchAccountFromShardV2: public td::actor::Actor {
