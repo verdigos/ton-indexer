@@ -1,8 +1,8 @@
 # Action goldens
 
 `goldens/actions/<group>/<slug>.<id8>.yaml` — one file per fixture trace in
-`indexer/tests/traces/`, holding every action row the engine serializes for
-it, exactly as production would write them. A diff is a regression, never a
+`indexer/tests/traces/`, holding every action row the golden renderer emits for
+it. A diff is a regression, never a
 re-baseline; a deliberate output change re-generates the files in its own
 commit and the diff is reviewed field by field.
 
@@ -81,9 +81,9 @@ synthetic fixture has no unmodified chain or API capture, so its `.lz4` is edite
 in place through a JSON round trip. From `indexer/`:
 
 ```
-python -m tests.utils.fixture_json unpack indexer/tests/traces/<trace-id>.lz4 -o /tmp/fixture.json
+python -m tests.utils.fixture_json unpack tests/traces/<trace-id>.lz4 -o /tmp/fixture.json
 # edit /tmp/fixture.json
-python -m tests.utils.fixture_json pack /tmp/fixture.json -o indexer/tests/traces/<trace-id>.lz4
+python -m tests.utils.fixture_json pack /tmp/fixture.json -o tests/traces/<trace-id>.lz4
 ```
 
 The JSON form is the fixture map 1:1; msgpack bin values spell as

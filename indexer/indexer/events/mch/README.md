@@ -55,9 +55,9 @@ ton-mch-engine --actions -T indexer/tests/traces -O /tmp/actions \
     --fixtures ton-index-worker/ton-mch-engine/goldens/fixtures.json
 ```
 
-A trace no matcher claims produces one synthetic `unknown` row keyed by the trace id.
-A trace whose messages are only recognized as leaves produces bare `call_contract` rows.
-Either shape is the signal that a matcher is missing.
+When a classified trace has no action rows after the ghost external fallback, or payload validation drops every row, the engine emits one synthetic `unknown` row keyed by the trace id.
+Unmatched serializable leaf messages can produce bare `call_contract` or `ton_transfer` rows.
+Either shape can signal a missing matcher.
 
 ### 3.2 Find the anchor
 
@@ -488,7 +488,7 @@ Chaining a lookup off another lookup's result works, and each level costs one ex
 
 A matcher's `out` block fills the produced block's `data` map.
 `ton-index-worker/ton-mch-engine/src/ActionBuild.cpp` maps each supported btype to a fill function that builds an `Action` row.
-Unsupported btypes are skipped along with their children.
+An unsupported btype skips its row; its serializable children remain eligible as separate rows.
 
 The action payload stores protocol-specific data as one flat map.
 It has no per-protocol composite columns or group wrappers. Shared fields such as
@@ -521,7 +521,10 @@ writer under each Redis action row's binary `payload` field. It emits no `*_data
 by one MessagePack map, with numeric registry ids in ascending order at every
 depth and no `data` wrapper. The empty payload is `01 80`. Addresses, BOCs,
 and hashes use binary values; unsigned decimals use MessagePack uint through
-uint64, then minimal big-endian binary. The action goldens still show names
+uint64, then minimal big-endian binary. The get-method integer fields `nft_index`,
+`price`, `full_price`, `marketplace_fee`, `max_bid`, `min_bid`, `mp_fee_base`,
+`mp_fee_factor`, `royalty_amount` and `royalty_fee_base` use signed decimal strings;
+`tick_spacing` is also an integer string. The action goldens still show names
 and decimal text.
 
 An invalid payload value skips its action. Other actions in the trace remain
