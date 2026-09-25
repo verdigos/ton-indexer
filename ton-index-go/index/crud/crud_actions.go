@@ -2,10 +2,12 @@ package crud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
@@ -20,56 +22,9 @@ func buildActionsQuery(req models.ActionRequest, settings models.RequestSettings
 	clmn_query_default := `A.trace_id, A.action_id, A.start_lt, A.end_lt, A.start_utime, A.end_utime, 
 		A.trace_end_lt, A.trace_end_utime, A.trace_mc_seqno_end, A.source, A.source_secondary,
 		A.destination, A.destination_secondary, A.asset, A.asset_secondary, A.asset2, A.asset2_secondary, A.opcode, A.tx_hashes,
-		A.type, (A.ton_transfer_data).content, (A.ton_transfer_data).encrypted, A.value, A.amount,
-		(A.jetton_transfer_data).response_destination, (A.jetton_transfer_data).forward_amount, (A.jetton_transfer_data).query_id,
-		(A.jetton_transfer_data).custom_payload, (A.jetton_transfer_data).forward_payload, (A.jetton_transfer_data).comment,
-		(A.jetton_transfer_data).is_encrypted_comment, (A.nft_transfer_data).is_purchase, (A.nft_transfer_data).price,
-		(A.nft_transfer_data).query_id, (A.nft_transfer_data).custom_payload, (A.nft_transfer_data).forward_payload,
-		(A.nft_transfer_data).forward_amount, (A.nft_transfer_data).response_destination, (A.nft_transfer_data).nft_item_index, (A.nft_transfer_data).marketplace, (A.nft_transfer_data).real_prev_owner
-		(A.jetton_swap_data).dex, (A.jetton_swap_data).sender, ((A.jetton_swap_data).dex_incoming_transfer).amount,
-		((A.jetton_swap_data).dex_incoming_transfer).asset, ((A.jetton_swap_data).dex_incoming_transfer).source,
-		((A.jetton_swap_data).dex_incoming_transfer).destination, ((A.jetton_swap_data).dex_incoming_transfer).source_jetton_wallet,
-		((A.jetton_swap_data).dex_incoming_transfer).destination_jetton_wallet, ((A.jetton_swap_data).dex_outgoing_transfer).amount,
-		((A.jetton_swap_data).dex_outgoing_transfer).asset, ((A.jetton_swap_data).dex_outgoing_transfer).source,
-		((A.jetton_swap_data).dex_outgoing_transfer).destination, ((A.jetton_swap_data).dex_outgoing_transfer).source_jetton_wallet,
-		((A.jetton_swap_data).dex_outgoing_transfer).destination_jetton_wallet, (A.jetton_swap_data).peer_swaps,
-		(A.change_dns_record_data).key, (A.change_dns_record_data).value_schema, (A.change_dns_record_data).value,
-		(A.change_dns_record_data).flags, (A.nft_mint_data).nft_item_index,
-		(A.dex_withdraw_liquidity_data).dex,
-		(A.dex_withdraw_liquidity_data).amount1,
-		(A.dex_withdraw_liquidity_data).amount2,
-		(A.dex_withdraw_liquidity_data).asset1_out,
-		(A.dex_withdraw_liquidity_data).asset2_out,
-		(A.dex_withdraw_liquidity_data).user_jetton_wallet_1,
-		(A.dex_withdraw_liquidity_data).user_jetton_wallet_2,
-		(A.dex_withdraw_liquidity_data).dex_jetton_wallet_1,
-		(A.dex_withdraw_liquidity_data).dex_jetton_wallet_2,
-		(A.dex_withdraw_liquidity_data).lp_tokens_burnt,
-		(A.dex_deposit_liquidity_data).dex,
-		(A.dex_deposit_liquidity_data).amount1,
-		(A.dex_deposit_liquidity_data).amount2,
-		(A.dex_deposit_liquidity_data).asset1,
-		(A.dex_deposit_liquidity_data).asset2,
-		(A.dex_deposit_liquidity_data).user_jetton_wallet_1,
-		(A.dex_deposit_liquidity_data).user_jetton_wallet_2,
-		(A.dex_deposit_liquidity_data).lp_tokens_minted,
-		(A.staking_data).provider,
-		(A.staking_data).ts_nft,
-		(A.staking_data).tokens_burnt,
-		(A.staking_data).tokens_minted,
-		(A.coffee_create_pool_data).amount_1,
-		(A.coffee_create_pool_data).amount_2,
-		(A.coffee_create_pool_data).lp_tokens_minted,
-		(A.coffee_staking_deposit_data).minted_item_address,
-		(A.coffee_staking_deposit_data).minted_item_index,
-		(A.coffee_staking_withdraw_data).nft_address,
-		(A.coffee_staking_withdraw_data).nft_index,
-		(A.coffee_staking_withdraw_data).points,
-		A.success,
-		2 as finality,
-		A.trace_external_hash,
-		A.trace_external_hash_norm,
-		A.value_extra_currencies`
+		A.type, A.payload, A.value, A.amount, A.success, 2 as finality,
+		A.trace_external_hash, A.trace_external_hash_norm, A.value_extra_currencies,
+		A.ancestor_type, ARRAY[]::text[]`
 	clmn_query := clmn_query_default
 	from_query := `actions as A`
 	filter_list := []string{}
@@ -275,6 +230,28 @@ func queryActionsAccountsImpl(actions []models.Action, idxs []int, conn *pgxpool
 	return nil
 }
 
+// scanRawActions reads every row, dropping and logging one whose payload cannot be
+// decoded: one undecodable action must not fail the whole request. Any other scan error
+// fails it.
+func scanRawActions(rows pgx.Rows) ([]models.RawAction, error) {
+	res := []models.RawAction{}
+	for rows.Next() {
+		loc, err := parse.ScanRawAction(rows)
+		if err == nil {
+			res = append(res, *loc)
+			continue
+		}
+		if !errors.Is(err, parse.ErrPayloadDecode) {
+			return nil, err
+		}
+		log.Printf("failed to scan raw action: %v", err)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func queryRawActionsImpl(query string, conn *pgxpool.Conn, settings models.RequestSettings, args ...any) ([]models.RawAction, error) {
 	ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 	defer cancel_ctx()
@@ -289,16 +266,9 @@ func queryRawActionsImpl(query string, conn *pgxpool.Conn, settings models.Reque
 	// }
 	defer rows.Close()
 
-	res := []models.RawAction{}
-	for rows.Next() {
-		if loc, err := parse.ScanRawAction(rows); err == nil {
-			res = append(res, *loc)
-		} else {
-			return nil, models.IndexError{Code: 500, Message: err.Error()}
-		}
-	}
-	if rows.Err() != nil {
-		return nil, models.IndexError{Code: 500, Message: rows.Err().Error()}
+	res, err := scanRawActions(rows)
+	if err != nil {
+		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
 	return res, nil
 }

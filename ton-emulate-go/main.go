@@ -30,6 +30,7 @@ type TraceTask struct {
 	IgnoreChksig     bool    `msgpack:"ignore_chksig"`
 	DetectInterfaces bool    `msgpack:"detect_interfaces"`
 	IncludeCodeData  bool    `msgpack:"include_code_data"`
+	WithActions      bool    `msgpack:"with_actions"`
 	McBlockSeqno     *uint32 `msgpack:"mc_block_seqno"`
 }
 
@@ -48,6 +49,7 @@ type TonConnectTraceTask struct {
 	Messages         []TonConnectMessage `msgpack:"messages"`
 	DetectInterfaces bool                `msgpack:"detect_interfaces"`
 	IncludeCodeData  bool                `msgpack:"include_code_data"`
+	WithActions      bool                `msgpack:"with_actions"`
 	McBlockSeqno     *uint32             `msgpack:"mc_block_seqno"`
 }
 
@@ -152,7 +154,6 @@ func (req TonConnectEmulateRequest) Validate() error {
 var (
 	redisAddr         = flag.String("redis", "localhost:6379", "Redis server dsn")
 	emulatorQueueName = flag.String("emulator-queue", "emulatorqueue", "Redis queue name")
-	classifierChannel = flag.String("classifier-channel", "classifierchannel", "Redis queue name")
 	pg                = flag.String("pg", "", "PostgreSQL connection string")
 	kvrocksAddr       = flag.String("kvrocks", "", "Kvrocks address or Redis URL for enrichment reads")
 	kvrocksSentinels  = flag.String("kvrocks-sentinels", "", "Comma-separated Kvrocks Sentinel addresses")
@@ -223,6 +224,7 @@ func emulateTrace(c *fiber.Ctx) error {
 		IgnoreChksig:     req.IgnoreChksig,
 		DetectInterfaces: req.WithActions || req.IncludeMetadata,
 		IncludeCodeData:  req.IncludeCodeData,
+		WithActions:      req.WithActions,
 		McBlockSeqno:     req.McBlockSeqno,
 	}
 
@@ -263,35 +265,16 @@ func emulateTrace(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from emulator channel: "+msg.Payload)
 	}
 
-	if req.WithActions {
-		// subscribe to result channel
-		pubsub := rdb.Subscribe(ctx, "classifier_result_channel_"+taskID)
-		defer pubsub.Close()
-
-		// publish task id to classifier channel
-		if err := rdb.Publish(ctx, *classifierChannel, taskID).Err(); err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "failed to publish task id to classifier queue: "+err.Error())
-		}
-		// wait for the notification in channel classifier_result_channel_taskID
-		msg, err := pubsub.ReceiveMessage(ctx)
-		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "failed to receive result from classifier channel: "+err.Error())
-		}
-		if msg.Payload == "error" {
-			error_msg, err := rdb.Get(ctx, "classifier_error_"+taskID).Result()
-			if err != nil {
-				return fiber.NewError(fiber.StatusInternalServerError, "failed to receive error from classifier error: "+err.Error())
-			}
-			return fiber.NewError(fiber.StatusInternalServerError, error_msg)
-		}
-		if msg.Payload != "success" {
-			return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from classifier result channel: "+msg.Payload)
-		}
-	}
-
 	hset, err := rdb.HGetAll(ctx, "result_"+taskID).Result()
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to get result from Redis: "+err.Error())
+	}
+	if _, ok := hset["actions"]; req.WithActions && !ok {
+		errorMsg, err := rdb.Get(ctx, "classifier_error_"+taskID).Result()
+		if err != nil {
+			errorMsg = "classification produced no result"
+		}
+		return fiber.NewError(fiber.StatusInternalServerError, errorMsg)
 	}
 
 	result, err := models.TransformToAPIResponse(hset, enrichmentReader, *testnet, req.IncludeAddressBook, req.IncludeMetadata,
@@ -342,6 +325,7 @@ func emulateTonConnect(c *fiber.Ctx) error {
 		Messages:         req.Messages,
 		DetectInterfaces: req.WithActions || req.IncludeMetadata,
 		IncludeCodeData:  req.IncludeCodeData,
+		WithActions:      req.WithActions,
 		McBlockSeqno:     req.McBlockSeqno,
 	}
 
@@ -382,35 +366,16 @@ func emulateTonConnect(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from emulator channel: "+msg.Payload)
 	}
 
-	if req.WithActions {
-		// subscribe to result channel
-		pubsub := rdb.Subscribe(ctx, "classifier_result_channel_"+taskID)
-		defer pubsub.Close()
-
-		// publish task id to classifier channel
-		if err := rdb.Publish(ctx, *classifierChannel, taskID).Err(); err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "failed to publish task id to classifier queue: "+err.Error())
-		}
-		// wait for the notification in channel classifier_result_channel_taskID
-		msg, err := pubsub.ReceiveMessage(ctx)
-		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "failed to receive result from classifier channel: "+err.Error())
-		}
-		if msg.Payload == "error" {
-			error_msg, err := rdb.Get(ctx, "classifier_error_"+taskID).Result()
-			if err != nil {
-				return fiber.NewError(fiber.StatusInternalServerError, "failed to receive error from classifier error: "+err.Error())
-			}
-			return fiber.NewError(fiber.StatusInternalServerError, error_msg)
-		}
-		if msg.Payload != "success" {
-			return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from classifier result channel: "+msg.Payload)
-		}
-	}
-
 	hset, err := rdb.HGetAll(ctx, "result_"+taskID).Result()
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to get result from Redis: "+err.Error())
+	}
+	if _, ok := hset["actions"]; req.WithActions && !ok {
+		errorMsg, err := rdb.Get(ctx, "classifier_error_"+taskID).Result()
+		if err != nil {
+			errorMsg = "classification produced no result"
+		}
+		return fiber.NewError(fiber.StatusInternalServerError, errorMsg)
 	}
 
 	result, err := models.TransformToAPIResponse(hset, enrichmentReader, *testnet, req.IncludeAddressBook, req.IncludeMetadata,

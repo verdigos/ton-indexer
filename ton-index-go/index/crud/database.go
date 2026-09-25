@@ -39,10 +39,6 @@ func afterConnectRegisterTypes(ctx context.Context, conn *pgx.Conn) error {
 		"_tonaddr",
 		"_tonhash",
 		"_tonbytes",
-		"peer_swap_details",
-		"liquidity_vault_excess_details",
-		"_peer_swap_details",
-		"_liquidity_vault_excess_details",
 	}
 	for _, type_name := range data_type_names {
 		data_type, err := conn.LoadType(ctx, type_name)

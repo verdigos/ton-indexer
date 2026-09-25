@@ -1,9 +1,11 @@
 package crud
 
 import (
+	"errors"
 	"log"
 
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 
 	"sort"
 
@@ -265,7 +267,14 @@ func (c *EmulatedTracesContext) FillFromRawData(rawData map[string]map[string]st
 		for _, a := range trace.Actions {
 			raw, err := a.ToRawAction()
 			if err != nil {
-				return err
+				// One undecodable payload must not fail the whole pending response: drop
+				// that action and log it, the way the stored-action readers do. Any other
+				// conversion error still fails the request.
+				if !errors.Is(err, parse.ErrPayloadDecode) {
+					return err
+				}
+				log.Printf("failed to decode pending action trace_id=%v action_id=%v: %v", traceKey, a.ActionId, err)
+				continue
 			}
 			c.emulatedActions[traceKey] = append(c.emulatedActions[traceKey], raw)
 		}

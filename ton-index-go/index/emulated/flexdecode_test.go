@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"reflect"
@@ -12,77 +13,76 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// pythonExclusions lists top-level fields kept numeric by the Python encoder.
-var pythonExclusions = map[string]bool{
+// stringNumberExclusions lists the top-level fields the string-number form keeps native.
+var stringNumberExclusions = map[string]bool{
 	"start_lt": true, "end_lt": true, "start_utime": true, "end_utime": true,
-	"opcode": true, "trace_start_lt": true, "finality": true, "trace_end_lt": true,
+	"opcode": true, "finality": true, "trace_end_lt": true,
 	"trace_end_utime": true, "mc_seqno_end": true, "trace_mc_seqno_end": true,
 }
 
-// pythonStyle reproduces the production Python numeric conversion.
-func pythonStyle(m map[string]interface{}) map[string]interface{} {
+// stringNumbers reproduces the string-number form: every value but the exclusions above
+// arrives as a decimal string.
+func stringNumbers(m map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{}, len(m))
 	for k, v := range m {
-		if pythonExclusions[k] {
+		if stringNumberExclusions[k] {
 			out[k] = v
 		} else {
-			out[k] = pythonConvert(v)
+			out[k] = stringNumberValue(v)
 		}
 	}
 	return out
 }
 
-func pythonConvert(v interface{}) interface{} {
+func stringNumberValue(v interface{}) interface{} {
 	switch t := v.(type) {
 	case map[string]interface{}:
 		out := make(map[string]interface{}, len(t))
 		for k, item := range t {
-			out[k] = pythonConvert(item)
+			out[k] = stringNumberValue(item)
 		}
 		return out
 	case []interface{}:
 		out := make([]interface{}, len(t))
 		for i, item := range t {
-			out[i] = pythonConvert(item)
+			out[i] = stringNumberValue(item)
 		}
 		return out
-	case bool, string, nil, []string:
+	case bool, string, nil, []string, []byte:
 		return v
 	default:
 		return fmt.Sprint(v)
 	}
 }
 
-// pythonStyleAction applies Python's string encoding, including an integral
-// float with a ".0" suffix.
-func pythonStyleAction() map[string]interface{} {
-	m := pythonStyle(naturalAction())
-	m["change_dns_record_data"].(map[string]interface{})["flags"] = "1.0"
-	return m
+// stringNumbersAction applies the string-number form to the whole row; the payload
+// bytes pass through untouched.
+func stringNumbersAction(t *testing.T) map[string]interface{} {
+	return stringNumbers(naturalAction(t))
 }
 
 // naturalAction carries numeric fields in their native msgpack forms.
-func naturalAction() map[string]interface{} {
+func naturalAction(t *testing.T) map[string]interface{} {
 	return map[string]interface{}{
 		"action_id":                "9C7SqQ==",
-		"type":                     "change_dns_record",
+		"type":                     "jetton_transfer",
 		"trace_id":                 "dHJhY2VfaWQ=",
 		"trace_external_hash":      "ZXh0X2hhc2g=",
 		"trace_external_hash_norm": "ZXh0X2hhc2hfbm9ybQ==",
 		"tx_hashes":                []string{"aGFzaDE=", "aGFzaDI="},
 		"success":                  true,
+		"ancestor_type":            []string{"jvault_stake"},
 
-		// top-level numbers Python keeps native
+		// top-level numbers the string-number form keeps native
 		"start_lt":           uint64(58913247000001),
 		"end_lt":             uint64(58913247000007),
 		"start_utime":        uint32(1753800000),
 		"end_utime":          uint32(1753800003),
-		"trace_start_lt":     uint64(58913247000000),
 		"opcode":             uint32(0x0f8a7ea5),
 		"finality":           1,
 		"trace_mc_seqno_end": uint32(48210934),
 
-		// top-level *string fields Python stringifies
+		// top-level *string fields the string-number form stringifies
 		"value":  uint64(1500000000),
 		"amount": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
 
@@ -90,60 +90,26 @@ func naturalAction() map[string]interface{} {
 		"destination": "0:1122334455667788990011223344556677889900112233445566778899001122",
 		"asset":       "0:AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899",
 
-		"change_dns_record_data": map[string]interface{}{
-			"key":          "d2FsbGV0",
-			"value_schema": "DNSNextResolver",
-			"value":        "0:1122334455667788990011223344556677889900112233445566778899001122",
-			"flags":        int64(1),
-		},
-
-		"multisig_create_order_data": map[string]interface{}{
-			"query_id":             uint64(17),
-			"order_seqno":          uint64(4),
-			"is_created_by_signer": true,
-			"creator_index":        int64(2),
-			"expiration_date":      int64(1753900000),
-			"order_boc":            "te6cckEB",
-		},
-		"multisig_approve_data": map[string]interface{}{
-			"signer_index": int64(3),
-			"exit_code":    int32(0),
-		},
-		"multisig_execute_data": map[string]interface{}{
-			"query_id":        uint64(18),
-			"order_seqno":     uint64(5),
-			"expiration_date": int64(1753900001),
-			"approvals_num":   int64(2),
-		},
-		"layerzero_send_data": map[string]interface{}{
-			"send_request_id": uint64(99),
-			"native_fee":      uint64(120000000),
-			"zro_fee":         uint64(0),
-			"msglib":          "0:2233445566778899001122334455667788990011223344556677889900112233",
-		},
-		"layerzero_packet_data": map[string]interface{}{
-			"src_eid": int32(30343),
-			"dst_eid": int32(30101),
-			"nonce":   int64(7),
-		},
-		"layerzero_dvn_verify_data": map[string]interface{}{
-			"nonce":  int64(8),
-			"status": "succeeded",
-		},
-		"cocoon_worker_payout_data": map[string]interface{}{
-			"payout_type":   "reward",
-			"worker_state":  int64(2),
-			"worker_tokens": uint64(4200000000),
-		},
-		"cocoon_unregister_proxy_data": map[string]interface{}{
-			"query_id": uint64(21),
-			"seqno":    int64(11),
-		},
-		"jvault_stake_data": map[string]interface{}{
-			"period":               int64(2592000),
-			"minted_stake_jettons": uint64(1000000000),
-		},
+		// the row carries the same payload bytes as the DB `payload` column
+		"payload": payloadBytes(t, jettonTransferPayloadHex),
 	}
+}
+
+// The two fixture payloads in the compact codec: one jetton_transfer detail set and one
+// accounts_added list.
+const (
+	jettonTransferPayloadHex = "01850da568656c6c6f0ec220ce17d7840059cfffffffffffffffff5dc42100bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	accountsAddedPayloadHex  = "01810191d942303a41414242434344444545464630303131323233333434353536363737383839394141424243434444454546463030313132323333343435353636373738383939"
+)
+
+// payloadBytes decodes one of the payload constants above.
+func payloadBytes(t *testing.T, encoded string) []byte {
+	t.Helper()
+	raw, err := hex.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode payload hex: %v", err)
+	}
+	return raw
 }
 
 func mustMarshal(t *testing.T, v interface{}) []byte {
@@ -164,148 +130,59 @@ func decodeAction(t *testing.T, m map[string]interface{}) Action {
 	return a
 }
 
-// TestOldAndNewStyleDecodeIdentically checks both numeric wire representations.
-func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
-	natural := naturalAction()
-	old := decodeAction(t, pythonStyleAction())
-	new_ := decodeAction(t, natural)
+// TestStringNumbersAndNativeDecodeIdentically checks both numeric wire representations.
+func TestStringNumbersAndNativeDecodeIdentically(t *testing.T) {
+	stringForm := decodeAction(t, stringNumbersAction(t))
+	nativeForm := decodeAction(t, naturalAction(t))
 
-	if !reflect.DeepEqual(old, new_) {
-		t.Fatalf("python-style and natural-style decode differ:\nold = %+v\nnew = %+v", old, new_)
+	if !reflect.DeepEqual(stringForm, nativeForm) {
+		t.Fatalf("string-number and native-style decode differ:\nstring-form = %+v\nnative-form = %+v", stringForm, nativeForm)
 	}
 
-	// Python-style scalar values decode without changing their values.
-	if old.ActionId != "9C7SqQ==" || old.Type != "change_dns_record" || !old.Success {
-		t.Errorf("scalars: %+v", old)
+	// String-number scalar values decode without changing their values.
+	if stringForm.ActionId != "9C7SqQ==" || stringForm.Type != "jetton_transfer" || !stringForm.Success {
+		t.Errorf("scalars: %+v", stringForm)
 	}
-	if got := old.StartLt; got == nil || *got != 58913247000001 {
+	if got := stringForm.StartLt; got == nil || *got != 58913247000001 {
 		t.Errorf("start_lt = %v", got)
 	}
-	if got := old.Opcode; got == nil || *got != 0x0f8a7ea5 {
+	if got := stringForm.Opcode; got == nil || *got != 0x0f8a7ea5 {
 		t.Errorf("opcode = %v", got)
 	}
-	if old.Finality != 1 {
-		t.Errorf("finality = %v", old.Finality)
+	if stringForm.Finality != 1 {
+		t.Errorf("finality = %v", stringForm.Finality)
 	}
-	if got := old.Value; got == nil || *got != "1500000000" {
+	if got := stringForm.Value; got == nil || *got != "1500000000" {
 		t.Errorf("value = %v", got)
 	}
-	if got := old.Amount; got == nil || *got != "115792089237316195423570985008687907853269984665640564039457584007913129639935" {
+	if got := stringForm.Amount; got == nil || *got != "115792089237316195423570985008687907853269984665640564039457584007913129639935" {
 		t.Errorf("amount = %v", got)
 	}
-	if !reflect.DeepEqual(old.TxHashes, []string{"aGFzaDE=", "aGFzaDI="}) {
-		t.Errorf("tx_hashes = %v", old.TxHashes)
+	if !reflect.DeepEqual(stringForm.TxHashes, []string{"aGFzaDE=", "aGFzaDI="}) {
+		t.Errorf("tx_hashes = %v", stringForm.TxHashes)
 	}
 
-	// Composite numeric fields accept Python string encodings.
-	if d := old.MultisigCreateOrderData; d == nil || *d.CreatorIndex != 2 || *d.ExpirationDate != 1753900000 || *d.OrderSeqno != "4" {
-		t.Errorf("multisig_create_order_data = %+v", d)
+	// The payload travels as bytes and decodes through the shared reader.
+	if !reflect.DeepEqual(stringForm.Payload, nativeForm.Payload) {
+		t.Errorf("payload bytes differ: %x / %x", stringForm.Payload, nativeForm.Payload)
 	}
-	if d := old.MultisigApproveData; d == nil || *d.SignerIndex != 3 || *d.ExitCode != 0 {
-		t.Errorf("multisig_approve_data = %+v", d)
-	}
-	if d := old.MultisigExecuteData; d == nil || *d.ExpirationDate != 1753900001 || *d.ApprovalsNum != 2 {
-		t.Errorf("multisig_execute_data = %+v", d)
-	}
-	if d := old.LayerzeroSendData; d == nil || *d.SendRequestId != 99 || *d.NativeFee != 120000000 || *d.ZroFee != 0 {
-		t.Errorf("layerzero_send_data = %+v", d)
-	}
-	if d := old.LayerzeroDvnVerifyData; d == nil || *d.Nonce != 8 {
-		t.Errorf("layerzero_dvn_verify_data = %+v", d)
-	}
-	if d := old.CocoonWorkerPayoutData; d == nil || *d.WorkerState != 2 || *d.WorkerTokens != "4200000000" {
-		t.Errorf("cocoon_worker_payout_data = %+v", d)
-	}
-	if d := old.CocoonUnregisterProxyData; d == nil || *d.Seqno != 11 {
-		t.Errorf("cocoon_unregister_proxy_data = %+v", d)
-	}
-	// These fields also use decimal-string encoding.
-	if d := old.JvaultStakeData; d == nil || *d.Period != 2592000 {
-		t.Errorf("jvault_stake_data = %+v", d)
-	}
-	if d := old.LayerzeroPacketData; d == nil || *d.SrcEid != 30343 || *d.DstEid != 30101 || *d.Nonce != 7 {
-		t.Errorf("layerzero_packet_data = %+v", d)
-	}
-
-	// Integral floating-point spellings decode into integer fields.
-	if d := old.ChangeDnsRecordData; d == nil || d.Flags == nil || *d.Flags != 1 {
-		t.Fatalf("change_dns_record_data = %+v", d)
-	}
-}
-
-// TestDnsFlagsForms checks every supported flags representation through RawAction.
-func TestDnsFlagsForms(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		flags interface{}
-		want  int64
-	}{
-		{"python str(float)", "1.0", 1},
-		{"decimal string", "3", 3},
-		{"native int", int64(3), 3},
-		{"exponent form", "1e+16", 10000000000000000},
-		{"negative", "-1", -1},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			a := decodeAction(t, map[string]interface{}{
-				"action_id": "a", "type": "change_dns_record",
-				"change_dns_record_data": map[string]interface{}{"flags": tc.flags},
-			})
-			raw, err := a.ToRawAction()
-			if err != nil {
-				t.Fatalf("ToRawAction: %v", err)
-			}
-			if raw.ChangeDNSRecordFlags == nil || *raw.ChangeDNSRecordFlags != tc.want {
-				t.Fatalf("flags = %v, want %d", raw.ChangeDNSRecordFlags, tc.want)
-			}
-		})
-	}
-
-	// absent stays nil
-	a := decodeAction(t, map[string]interface{}{
-		"action_id": "a", "type": "change_dns_record",
-		"change_dns_record_data": map[string]interface{}{"key": "d2FsbGV0"},
-	})
-	raw, err := a.ToRawAction()
+	// The wire ancestry list is copied onto the RawAction the API embeds as raw_action.
+	raw, err := stringForm.ToRawAction()
 	if err != nil {
 		t.Fatalf("ToRawAction: %v", err)
 	}
-	if raw.ChangeDNSRecordFlags != nil {
-		t.Fatalf("absent flags = %v, want nil", *raw.ChangeDNSRecordFlags)
+	if len(raw.AncestorType) != 1 || raw.AncestorType[0] != "jvault_stake" {
+		t.Errorf("raw ancestor_type = %v", raw.AncestorType)
 	}
 }
 
-// TestNativeNumberIntoStringField checks decimal rendering for native integers.
-func TestNativeNumberIntoStringField(t *testing.T) {
+// TestPayloadDecodeError checks a malformed payload fails the conversion.
+func TestPayloadDecodeError(t *testing.T) {
 	a := decodeAction(t, map[string]interface{}{
-		"action_id": "a",
-		"type":      "jetton_transfer",
-		"value":     uint64(1) << 63, // Uint64 code: must not read back as negative
-		"amount":    int64(-5),       // Int8 code
-		"jetton_transfer_data": map[string]interface{}{
-			"forward_amount": uint32(1000000),
-			"query_id":       0, // positive fixnum
-		},
-		"nft_transfer_data": map[string]interface{}{
-			"nft_item_index": uint64(18446744073709551615),
-			"price":          float64(1037),
-		},
+		"action_id": "a", "type": "jetton_transfer", "payload": []byte{9, 0},
 	})
-	checks := []struct {
-		got  *string
-		want string
-	}{
-		{a.Value, "9223372036854775808"},
-		{a.Amount, "-5"},
-		{a.JettonTransferData.ForwardAmount, "1000000"},
-		{a.JettonTransferData.QueryId, "0"},
-		{a.NftTransferData.NftItemIndex, "18446744073709551615"},
-		{a.NftTransferData.Price, "1037"},
-	}
-	for i, c := range checks {
-		if c.got == nil || *c.got != c.want {
-			t.Errorf("check %d: got %v, want %q", i, c.got, c.want)
-		}
+	if _, err := a.ToRawAction(); err == nil {
+		t.Fatal("unsupported payload codec accepted")
 	}
 }
 
@@ -314,28 +191,26 @@ func TestFlexDecodeRejectsNonNumbers(t *testing.T) {
 	for _, bad := range []interface{}{"abc", "1.5", "", "0x10", true} {
 		var a Action
 		err := msgpack.Unmarshal(mustMarshal(t, map[string]interface{}{
-			"multisig_approve_data": map[string]interface{}{"signer_index": bad},
+			"start_lt": bad,
 		}), &a)
 		if err == nil {
-			t.Errorf("signer_index = %#v decoded to %v, want error", bad, *a.MultisigApproveData.SignerIndex)
+			t.Errorf("start_lt = %#v decoded to %v, want error", bad, *a.StartLt)
 		}
 	}
 
 	a := decodeAction(t, map[string]interface{}{
-		"value": nil,
-		"multisig_approve_data": map[string]interface{}{
-			"signer_index": nil,
-			"exit_code":    int32(-7),
-		},
+		"value":     nil,
+		"opcode":    nil,
+		"end_utime": uint32(4294967295),
 	})
 	if a.Value != nil {
 		t.Errorf("value = %v, want nil", *a.Value)
 	}
-	if a.MultisigApproveData.SignerIndex != nil {
-		t.Errorf("signer_index = %v, want nil", *a.MultisigApproveData.SignerIndex)
+	if a.Opcode != nil {
+		t.Errorf("opcode = %v, want nil", *a.Opcode)
 	}
-	if *a.MultisigApproveData.ExitCode != -7 {
-		t.Errorf("exit_code = %v", *a.MultisigApproveData.ExitCode)
+	if *a.EndUtime != 4294967295 {
+		t.Errorf("end_utime = %v, want 4294967295", *a.EndUtime)
 	}
 }
 
@@ -343,14 +218,14 @@ func TestFlexDecodeRejectsNonNumbers(t *testing.T) {
 func TestControlStockDecoderStillRejectsStrings(t *testing.T) {
 	type stockInt64 int64
 	var v struct {
-		SignerIndex *stockInt64 `msgpack:"signer_index"`
+		StartLt *stockInt64 `msgpack:"start_lt"`
 	}
-	blob := mustMarshal(t, map[string]interface{}{"signer_index": "3"})
+	blob := mustMarshal(t, map[string]interface{}{"start_lt": "3"})
 	if err := msgpack.Unmarshal(blob, &v); err == nil {
-		t.Fatalf("stock decoder accepted %q -> %v", "3", *v.SignerIndex)
+		t.Fatalf("stock decoder accepted %q -> %v", "3", *v.StartLt)
 	}
 	var flex struct {
-		SignerIndex *int64 `msgpack:"signer_index"`
+		StartLt *int64 `msgpack:"start_lt"`
 	}
 	if err := msgpack.Unmarshal(blob, &flex); err != nil {
 		t.Fatalf("flex decoder rejected %q: %v", "3", err)
@@ -423,16 +298,11 @@ func TestNormAddr(t *testing.T) {
 		upper = "0:AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"
 	)
 	a := decodeAction(t, map[string]interface{}{
-		"action_id": "a", "type": "ton_transfer",
+		"action_id": "a", "type": "vesting_add_whitelist",
 		"source":      lower,
 		"destination": upper,
 		"accounts":    []string{lower, upper},
-		"vesting_add_whitelist_data": map[string]interface{}{
-			"accounts_added": []string{lower},
-		},
-		"jvault_claim_data": map[string]interface{}{
-			"claimed_jettons": []string{lower},
-		},
+		"payload":     payloadBytes(t, accountsAddedPayloadHex),
 	})
 	raw, err := a.ToRawAction()
 	if err != nil {
@@ -441,17 +311,24 @@ func TestNormAddr(t *testing.T) {
 	if raw.Source == nil || string(*raw.Source) != string(*raw.Destination) {
 		t.Errorf("source %v not normalized to destination %v", raw.Source, raw.Destination)
 	}
-	// the four sites that bypass ptrAccountAddress
+	// the envelope account list bypasses ptrAccountAddress and is normalized
 	if len(raw.Accounts) != 2 || string(raw.Accounts[0]) != upper || string(raw.Accounts[1]) != upper {
 		t.Errorf("accounts = %v", raw.Accounts)
 	}
 	if len(raw.VestingAddWhitelistAccountsAdded) != 1 || string(raw.VestingAddWhitelistAccountsAdded[0]) != upper {
 		t.Errorf("accounts_added = %v", raw.VestingAddWhitelistAccountsAdded)
 	}
-	if len(raw.JvaultClaimClaimedJettons) != 1 || string(raw.JvaultClaimClaimedJettons[0]) != upper {
-		t.Errorf("claimed_jettons = %v", raw.JvaultClaimClaimedJettons)
+	if raw.Asset != nil {
+		t.Errorf("absent asset = %v, want nil", *raw.Asset)
 	}
-	// ComputePh must be populated: ToTransaction:1397 type-asserts Data unconditionally.
+}
+
+// TestToTransactionAccount checks the node conversion returns the node's normalized
+// account. The fixture carries a compute phase because ToTransaction type-asserts
+// ComputePh.Data.
+func TestToTransactionAccount(t *testing.T) {
+	const lower = "0:aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+	const upper = "0:AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"
 	node := TraceNode{Transaction: transaction{
 		Account:     lower,
 		Description: transactionDescr{ComputePh: computePhaseVar{Data: trComputePhaseSkipped{}}},
@@ -462,9 +339,6 @@ func TestNormAddr(t *testing.T) {
 	}
 	if string(tx.Account) != upper {
 		t.Errorf("transaction account = %q", tx.Account)
-	}
-	if raw.Asset != nil {
-		t.Errorf("absent asset = %v, want nil", *raw.Asset)
 	}
 }
 
@@ -519,10 +393,10 @@ func TestConvertHSetBothEncodings(t *testing.T) {
 		}
 	}
 
-	natural := naturalAction()
-	oldTrace, err := ConvertHSet(build(pythonStyleAction(), node, false), rootKey)
+	natural := naturalAction(t)
+	oldTrace, err := ConvertHSet(build(stringNumbersAction(t), node, false), rootKey)
 	if err != nil {
-		t.Fatalf("python-style ConvertHSet: %v", err)
+		t.Fatalf("string-number ConvertHSet: %v", err)
 	}
 	newTrace, err := ConvertHSet(build(natural, node, true), rootKey)
 	if err != nil {
@@ -549,7 +423,7 @@ func TestConvertHSetBothEncodings(t *testing.T) {
 		t.Errorf("trace_end_lt = %v", got)
 	}
 
-	// the whole action still converts
+	// the whole action still converts, payload included
 	if _, err := oldTrace.Actions[0].ToRawAction(); err != nil {
 		t.Fatalf("ToRawAction: %v", err)
 	}

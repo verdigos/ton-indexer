@@ -11,8 +11,7 @@ import (
 )
 
 // Accept both decimal strings and native msgpack numbers in emulated trace
-// payloads. Registration covers scalar integer and string fields and must run
-// before msgpack memoizes its per-type decoders.
+// payloads. Register decoders before msgpack memoizes their types.
 func init() {
 	for _, v := range []interface{}{int(0), int8(0), int16(0), int32(0), int64(0)} {
 		msgpack.Register(v, nil, decodeFlexInt)
