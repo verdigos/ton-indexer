@@ -2,7 +2,6 @@ package crud
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -501,22 +500,9 @@ func queryRawActionsImplV2(query string, args []any, conn *pgxpool.Conn, setting
 	// default:
 	// }
 	defer rows.Close()
-	res := []models.RawAction{}
-	for rows.Next() {
-		if loc, err := parse.ScanRawAction(rows); err == nil {
-			res = append(res, *loc)
-		} else if !errors.Is(err, parse.ErrPayloadDecode) {
-			return nil, models.IndexError{Code: 500, Message: err.Error()}
-		} else {
-			values, valuesErr := rows.Values()
-			if valuesErr != nil || len(values) < 2 {
-				return nil, models.IndexError{Code: 500, Message: err.Error()}
-			}
-			log.Printf("failed to scan raw action trace_id=%v action_id=%v: %v", values[0], values[1], err)
-		}
-	}
-	if rows.Err() != nil {
-		return nil, models.IndexError{Code: 500, Message: rows.Err().Error()}
+	res, err := scanRawActions(rows)
+	if err != nil {
+		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
 	return res, nil
 }

@@ -186,8 +186,8 @@ func CollectAddressesFromAction(addr_list *map[models.AccountAddress]bool, raw_a
 		(*addr_list)[*v] = true
 	}
 	for _, reward := range raw_action.JvaultClaimClaimedJettons {
-		if reward.Asset != nil {
-			(*addr_list)[*reward.Asset] = true
+		if reward.Asset != "" {
+			(*addr_list)[reward.Asset] = true
 		}
 	}
 
@@ -717,23 +717,14 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			IsKnownAsset:     knownAsset,
 		}
 	case "jvault_claim":
-		// The grouped payload always reported both halves of a claim pair, as an empty
-		// string when the value was null; a flat record without the key must not turn
-		// that into null.
+		// A claim pair always reports both halves: a member the record omits reports as
+		// an empty string, never null.
 		claimedRewards := make([]models.JettonAmountPair, 0)
 		for i := range raw.JvaultClaimClaimedJettons {
-			reward := raw.JvaultClaimClaimedJettons[i]
-			jetton := models.AccountAddress("")
-			if reward.Asset != nil {
-				jetton = *reward.Asset
-			}
-			amount := ""
-			if reward.Amount != nil {
-				amount = *reward.Amount
-			}
+			reward := &raw.JvaultClaimClaimedJettons[i]
 			claimedRewards = append(claimedRewards, models.JettonAmountPair{
-				Jetton: &jetton,
-				Amount: &amount,
+				Jetton: &reward.Asset,
+				Amount: &reward.Amount,
 			})
 		}
 		act.Details = models.ActionDetailsJvaultClaim{
@@ -1198,7 +1189,7 @@ func ScanRawAction(row pgx.Row) (*models.RawAction, error) {
 		return nil, err
 	}
 	if err := DecodeActionPayload(payload, &act); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("trace_id=%v action_id=%v: %w", act.TraceId, act.ActionId, err)
 	}
 	return &act, nil
 }

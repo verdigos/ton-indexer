@@ -163,7 +163,7 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	}
 	values, err := decodeCompactPayload(payload[1:])
 	if err != nil {
-		return fmt.Errorf("%w: decode action payload: %v", ErrPayloadDecode, err)
+		return fmt.Errorf("%w: %v", ErrPayloadDecode, err)
 	}
 	if err := applyActionPayload(action, values); err != nil {
 		return fmt.Errorf("%w: %v", ErrPayloadDecode, err)
@@ -215,7 +215,7 @@ func fillActionPayload(target reflect.Value, action *models.RawAction, prefixes 
 			continue
 		}
 		if err := setPayloadValue(field, value); err != nil {
-			return fmt.Errorf("decode action payload field %s: %w", path, err)
+			return fmt.Errorf("field %s: %w", path, err)
 		}
 	}
 	return nil
@@ -243,7 +243,7 @@ func resolvePayloadField(target reflect.Value, prefixes []string, path string) r
 func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interface{}) error {
 	items, ok := value.([]interface{})
 	if !ok {
-		return fmt.Errorf("decode action payload field legs: expected array, got %T", value)
+		return fmt.Errorf("field legs: expected array, got %T", value)
 	}
 	for index, item := range items {
 		// An empty leg is a placeholder: it keeps the slot its index gives it, so the
@@ -253,7 +253,7 @@ func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interf
 		}
 		record, ok := item.(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("decode action payload field legs: expected map, got %T", item)
+			return fmt.Errorf("field legs: expected map, got %T", item)
 		}
 		for member, memberValue := range record {
 			if memberValue == nil {
@@ -264,7 +264,7 @@ func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interf
 				continue
 			}
 			if err := setPayloadValue(field, memberValue); err != nil {
-				return fmt.Errorf("decode action payload field legs[%d].%s: %w", index, member, err)
+				return fmt.Errorf("field legs[%d].%s: %w", index, member, err)
 			}
 		}
 	}

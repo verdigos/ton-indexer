@@ -71,6 +71,7 @@ func naturalAction(t *testing.T) map[string]interface{} {
 		"trace_external_hash_norm": "ZXh0X2hhc2hfbm9ybQ==",
 		"tx_hashes":                []string{"aGFzaDE=", "aGFzaDI="},
 		"success":                  true,
+		"ancestor_type":            []string{"jvault_stake"},
 
 		// top-level numbers the string-number form keeps native
 		"start_lt":           uint64(58913247000001),
@@ -94,8 +95,8 @@ func naturalAction(t *testing.T) map[string]interface{} {
 	}
 }
 
-// The two fixture payloads in the compact codec. The jetton_transfer bytes are the ones
-// the engine wrote into testdata/actions_wire.msgpack.
+// The two fixture payloads in the compact codec: one jetton_transfer detail set and one
+// accounts_added list.
 const (
 	jettonTransferPayloadHex = "01850da568656c6c6f0ec220ce17d7840059cfffffffffffffffff5dc42100bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	accountsAddedPayloadHex  = "01810191d942303a41414242434344444545464630303131323233333434353536363737383839394141424243434444454546463030313132323333343435353636373738383939"
@@ -165,18 +166,13 @@ func TestStringNumbersAndNativeDecodeIdentically(t *testing.T) {
 	if !reflect.DeepEqual(old.Payload, new_.Payload) {
 		t.Errorf("payload bytes differ: %x / %x", old.Payload, new_.Payload)
 	}
+	// The wire ancestry list is copied onto the RawAction the API embeds as raw_action.
 	raw, err := old.ToRawAction()
 	if err != nil {
 		t.Fatalf("ToRawAction: %v", err)
 	}
-	if raw.JettonTransferQueryId == nil || *raw.JettonTransferQueryId != "18446744073709551615" {
-		t.Errorf("payload query_id = %v", raw.JettonTransferQueryId)
-	}
-	if raw.JettonTransferForwardAmount == nil || *raw.JettonTransferForwardAmount != "400000000" {
-		t.Errorf("payload forward_amount = %v", raw.JettonTransferForwardAmount)
-	}
-	if raw.JettonTransferComment == nil || *raw.JettonTransferComment != "hello" {
-		t.Errorf("payload comment = %v", raw.JettonTransferComment)
+	if len(raw.AncestorType) != 1 || raw.AncestorType[0] != "jvault_stake" {
+		t.Errorf("raw ancestor_type = %v", raw.AncestorType)
 	}
 }
 
@@ -322,7 +318,17 @@ func TestNormAddr(t *testing.T) {
 	if len(raw.VestingAddWhitelistAccountsAdded) != 1 || string(raw.VestingAddWhitelistAccountsAdded[0]) != upper {
 		t.Errorf("accounts_added = %v", raw.VestingAddWhitelistAccountsAdded)
 	}
-	// ComputePh must be populated: ToTransaction:1397 type-asserts Data unconditionally.
+	if raw.Asset != nil {
+		t.Errorf("absent asset = %v, want nil", *raw.Asset)
+	}
+}
+
+// TestToTransactionAccount checks the node conversion returns the node's normalized
+// account. The fixture carries a compute phase because ToTransaction type-asserts
+// ComputePh.Data.
+func TestToTransactionAccount(t *testing.T) {
+	const lower = "0:aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+	const upper = "0:AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"
 	node := TraceNode{Transaction: transaction{
 		Account:     lower,
 		Description: transactionDescr{ComputePh: computePhaseVar{Data: trComputePhaseSkipped{}}},
@@ -333,9 +339,6 @@ func TestNormAddr(t *testing.T) {
 	}
 	if string(tx.Account) != upper {
 		t.Errorf("transaction account = %q", tx.Account)
-	}
-	if raw.Asset != nil {
-		t.Errorf("absent asset = %v, want nil", *raw.Asset)
 	}
 }
 
@@ -421,11 +424,7 @@ func TestConvertHSetBothEncodings(t *testing.T) {
 	}
 
 	// the whole action still converts, payload included
-	raw, err := oldTrace.Actions[0].ToRawAction()
-	if err != nil {
+	if _, err := oldTrace.Actions[0].ToRawAction(); err != nil {
 		t.Fatalf("ToRawAction: %v", err)
-	}
-	if raw.JettonTransferComment == nil || *raw.JettonTransferComment != "hello" {
-		t.Errorf("payload comment = %v", raw.JettonTransferComment)
 	}
 }

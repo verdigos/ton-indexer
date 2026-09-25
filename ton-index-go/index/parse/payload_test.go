@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -14,35 +13,8 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// assertWirePayload checks the emulator row carries exactly the row's payload bytes.
-func assertWirePayload(t *testing.T, wireHex, payloadHex string) {
-	t.Helper()
-	wire, err := hex.DecodeString(wireHex)
-	if err != nil {
-		t.Fatalf("decode wire hex: %v", err)
-	}
-	var actions []emulatedAction
-	if err := msgpack.Unmarshal(wire, &actions); err != nil {
-		t.Fatalf("decode emulator wire: %v", err)
-	}
-	if len(actions) != 1 {
-		t.Fatalf("wire contains %d actions", len(actions))
-	}
-	payload, err := hex.DecodeString(payloadHex)
-	if err != nil {
-		t.Fatalf("decode payload hex: %v", err)
-	}
-	if !bytes.Equal(actions[0].Payload, payload) {
-		t.Errorf("wire payload = %x, row payload = %x", actions[0].Payload, payload)
-	}
-}
-
-type emulatedAction struct {
-	Payload []byte `msgpack:"payload"`
-}
-
-// TestJvaultClaimRewardMissingMember pins the frozen claim pair shape: a record whose
-// member was null in the grouped payload reports that half as an empty string, never null.
+// TestJvaultClaimRewardMissingMember pins the claim pair shape: a member the record omits
+// reports as an empty string, never null.
 func TestJvaultClaimRewardMissingMember(t *testing.T) {
 	const address = "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 	for _, tc := range []struct {
@@ -100,7 +72,8 @@ func TestJvaultClaimRewardMissingMember(t *testing.T) {
 	}
 }
 
-func decodeWireAction(t *testing.T, encoded string) *models.RawAction {
+// decodeWireAction decodes one emulator wire row into its action.
+func decodeWireAction(t *testing.T, encoded string) emulated.Action {
 	t.Helper()
 	wire, err := hex.DecodeString(encoded)
 	if err != nil {
@@ -113,32 +86,7 @@ func decodeWireAction(t *testing.T, encoded string) *models.RawAction {
 	if len(actions) != 1 {
 		t.Fatalf("wire contains %d actions", len(actions))
 	}
-	raw, err := actions[0].ToRawAction()
-	if err != nil {
-		t.Fatalf("ToRawAction: %v", err)
-	}
-	return raw
-}
-
-func clearPayloadFields(action *models.RawAction) {
-	envelope := map[string]bool{
-		"TraceId": true, "ActionId": true, "StartLt": true, "EndLt": true,
-		"StartUtime": true, "EndUtime": true, "TraceEndLt": true, "TraceEndUtime": true,
-		"TraceMcSeqnoEnd": true, "Source": true, "SourceSecondary": true,
-		"Destination": true, "DestinationSecondary": true, "Asset": true,
-		"AssetSecondary": true, "Asset2": true, "Asset2Secondary": true,
-		"Opcode": true, "TxHashes": true, "Type": true, "Value": true, "Amount": true,
-		"Success": true, "Finality": true, "TraceExternalHash": true,
-		"TraceExternalHashNorm": true, "ExtraCurrencies": true, "AncestorType": true,
-		"Accounts": true,
-	}
-	value := reflect.ValueOf(action).Elem()
-	typeOf := value.Type()
-	for i := range value.NumField() {
-		if !envelope[typeOf.Field(i).Name] {
-			value.Field(i).SetZero()
-		}
-	}
+	return actions[0]
 }
 
 // TestDecodeActionPayloadEnvelope pins the payload envelope: codec byte 1 followed by ONE

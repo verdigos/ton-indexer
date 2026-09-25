@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -14,9 +13,10 @@ import (
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 )
 
-const contractRows = 1229
-
-var contractPath = flag.String("payload-contract-file", "testdata/payload_contract.jsonl.gz", "API contract baseline")
+const (
+	contractPath = "testdata/payload_contract.jsonl.gz"
+	contractRows = 1229
+)
 
 type payloadContractRow struct {
 	FixtureID string          `json:"fixture_id"`
@@ -57,21 +57,22 @@ func checkAPIBaseline(t *testing.T, path string, rows int) []string {
 				t.Fatal("missing API JSON")
 			}
 			wire := decodeWireAction(t, row.Wire)
-			if string(wire.ActionId) != row.ActionID || wire.Type != row.Type {
+			if wire.ActionId != row.ActionID || wire.Type != row.Type {
 				t.Fatalf("wire identity = %s/%s", wire.ActionId, wire.Type)
 			}
 			// The emulator row and the DB column carry the same payload bytes.
-			assertWirePayload(t, row.Wire, row.Payload)
-			raw := *wire
-			clearPayloadFields(&raw)
 			payload, err := hex.DecodeString(row.Payload)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := parse.DecodeActionPayload(payload, &raw); err != nil {
+			if !bytes.Equal(wire.Payload, payload) {
+				t.Errorf("wire payload = %x, row payload = %x", wire.Payload, payload)
+			}
+			raw, err := wire.ToRawAction()
+			if err != nil {
 				t.Fatal(err)
 			}
-			action, err := parse.ParseRawAction(&raw)
+			action, err := parse.ParseRawAction(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +97,7 @@ func checkAPIBaseline(t *testing.T, path string, rows int) []string {
 // TestPayloadContract requires the API JSON of the current decoder over the committed
 // baseline, whose rows must be sorted and free of duplicates.
 func TestPayloadContract(t *testing.T) {
-	keys := checkAPIBaseline(t, *contractPath, contractRows)
+	keys := checkAPIBaseline(t, contractPath, contractRows)
 	seen := make(map[string]bool, len(keys))
 	lastKey := ""
 	for _, key := range keys {

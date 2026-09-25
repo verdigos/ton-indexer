@@ -6,10 +6,9 @@
   "golden_set_sha256": "d1dccce89609efa0222ad51c610b3be13889528a73201230f9eaac8911b91b39",
   "gzip_bytes": 812073,
   "gzip_sha256": "6bde4f714c6ab5295aeb2d92afe5ac8d747409b12ab9119a78510fbdb9dce1cd",
-  "main_sha": "9036569b",
+  "main_sha": "c495a87c",
   "payload_bytes": 2875492,
   "payload_sha256": "d145ae00cdd0e77a6f4d59e9970e6511dcde8320f70c33b39e13fdc714a827f3",
-  "rows": 1229,
   "rows_by_type": {
     "auction_bid": 3,
     "auction_outbid": 2,

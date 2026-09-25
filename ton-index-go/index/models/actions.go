@@ -258,8 +258,8 @@ type RawActionVaultExcessEntry struct {
 // RawActionJvaultClaimReward is one entry of the jvault claim payload's
 // claimed_rewards list; the length-mismatch rule lives in the payload writer.
 type RawActionJvaultClaimReward struct {
-	Asset  *AccountAddress
-	Amount *string
+	Asset  AccountAddress
+	Amount string
 }
 
 type ActionDetailsCallContract struct {

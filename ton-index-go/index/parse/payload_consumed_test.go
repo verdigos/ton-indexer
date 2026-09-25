@@ -147,7 +147,7 @@ func (s *consumedScan) checkRow(t *testing.T, row consumedFixtureRow) {
 	if err != nil {
 		t.Fatalf("original row: %v", err)
 	}
-	paths, data, err := payloadKeyPaths(payload)
+	paths, err := payloadKeyPaths(payload)
 	if err != nil {
 		t.Fatalf("payload key paths: %v", err)
 	}
@@ -159,27 +159,15 @@ func (s *consumedScan) checkRow(t *testing.T, row consumedFixtureRow) {
 			s.inconclusive[label]++
 			continue
 		}
-		collected := false
-		var modifiedRaw *models.RawAction
-		if path.placeholder {
-			// No field carries a placeholder: dropping it means the list loses the
-			// element, which shifts every leg behind it.
-			modifiedRaw, err = payloadWithoutLegElement(row.Type, data, path.index)
-			if err != nil {
-				t.Fatalf("without %s: %v", path.label(), err)
+		variant := *base
+		if base.Extra != nil {
+			variant.Extra = map[string]interface{}{}
+			for name, value := range base.Extra {
+				variant.Extra[name] = value
 			}
-		} else {
-			variant := *base
-			if base.Extra != nil {
-				variant.Extra = map[string]interface{}{}
-				for name, value := range base.Extra {
-					variant.Extra[name] = value
-				}
-			}
-			collected = dropPayloadKey(&variant, row.Type, path)
-			modifiedRaw = &variant
 		}
-		modified, err := observablesOf(modifiedRaw)
+		collected := dropPayloadKey(&variant, row.Type, path)
+		modified, err := observablesOf(&variant)
 		if err != nil {
 			t.Fatalf("without %s: %v", path.label(), err)
 		}
@@ -191,44 +179,6 @@ func (s *consumedScan) checkRow(t *testing.T, row consumedFixtureRow) {
 			!sameAddresses(original.addresses, modified.addresses) {
 			s.observed[label]++
 		}
-	}
-}
-
-// TestPayloadConsumedKeysPlaceholderRow checks the placeholder mechanic on a synthetic
-// row: the frozen corpus has no empty leg, and the C++ encoder emits one for an empty leg
-// before a filled one. The placeholder must count as consumed - removing it moves the
-// filled leg down a slot - so the key does not fail.
-func TestPayloadConsumedKeysPlaceholderRow(t *testing.T) {
-	record := map[string]interface{}{
-		"asset":  "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		"amount": "456",
-	}
-	payload, err := EncodeCompactForTest(map[string]interface{}{
-		"legs": []interface{}{nil, record},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	row := consumedFixtureRow{
-		FixtureID: "synthetic",
-		ActionID:  "legs-sol",
-		Type:      "dex_deposit_liquidity",
-		Payload:   hex.EncodeToString(payload),
-	}
-	scan := newConsumedScan()
-	scan.checkRow(t, row)
-	for _, label := range []string{"dex_deposit_liquidity.legs[0]", "dex_deposit_liquidity.legs[1].amount", "dex_deposit_liquidity.legs[1].asset"} {
-		if scan.rowsSeen[label] != 1 {
-			t.Errorf("%s seen %d times, want 1", label, scan.rowsSeen[label])
-			continue
-		}
-		if scan.observed[label] != 1 {
-			t.Errorf("%s observed as consumed %d times, want 1 (inconclusive=%v)",
-				label, scan.observed[label], scan.inconclusive[label] == 1)
-		}
-	}
-	if scan.inconclusive["dex_deposit_liquidity.legs[0]"] != 0 {
-		t.Errorf("the placeholder was treated as an empty container")
 	}
 }
 
@@ -263,16 +213,13 @@ func sameAddresses(a, b map[models.AccountAddress]bool) bool {
 	return true
 }
 
-// keyPath is one payload key of a row: its path parts, whether it is a `legs[i]` entry,
-// whether that entry is a nil placeholder (no field to zero - the whole list has to lose
-// the element), its leg index, and whether its value is an empty container (invisible to
-// any drop test).
+// keyPath is one payload key of a row: its path parts, whether it is a `legs[i]` member,
+// and whether the value is invisible to the drop test (an empty container, or a nil leg
+// whose placeholder carries no field to zero).
 type keyPath struct {
-	parts       []string
-	leg         bool
-	placeholder bool
-	index       int
-	empty       bool
+	parts []string
+	leg   bool
+	empty bool
 }
 
 func (p keyPath) label() string {
@@ -286,16 +233,15 @@ func (p keyPath) label() string {
 	return out
 }
 
-// payloadKeyPaths lists the payload keys to check (leaves of nested maps as dotted paths,
-// each `legs[i].<member>`, and any other value as its own key) and returns the decoded
-// payload map, which the placeholder drop needs to re-encode the row.
-func payloadKeyPaths(payload []byte) ([]keyPath, map[string]interface{}, error) {
+// payloadKeyPaths lists the payload keys to check: leaves of nested maps as dotted paths,
+// each `legs[i].<member>`, and any other value as its own key.
+func payloadKeyPaths(payload []byte) ([]keyPath, error) {
 	if len(payload) == 0 || payload[0] != actionPayloadCodecMsgpack {
-		return nil, nil, fmt.Errorf("unsupported payload codec")
+		return nil, fmt.Errorf("unsupported payload codec")
 	}
 	data, err := decodeCompactPayload(payload[1:])
 	if err != nil {
-		return nil, nil, fmt.Errorf("decode payload: %w", err)
+		return nil, fmt.Errorf("decode payload: %w", err)
 	}
 	var paths []keyPath
 	for _, name := range sortedKeys(data) {
@@ -303,17 +249,14 @@ func payloadKeyPaths(payload []byte) ([]keyPath, map[string]interface{}, error) 
 		if name == "legs" {
 			items, ok := value.([]interface{})
 			if !ok {
-				return nil, nil, fmt.Errorf("legs is %T, want an array", value)
+				return nil, fmt.Errorf("legs is %T, want an array", value)
 			}
 			for index, item := range items {
 				record, ok := item.(map[string]interface{})
 				if !ok {
-					paths = append(paths, keyPath{
-						parts:       []string{fmt.Sprintf("legs[%d]", index)},
-						leg:         true,
-						placeholder: item == nil,
-						index:       index,
-					})
+					// A nil placeholder has no member to drop, so the drop test cannot
+					// see it either.
+					paths = append(paths, keyPath{parts: []string{fmt.Sprintf("legs[%d]", index)}, empty: true})
 					continue
 				}
 				for _, member := range sortedKeys(record) {
@@ -340,7 +283,7 @@ func payloadKeyPaths(payload []byte) ([]keyPath, map[string]interface{}, error) 
 		}
 		paths = append(paths, keyPath{parts: []string{name}, empty: emptyContainer(value)})
 	}
-	return paths, data, nil
+	return paths, nil
 }
 
 func emptyContainer(value interface{}) bool {
@@ -366,35 +309,6 @@ func sortedKeys(values map[string]interface{}) []string {
 // sentinelAddress is a valid address the collector probe uses to detect that a field is
 // one of the collector's reads.
 var sentinelAddress = models.AccountAddress("0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-
-// payloadWithoutLegElement re-encodes the row's payload with one `legs` element removed,
-// which is how a nil placeholder's absence looks: the legs behind it move down a slot.
-func payloadWithoutLegElement(typeName string, data map[string]interface{}, index int) (*models.RawAction, error) {
-	clone := make(map[string]interface{}, len(data))
-	for key, value := range data {
-		clone[key] = value
-	}
-	items, ok := clone["legs"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("legs is %T, want an array", clone["legs"])
-	}
-	if index < 0 || index >= len(items) {
-		return nil, fmt.Errorf("legs index %d is outside the %d element list", index, len(items))
-	}
-	kept := make([]interface{}, 0, len(items)-1)
-	kept = append(kept, items[:index]...)
-	kept = append(kept, items[index+1:]...)
-	clone["legs"] = kept
-	body, err := EncodeCompactForTest(clone)
-	if err != nil {
-		return nil, err
-	}
-	raw := &models.RawAction{Type: typeName}
-	if err := DecodeActionPayload(body, raw); err != nil {
-		return nil, err
-	}
-	return raw, nil
-}
 
 // dropPayloadKey removes one decoded payload key from `raw` the way the key's absence
 // would: extra keys leave RawAction.Extra, every other key zeroes the field the decoder

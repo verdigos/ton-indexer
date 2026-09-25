@@ -3,10 +3,8 @@ package parse
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"math/big"
 	"strconv"
 	"strings"
@@ -19,8 +17,6 @@ const (
 	// compactMaxDepth bounds the nesting of records and arrays: a deeper payload is
 	// rejected before the recursion can exhaust the stack.
 	compactMaxDepth = 32
-	// compactMaxKeyText bounds the key sample an error message quotes.
-	compactMaxKeyText = 32
 )
 
 // The compact payload (codec byte 1) is ONE msgpack map whose keys are registry ids and
@@ -80,7 +76,7 @@ func (d *compactDecoder) record() (map[string]interface{}, error) {
 		}
 		id, ok := compactKeyID(key)
 		if !ok {
-			return nil, fmt.Errorf("payload map key %s is not a registry id", compactKeyText(key))
+			return nil, fmt.Errorf("payload map key of type %T is not a registry id", key)
 		}
 		info := payloadKeys[id]
 		if info.Name == "" {
@@ -123,7 +119,7 @@ func (d *compactDecoder) enter(what string) error {
 // compactKeyID reads a registry id from a decoded msgpack key: any non-negative integer
 // up to 255, whatever msgpack width the encoder chose.
 func compactKeyID(key interface{}) (uint8, bool) {
-	number, _, ok := msgpackUint(key)
+	number, ok := msgpackUint(key)
 	if !ok || number > 255 {
 		return 0, false
 	}
@@ -131,40 +127,39 @@ func compactKeyID(key interface{}) (uint8, bool) {
 }
 
 // msgpackUint reads a non-negative integer of any msgpack width (a positive fixint
-// decodes to int8, so a non-negative int is a valid uint too). An integer below zero
-// returns ok false with `negative` carrying it, so the caller can name it in its error.
-func msgpackUint(value interface{}) (number uint64, negative int64, ok bool) {
+// decodes to int8, so a non-negative int is a valid uint too).
+func msgpackUint(value interface{}) (uint64, bool) {
 	switch value := value.(type) {
 	case int8:
 		if value < 0 {
-			return 0, int64(value), false
+			return 0, false
 		}
-		return uint64(value), 0, true
+		return uint64(value), true
 	case int16:
 		if value < 0 {
-			return 0, int64(value), false
+			return 0, false
 		}
-		return uint64(value), 0, true
+		return uint64(value), true
 	case int32:
 		if value < 0 {
-			return 0, int64(value), false
+			return 0, false
 		}
-		return uint64(value), 0, true
+		return uint64(value), true
 	case int64:
 		if value < 0 {
-			return 0, value, false
+			return 0, false
 		}
-		return uint64(value), 0, true
+		return uint64(value), true
 	case uint8:
-		return uint64(value), 0, true
+		return uint64(value), true
 	case uint16:
-		return uint64(value), 0, true
+		return uint64(value), true
 	case uint32:
-		return uint64(value), 0, true
+		return uint64(value), true
 	case uint64:
-		return value, 0, true
+		return value, true
 	}
-	return 0, 0, false
+	return 0, false
 }
 
 // value decodes the value of one registry key. A null is an absent key for every type.
@@ -216,13 +211,13 @@ func compactTypedText(value interface{}, info payloadKeyInfo) (interface{}, erro
 	case payloadTypeString:
 		text, ok := value.(string)
 		if !ok {
-			return nil, fmt.Errorf("expected a msgpack string, got %s", compactTypeName(value))
+			return nil, fmt.Errorf("expected a msgpack string, got %T", value)
 		}
 		return text, nil
 	case payloadTypeBool:
 		flag, ok := value.(bool)
 		if !ok {
-			return nil, fmt.Errorf("expected a msgpack bool, got %s", compactTypeName(value))
+			return nil, fmt.Errorf("expected a msgpack bool, got %T", value)
 		}
 		return flag, nil
 	}
@@ -234,7 +229,7 @@ func compactTypedText(value interface{}, info payloadKeyInfo) (interface{}, erro
 func compactBin(value interface{}, size int, what string) ([]byte, error) {
 	raw, ok := value.([]byte)
 	if !ok {
-		return nil, fmt.Errorf("expected a %d byte bin %s, got %s", size, what, compactTypeName(value))
+		return nil, fmt.Errorf("expected a %d byte bin %s, got %T", size, what, value)
 	}
 	if size != 0 && len(raw) != size {
 		return nil, fmt.Errorf("expected a %d byte %s, got %d bytes", size, what, len(raw))
@@ -249,12 +244,9 @@ func compactUintText(value interface{}) (interface{}, error) {
 	if raw, ok := value.([]byte); ok {
 		return new(big.Int).SetBytes(raw).String(), nil
 	}
-	number, negative, ok := msgpackUint(value)
+	number, ok := msgpackUint(value)
 	if !ok {
-		if negative != 0 {
-			return nil, fmt.Errorf("negative msgpack integer %d for a uint key", negative)
-		}
-		return nil, fmt.Errorf("expected a msgpack uint or a bin, got %s", compactTypeName(value))
+		return nil, fmt.Errorf("expected a msgpack uint or a bin, got %T", value)
 	}
 	return strconv.FormatUint(number, 10), nil
 }
@@ -263,7 +255,7 @@ func compactUintText(value interface{}) (interface{}, error) {
 // checked against the bytes left before its bytes are allocated; the msgpack codes that
 // carry no length are bounded by construction (at most nine bytes).
 func (d *compactDecoder) scalar() (interface{}, error) {
-	code, err := d.peek()
+	code, err := d.dec.PeekCode()
 	if err != nil {
 		return nil, err
 	}
@@ -274,27 +266,22 @@ func (d *compactDecoder) scalar() (interface{}, error) {
 		code == msgpcode.Int8 || code == msgpcode.Int16 || code == msgpcode.Int32 || code == msgpcode.Int64:
 		return d.dec.DecodeInterface()
 	case isStrCode(code):
-		raw, err := d.lengthPrefixed(code)
+		raw, err := d.lengthPrefixed()
 		if err != nil {
 			return nil, err
 		}
 		return string(raw), nil
 	case isBinCode(code):
-		return d.lengthPrefixed(code)
+		return d.lengthPrefixed()
 	}
 	return nil, fmt.Errorf("unsupported msgpack code 0x%02x", code)
-}
-
-// peek reports the next msgpack code without consuming it.
-func (d *compactDecoder) peek() (byte, error) {
-	return d.dec.PeekCode()
 }
 
 // lengthPrefixed consumes a str or bin header and returns its bytes. The declared length
 // is rejected when the bytes left cannot hold it, so nothing larger than the input is ever
 // allocated.
-func (d *compactDecoder) lengthPrefixed(code byte) ([]byte, error) {
-	length, err := d.valueLength(code)
+func (d *compactDecoder) lengthPrefixed() ([]byte, error) {
+	length, err := d.dec.DecodeBytesLen()
 	if err != nil {
 		return nil, err
 	}
@@ -308,44 +295,12 @@ func (d *compactDecoder) lengthPrefixed(code byte) ([]byte, error) {
 	return raw, nil
 }
 
-// valueLength consumes the header of a str or bin value and returns its declared length.
-func (d *compactDecoder) valueLength(code byte) (int, error) {
-	if _, err := d.in.ReadByte(); err != nil {
-		return 0, fmt.Errorf("value header: %w", err)
-	}
-	switch code {
-	case msgpcode.Str8, msgpcode.Bin8:
-		return d.lengthBytes(1)
-	case msgpcode.Str16, msgpcode.Bin16:
-		return d.lengthBytes(2)
-	case msgpcode.Str32, msgpcode.Bin32:
-		return d.lengthBytes(4)
-	}
-	// A fixstr carries its length in the code byte.
-	return int(code & 0x1f), nil
-}
-
-// lengthBytes reads a big-endian length of `width` bytes.
-func (d *compactDecoder) lengthBytes(width int) (int, error) {
-	var raw [4]byte
-	if _, err := io.ReadFull(d.in, raw[:width]); err != nil {
-		return 0, fmt.Errorf("value header: %w", err)
-	}
-	if width == 1 {
-		return int(raw[0]), nil
-	}
-	if width == 2 {
-		return int(binary.BigEndian.Uint16(raw[:2])), nil
-	}
-	return int(binary.BigEndian.Uint32(raw[:4])), nil
-}
-
 // container decodes an `other` value: a map becomes a record whose keys are translated and
 // whose values are typed by their own key, an array keeps its order with its records
 // translated and its null placeholders kept (the positional `legs` slots), and every
 // scalar passes through unchanged.
 func (d *compactDecoder) container() (interface{}, error) {
-	code, err := d.peek()
+	code, err := d.dec.PeekCode()
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +346,7 @@ func (d *compactDecoder) container() (interface{}, error) {
 // skip consumes one value and keeps nothing: it serves an id this build does not know. It
 // obeys the same count, length and depth bounds as the decoder.
 func (d *compactDecoder) skip() error {
-	code, err := d.peek()
+	code, err := d.dec.PeekCode()
 	if err != nil {
 		return err
 	}
@@ -463,31 +418,4 @@ func isStrCode(code byte) bool {
 
 func isBinCode(code byte) bool {
 	return code == msgpcode.Bin8 || code == msgpcode.Bin16 || code == msgpcode.Bin32
-}
-
-func compactTypeName(value interface{}) string {
-	if value == nil {
-		return "nil"
-	}
-	return fmt.Sprintf("%T", value)
-}
-
-// compactKeyText names a rejected key by its type and a bounded sample: a key of an
-// untrusted payload must never make the error text (and the log line it reaches) huge.
-func compactKeyText(key interface{}) string {
-	switch key := key.(type) {
-	case string:
-		return fmt.Sprintf("%s (string, %d bytes)", compactSample([]byte(key)), len(key))
-	case []byte:
-		return fmt.Sprintf("%s (bin, %d bytes)", compactSample(key), len(key))
-	}
-	return fmt.Sprintf("%v (%s)", key, compactTypeName(key))
-}
-
-// compactSample renders at most compactMaxKeyText bytes, quoted.
-func compactSample(raw []byte) string {
-	if len(raw) <= compactMaxKeyText {
-		return strconv.Quote(string(raw))
-	}
-	return strconv.Quote(string(raw[:compactMaxKeyText])) + "..."
 }

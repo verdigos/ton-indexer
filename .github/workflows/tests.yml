@@ -58,12 +58,12 @@ jobs:
     
     - uses: actions/setup-go@v5
       with:
-        go-version: '>=1.23.0'
+        go-version-file: ton-index-go/go.mod
 
     - name: Install system libraries
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential clang-20 git cmake ninja-build zlib1g-dev libcurl4-openssl-dev libsecp256k1-dev libmicrohttpd-dev libsodium-dev liblz4-dev libjemalloc-dev libhiredis-dev
+        sudo apt-get install -y build-essential clang-20 git cmake ninja-build zlib1g-dev libcurl4-openssl-dev libsecp256k1-dev libmicrohttpd-dev libsodium-dev liblz4-dev libjemalloc-dev libhiredis-dev python3-yaml
 #        wget https://apt.llvm.org/llvm.sh
 #        chmod +x llvm.sh
 #        sudo ./llvm.sh 16 all
@@ -97,8 +97,8 @@ jobs:
       run: ctest -R 'task_emulator_with_actions' --output-on-failure
 
     # G2: the write-back wire contract, run through ton-index-go's REAL decoder
-    # over the committed engine-produced baselines (actions_wire.msgpack and the
-    # payload_contract rows), which CI reads but does not regenerate.
+    # over the committed engine-produced payload_contract rows, which CI reads
+    # but does not regenerate.
     - name: Test ton-index-go
       working-directory: ${{github.workspace}}/ton-index-go
       run: go test ./...
