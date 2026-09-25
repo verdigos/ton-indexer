@@ -6,44 +6,8 @@ x-index-pg-access: &index-pg-access
   POSTGRES_DB: ${POSTGRES_DB:-ton_index}
 
 services:
-  event-cache:
-    image: redis:8-alpine
-    networks:
-      - internal
-    command: redis-server --maxclients 40000
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  event-classifier:
-    image: toncenter/ton-indexer-classifier:v1.3.0
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: classifier
-    depends_on:
-      postgres:
-        condition: service_healthy
-      event-cache:
-        condition: service_healthy
-      kvrocks:
-        condition: service_started
-    secrets:
-      - postgres_password
-    command: --pool-size ${TON_INDEXER_WORKERS:-8} --prefetch-size 10000 --batch-size 1000 --kvrocks kvrocks:6666 --kvrocks-password "${KVROCKS_PASSWORD:?Set KVROCKS_PASSWORD in .env}"
-    environment: 
-      <<: *index-pg-access
-      TON_INDEXER_REDIS_DSN: redis://event-cache:6379
-      TON_INDEXER_IS_TESTNET: ${TON_INDEXER_IS_TESTNET:-0}
-    restart: unless-stopped
-    networks:
-      internal:
-
   index-api:
-    image: toncenter/ton-indexer-api:v1.3.0
+    image: toncenter/ton-indexer-api:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -73,7 +37,7 @@ services:
       internal:
 
   run-migrations:
-    image: toncenter/ton-indexer-worker:v1.3.0
+    image: toncenter/ton-indexer-worker:v1.4.0
     ulimits:
       nofile:
         soft: 1000000
@@ -92,11 +56,11 @@ services:
       TON_WORKER_BINARY: ton-index-postgres-migrate
     networks:
       internal:
-    command: ton-index-postgres-migrate --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --custom-types
+    command: --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --custom-types
     restart: on-failure
 
   index-worker:
-    image: toncenter/ton-indexer-worker:v1.3.0
+    image: toncenter/ton-indexer-worker:v1.4.0
     ulimits:
       nofile:
         soft: 1000000
@@ -123,11 +87,11 @@ services:
       TON_INDEXER_IS_TESTNET: ${TON_INDEXER_IS_TESTNET:-0}
     networks:
       internal:
-    command: ton-index-postgres --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --kvrocks tcp://kvrocks:6666/0 --kvrocks-password "${KVROCKS_PASSWORD:?Set KVROCKS_PASSWORD in .env}" --db /tondb --working-dir /ton_index_workdir --from ${TON_WORKER_FROM:?} ${TON_WORKER_ADDITIONAL_ARGS:-}
+    command: --pg postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} --kvrocks tcp://kvrocks:6666/0 --kvrocks-password "${KVROCKS_PASSWORD:?Set KVROCKS_PASSWORD in .env}" --db /tondb --working-dir /ton_index_workdir --from ${TON_WORKER_FROM:?} --enable-classifier --mch-workers 4 --mch-trace-cap 8000 --mch-slow-job-threshold 5 --mch-rss-budget-gb 16 ${TON_WORKER_ADDITIONAL_ARGS:-}
     restart: unless-stopped
 
   postgres:
-    image: toncenter/ton-indexer-postgres:v1.3.0
+    image: toncenter/ton-indexer-postgres:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -187,7 +151,7 @@ services:
 # additional: offchain metadata indexer
   metadata-fetcher:
     profiles: [metadata]
-    image: toncenter/ton-indexer-metadata-fetcher:v1.3.0
+    image: toncenter/ton-indexer-metadata-fetcher:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -225,7 +189,7 @@ services:
 # additional: API Emulate
   emulate-task-emulator:
     profiles: [emulate]
-    image: toncenter/ton-indexer-worker:v1.3.0
+    image: toncenter/ton-indexer-worker:v1.4.0
     ulimits:
       nofile:
         soft: 1000000
@@ -248,7 +212,7 @@ services:
       TON_INDEXER_EMULATE_REDIS_DSN: redis://emulate-redis:6379
       TON_WORKER_BINARY: ton-trace-task-emulator
       TON_INDEXER_IS_TESTNET: ${TON_INDEXER_IS_TESTNET:-0}
-    command: --redis tcp://emulate-redis:6379 --db /tondb --working-dir /ton_emulate_workdir ${TON_EMULATE_ADDITIONAL_ARGS:-}
+    command: --redis tcp://emulate-redis:6379 --db /tondb --working-dir /ton_emulate_workdir --mch-workers 1 ${TON_EMULATE_ADDITIONAL_ARGS:-}
     secrets:
       - postgres_password
     volumes:
@@ -267,31 +231,9 @@ services:
       retries: 5
     restart: unless-stopped
 
-  emulate-event-classifier:
-    profiles: [emulate]
-    image: toncenter/ton-indexer-classifier:v1.3.0
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: classifier
-    depends_on:
-      emulate-redis:
-        condition: service_healthy
-      emulate-task-emulator:
-        condition: service_started
-      kvrocks:
-        condition: service_started
-    command: --emulated-trace-tasks --emulated-traces-redis-channel classifierchannel --kvrocks kvrocks:6666 --kvrocks-password "${KVROCKS_PASSWORD:?Set KVROCKS_PASSWORD in .env}"
-    environment:
-      TON_INDEXER_REDIS_DSN: redis://emulate-redis:6379
-      TON_INDEXER_IS_TESTNET: ${TON_INDEXER_IS_TESTNET:-0}
-    restart: unless-stopped
-    networks:
-      internal:
-
   emulate-api:
     profiles: [emulate]
-    image: toncenter/ton-indexer-emulate-api:v1.3.0
+    image: toncenter/ton-indexer-emulate-api:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -319,7 +261,7 @@ services:
 
   metadata-cache:
     profiles: [ metadata ]
-    image: toncenter/ton-metadata-cache:v1.3.0
+    image: toncenter/ton-metadata-cache:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile

@@ -31,12 +31,15 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 add_subdirectory(external/ton EXCLUDE_FROM_ALL)
 add_subdirectory(external/libpqxx EXCLUDE_FROM_ALL)
 
-find_package(Git REQUIRED)
+find_program(PATCH_EXECUTABLE patch)
+if(NOT PATCH_EXECUTABLE)
+  message(FATAL_ERROR "The patch tool is required to build RocksDB. Install the patch package (Ubuntu/Debian: apt-get install patch; Windows: Git for Windows usr/bin/patch.exe) or set PATCH_EXECUTABLE.")
+endif()
 set(TON_INDEXER_ROCKSDB_SECONDARY_OPEN_PATCH
     ${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-secondary-open.patch)
 add_custom_target(apply-rocksdb-secondary-open-patch
   COMMAND ${CMAKE_COMMAND}
-    -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
+    -DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}
     -DPATCH_FILE=${TON_INDEXER_ROCKSDB_SECONDARY_OPEN_PATCH}
     -DPATCH_WORKING_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}/external/ton/third-party/rocksdb
     -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ApplyPatch.cmake
@@ -102,6 +105,7 @@ add_subdirectory(ton-marker)
 add_subdirectory(ton-observability)
 add_subdirectory(ton-abi)  # standalone Tolk-ABI message (de)serialization library; must precede ton-mch-engine, which links it
 add_subdirectory(ton-mch-engine)  # defines mch-classify (linked by ton-index-postgres shadow mode)
+add_subdirectory(ton-mch-index)  # batch classifier CLI over a node RocksDB seqno range
 add_subdirectory(ton-index-postgres)
 add_subdirectory(ton-index-clickhouse)
 add_subdirectory(ton-integrity-checker)

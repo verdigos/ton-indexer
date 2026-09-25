@@ -5,7 +5,7 @@ RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get update -y && apt-get -y in
 RUN apt-get update -y \
     && apt-get install -y build-essential cmake clang-20 openssl libssl-dev zlib1g-dev \
                    gperf wget git curl ccache libcurl4-openssl-dev libmicrohttpd-dev liblz4-dev \
-                   pkg-config libsecp256k1-dev libsodium-dev libhiredis-dev python3-dev libpq-dev \
+                   pkg-config libsecp256k1-dev libsodium-dev libhiredis-dev python3-dev python3-yaml libpq-dev \
                    automake libjemalloc-dev lsb-release software-properties-common gnupg \
                    autoconf libtool \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
@@ -102,12 +102,7 @@ RUN cd /go/app && go build -o ton-metadata-cache .
 ## build metadata fetcher service ton-metadata-fetcher
 FROM golang:trixie AS metadata-fetcher-builder
 
-ADD ton-metadata-fetcher/images.go /go/app/images.go
-ADD ton-metadata-fetcher/ipfs.go /go/app/ipfs.go
-ADD ton-metadata-fetcher/main.go /go/app/main.go
-ADD ton-metadata-fetcher/overrides.go /go/app/overrides.go
-ADD ton-metadata-fetcher/go.mod /go/app/go.mod
-ADD ton-metadata-fetcher/go.sum /go/app/go.sum
+COPY ton-metadata-fetcher/*.go ton-metadata-fetcher/go.mod ton-metadata-fetcher/go.sum /go/app/
 
 WORKDIR /go/app
 RUN go build -o ton-metadata-fetcher ./*.go
@@ -181,18 +176,6 @@ COPY --from=metadata-fetcher-builder /go/app/ton-metadata-fetcher /usr/local/bin
 COPY ton-metadata-fetcher/entrypoint.sh /app/entrypoint.sh
 COPY ton-metadata-fetcher/metadata_overrides.json /app/metadata_overrides.json
 
-ENTRYPOINT [ "/app/entrypoint.sh" ]
-
-
-## classifier service image
-FROM python:3.12-trixie AS classifier
-ADD indexer/requirements.txt /tmp/requirements.txt
-RUN python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
-COPY indexer/ /app/
-COPY indexer/files/* /app
-
-WORKDIR /app
-ENV C_FORCE_ROOT=1
 ENTRYPOINT [ "/app/entrypoint.sh" ]
 
 
