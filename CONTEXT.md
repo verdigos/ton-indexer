@@ -49,8 +49,9 @@ The ratio of amounts actually exchanged in one swap. Not used as a price; it inc
 The Spot price of an Asset aggregated across its Pools, weighted by liquidity, expressed in a Quote asset.
 
 **Quote asset**:
-The unit a Price is expressed in. TON is the primary Quote asset; USD is derived from it.
+The Asset a Price is expressed in. Every Price exists in two Quote assets at once: TON and USDT.
+_Avoid_: USD, base currency
 
 **Anchor pools**:
-The configured set of USDT/TON Pools whose Spot prices define the TON/USD Price, assuming 1 USDT = 1 USD.
+The configured set of USDT/TON Pools whose Spot prices define the Price of TON in USDT.
 _Avoid_: base pool, reference pool, hardcoded pool
