@@ -17,6 +17,7 @@ import (
 
 	"github.com/toncenter/ton-indexer/ton-index-go/index/crud"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/dexprices"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/services"
@@ -2767,6 +2768,8 @@ func main() {
 	flag.BoolVar(&kvrocks_replica_reads, "kvrocks-replica-reads", false, "Read from Kvrocks replicas discovered via Sentinel")
 	flag.Int64Var(&kvrocks_staleness_blocks, "kvrocks-staleness-blocks", 5, "Max watermark lag in masterchain blocks for a Kvrocks replica to serve reads")
 	flag.Int64Var(&kvrocks_replica_refresh_ms, "kvrocks-replica-refresh-ms", 300, "Kvrocks replica discovery and freshness poll interval in milliseconds")
+	var dex_prices_dsn string
+	flag.StringVar(&dex_prices_dsn, "clickhouse-dex-prices", "", "ClickHouse DSN of the DEX prices prototype (dex-tap), e.g. clickhouse://localhost:9000/dex_prices; enables /api/v3/experimental/dex/*")
 	flag.Parse()
 	settings.Request.Timeout = time.Duration(timeout_ms) * time.Millisecond
 	if settings.CacheServiceUrl == "" {
@@ -2800,6 +2803,16 @@ func main() {
 		}
 		defer kvrocks_store.Close()
 		log.Println("Kvrocks point-state reads enabled")
+	}
+
+	if dex_prices_dsn != "" {
+		dexPrices, err = dexprices.NewStore(dex_prices_dsn)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(63)
+		}
+		defer dexPrices.Close()
+		log.Println("Experimental DEX price endpoints enabled")
 	}
 
 	pool, err = crud.NewDbClient(settings.PgDsn, settings.MaxConns, settings.MinConns, kvrocks_store)
@@ -2917,6 +2930,12 @@ func main() {
 	app.Get("/api/v3/jetton/wallets", GetJettonWallets)
 	app.Get("/api/v3/jetton/transfers", GetJettonTransfers)
 	app.Get("/api/v3/jetton/burns", GetJettonBurns)
+
+	// experimental: DEX prices prototype
+	if dexPrices != nil {
+		app.Get("/api/v3/experimental/dex/prices", GetDexPrices)
+		app.Get("/api/v3/experimental/dex/pool_snapshots", GetDexPoolSnapshots)
+	}
 
 	// multisig
 	app.Get("/api/v3/multisig/wallets", GetMultisigs)
