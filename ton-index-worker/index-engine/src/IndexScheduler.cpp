@@ -2,11 +2,15 @@
 #include "BlockInterfacesDetector.h"
 #include "Statistics.h"
 #include "common/delay.h"
+#include "td/actor/MultiPromise.h"
 #include "td/utils/StringBuilder.h"
 #include "td/utils/Time.h"
+#include "td/utils/base64.h"
 #include "td/utils/filesystem.h"
+#include "td/utils/port/Stat.h"
 #include "ton/ton-tl.hpp"
 #include <chrono>
+#include <exception>
 
 namespace {
 
@@ -30,7 +34,13 @@ std::int64_t processing_lag_ms(std::int32_t gen_utime) {
 }  // namespace
 
 void IndexScheduler::start_up() {
-    trace_assembler_ = td::actor::create_actor<TraceAssembler>("trace_assembler", working_dir_ + "/trace_assembler", max_queue_.mc_blocks_);
+    if (run_) {
+        for (std::uint32_t i = 0; i < run_->policy.workers; ++i) {
+            classify_workers_.push_back(td::actor::create_actor<mch::ClassifyWorker>(
+                "classify_worker", prep_, run_->policy));
+        }
+    }
+    trace_assembler_ = td::actor::create_actor<TraceAssembler>("trace_assembler", working_dir_ + "/trace_assembler", !run_);
 }
 
 std::string get_time_string(double seconds) {
@@ -71,7 +81,7 @@ void IndexScheduler::alarm() {
 
     constexpr double alpha = 0.99; // Decay factor per second
 
-    auto current_count = indexed_seqnos_.size();
+    auto current_count = indexed_total_;
 
     if (last_indexed_seqno_count_ == 0) {
         last_indexed_seqno_count_ = current_count;
@@ -88,9 +98,10 @@ void IndexScheduler::alarm() {
 
     if (next_print_stats_.is_in_past()) {
         print_stats();
+        td::actor::send_closure(trace_assembler_, &TraceAssembler::set_gc_floor, static_cast<ton::BlockSeqno>(std::max(contiguous_indexed_seqno_, 0)));
         next_print_stats_ = td::Timestamp::in(stats_timeout_);
     }
-    if (next_statistics_flush_.is_in_past()) {
+    if ((!run_ || run_->mode != mch::RunMode::task) && next_statistics_flush_.is_in_past()) {
         ton::delay_action([working_dir = this->working_dir_]() {
             auto stats = g_statistics.generate_report_and_reset();
             auto path = working_dir + "/" + "stats.txt";
@@ -119,6 +130,10 @@ void IndexScheduler::alarm() {
 }
 
 void IndexScheduler::request_insert_queue_state() {
+    if (run_ && run_->mode == mch::RunMode::task) {
+        schedule_next_seqnos();
+        return;
+    }
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<QueueState> R){
         R.ensure();
         td::actor::send_closure(SelfId, &IndexScheduler::got_insert_queue_state, R.move_as_ok());
@@ -138,14 +153,19 @@ const ton::BlockSeqno FIRST_INDEXABLE_MC_SEQNO = 1;
 //   If the row is missing, it is initialized from --from and indexing starts
 //   exactly there. Once the row exists, --from is only a deployment default and
 //   is ignored on restart.
-// - Forced mode still starts from CLI --from, but first ensures that the
+// - Without ReplayRun, forced mode starts from CLI --from, but first ensures that the
 //   progress row exists so the Postgres trigger can keep advancing it.
 // - Masterchain seqno 0 is not readable from the node DB, so all starts are
 //   clamped to FIRST_INDEXABLE_MC_SEQNO.
-// - On restart, --prewarm controls how far TraceAssembler may move the start
+// - Live ReplayRun restores an assembler snapshot and warms the payload buffer from retained history.
+// - Without ReplayRun, --prewarm controls how far TraceAssembler may move the start
 //   point backwards. If no suitable state exists, the assembler is reset and
 //   the same bounded fallback is used.
 void IndexScheduler::run() {
+    if (run_ && run_->mode == mch::RunMode::task) {
+        start_from_seqno(run_->scan_from, true);
+        return;
+    }
     if (is_bounded_archive_range()) {
         LOG(INFO) << "Bounded archive indexing enabled: from=" << from_seqno_
                   << ", to=" << to_seqno_ << ", prewarm=" << prewarm_count_;
@@ -162,7 +182,7 @@ void IndexScheduler::run() {
         return;
     }
 
-    if (force_index_) {
+    if (force_index_ && !run_) {
         LOG(WARNING) << "Force reindexing enabled";
         const auto start_seqno = from_seqno_ > 0 ? static_cast<ton::BlockSeqno>(from_seqno_) : FIRST_INDEXABLE_MC_SEQNO;
         auto P = td::PromiseCreator::lambda(
@@ -199,6 +219,14 @@ void IndexScheduler::process_resume_seqno(td::Result<InsertManagerInterface::Res
     }
 
     auto resume_state = R.move_as_ok();
+    if (run_) {
+        auto P = td::PromiseCreator::lambda(
+            [SelfId = actor_id(this), resume_state](td::Result<ton::BlockSeqno> oldest) {
+                td::actor::send_closure(SelfId, &IndexScheduler::process_replay_resume, resume_state, std::move(oldest));
+            });
+        td::actor::send_closure(db_scanner_, &DbScanner::get_oldest_mc_seqno, std::move(P));
+        return;
+    }
     auto next_seqno = resume_state.next_seqno;
     if (next_seqno < FIRST_INDEXABLE_MC_SEQNO) {
         LOG(WARNING) << "Resume seqno " << next_seqno << " is below first indexable masterchain seqno "
@@ -245,6 +273,80 @@ void IndexScheduler::process_resume_seqno(td::Result<InsertManagerInterface::Res
     td::actor::send_closure(trace_assembler_, &TraceAssembler::restore_state, next_seqno - 1, std::move(P));
 }
 
+void IndexScheduler::process_replay_resume(InsertManagerInterface::ResumeState resume,
+                                         td::Result<ton::BlockSeqno> oldest) {
+    if (oldest.is_error()) {
+        LOG(ERROR) << "Error reading oldest masterchain seqno: " << oldest.move_as_error();
+        watcher_.reset();
+        stop();
+        return;
+    }
+    const auto A = std::max(oldest.move_as_ok(), FIRST_INDEXABLE_MC_SEQNO);
+    const auto N = std::max(resume.next_seqno, FIRST_INDEXABLE_MC_SEQNO);
+    const auto C1 = std::max(resume.pg_next_seqno, FIRST_INDEXABLE_MC_SEQNO);
+    auto P = td::PromiseCreator::lambda(
+        [SelfId = actor_id(this), N, C1, A](td::Result<PendingSummary> summary) {
+            td::actor::send_closure(SelfId, &IndexScheduler::process_replay_snapshot, N, C1, A,
+                                    std::move(summary));
+        });
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::preload_state,
+                            N - 1, run_->policy.trace_cap, A, std::move(P));
+}
+
+void IndexScheduler::process_replay_snapshot(std::uint32_t N, std::uint32_t C1, std::uint32_t A,
+                                             td::Result<PendingSummary> r) {
+    std::optional<mch::SnapshotInfo> snap;
+    if (r.is_error()) {
+        ++restore_failures_;
+        LOG(WARNING) << "No usable TraceAssembler snapshot below " << N << ": " << r.move_as_error()
+                     << "; starting fresh, traces straddling " << N << " become broken roots";
+    } else {
+        auto s = r.move_as_ok();
+        snapshot_seqno_ = s.seqno;
+        snapshot_healthy_ = s.healthy;
+        warmup_seeds_ = std::move(s.capped);
+        snap = mch::SnapshotInfo{s.seqno,
+            s.oldest_healthy == UINT32_MAX ? s.seqno + 1 : s.oldest_healthy};
+        if (!mch::snapshot_usable(*snap, N, A) ||
+            snap->oldest_healthy < FIRST_INDEXABLE_MC_SEQNO ||
+            std::uint64_t{snap->oldest_healthy} > std::uint64_t{s.seqno} + 1) {
+            ++restore_failures_;
+            LOG(WARNING) << "TraceAssembler snapshot " << s.seqno << " unusable (oldest_available=" << A
+                         << " next_seqno=" << N << " oldest_healthy=" << snap->oldest_healthy
+                         << "); starting fresh at " << N;
+            snap.reset();
+            td::actor::send_closure(trace_assembler_, &TraceAssembler::discard_preloaded);
+            warmup_seeds_.clear();
+        } else if (snap->oldest_healthy <= snap->seqno) {
+            warmup_pending_ids_ = std::move(s.pending_ids);
+        }
+    }
+    const auto bounds = mch::live_bounds(N, C1, A, snap);
+    run_->scan_from = bounds.scan_from;
+    run_->no_insert_below = bounds.no_insert_below;
+    run_->classify_from = bounds.classify_from;
+    run_->scan_to = run_->classify_to = UINT32_MAX;
+    warmup_scan_from_ = bounds.scan_from;
+    warmup_until_ = (snap && bounds.scan_from <= snap->seqno) ? snap->seqno : 0;
+    LOG(INFO) << "Replay bounds: scan_from=" << run_->scan_from
+              << " no_insert_below=" << run_->no_insert_below
+              << " classify_from=" << run_->classify_from
+              << " oldest_available=" << A
+              << " snapshot=" << (snap ? std::to_string(snap->seqno) : std::string("none"))
+              << " healthy=" << snapshot_healthy_ << " seeds=" << warmup_seeds_.size()
+              << " warmup=" << (warmup_until_ ? "on" : "off");
+    start_from_seqno(run_->scan_from, true);
+    if (!warmup_until_) {
+        if (snap) {
+            td::actor::send_closure(trace_assembler_, &TraceAssembler::install_preloaded);
+            for (const auto &id : warmup_seeds_) payload_buffer_->seed(id, mch::TraceOutcome::skipped_capped);
+            warmup_seeds_.clear();
+        }
+        td::actor::send_closure(trace_assembler_, &TraceAssembler::start_persisting,
+            static_cast<ton::BlockSeqno>(std::max(contiguous_indexed_seqno_, 0)));
+    }
+}
+
 void IndexScheduler::process_archive_existing_seqnos(td::Result<std::vector<std::uint32_t>> R) {
     if (R.is_error()) {
         LOG(ERROR) << "Error reading existing archive seqnos: " << R.move_as_error();
@@ -288,6 +390,13 @@ void IndexScheduler::start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_as
     }
     if (reset_trace_assembler) {
         td::actor::send_closure(trace_assembler_, &TraceAssembler::reset_state);
+        if (run_) {
+            payload_buffer_.emplace(run_->policy);
+            classify_outcomes_.clear();
+            block_results_.clear();
+            run_report_ = {};
+            suppressed_ = jobs_dispatched_ = jobs_done_ = slow_jobs_ = blocks_waited_ = 0;
+        }
     }
     read_from_seqno_ = static_cast<std::int32_t>(seqno);
     last_known_seqno_ = read_from_seqno_ - 1;
@@ -389,11 +498,14 @@ void IndexScheduler::event_catch_up_finished(ton::BlockSeqno mc_seqno, td::Resul
 
 void IndexScheduler::got_newest_mc_seqno(std::uint32_t newest_mc_seqno) {
     auto effective_newest_seqno = newest_mc_seqno;
+    if (warmup_until_ && effective_newest_seqno > warmup_until_) {
+        effective_newest_seqno = warmup_until_;
+    }
     if (to_seqno_ > 0 && effective_newest_seqno > static_cast<std::uint32_t>(to_seqno_)) {
         effective_newest_seqno = static_cast<std::uint32_t>(to_seqno_);
     }
     if (to_seqno_ > 0 && last_known_seqno_ >= to_seqno_) {
-        maybe_finish_bounded_range();
+        maybe_finish_run();
         return;
     }
     if (last_known_seqno_ >= static_cast<std::int32_t>(effective_newest_seqno)) {
@@ -481,24 +593,6 @@ void IndexScheduler::seqno_parsed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_
     LOG(DEBUG) << "Parsed seqno " << mc_seqno;
     apply_otel_processing_lag(mc_seqno, *parsed_block);
     finish_seqno_otel_stage(mc_seqno);
-    start_seqno_otel_stage(mc_seqno, "assemble_traces");
-
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
-        if (R.is_error()) {
-            auto error = R.move_as_error();
-            LOG(ERROR) << "Failed to asseble traces for seqno " << mc_seqno << ": " << error;
-            td::actor::send_closure(SelfId, &IndexScheduler::handle_seqno_failure, mc_seqno,
-                                    std::string("index_postgres.trace_assembly_error"), std::move(error), false);
-            return;
-        }
-        td::actor::send_closure(SelfId, &IndexScheduler::seqno_traces_assembled, mc_seqno, R.move_as_ok());
-    });
-    td::actor::send_closure(trace_assembler_, &TraceAssembler::assemble, mc_seqno, std::move(parsed_block), std::move(P));
-}
-
-void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
-    LOG(DEBUG) << "Assembled traces for seqno " << mc_seqno;
-    finish_seqno_otel_stage(mc_seqno);
     start_seqno_otel_stage(mc_seqno, "detect_interfaces");
 
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
@@ -517,6 +611,165 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
 void IndexScheduler::seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
     LOG(DEBUG) << "Interfaces processed for seqno " << mc_seqno;
     finish_seqno_otel_stage(mc_seqno);
+    start_seqno_otel_stage(mc_seqno, "assemble_traces");
+
+    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
+        if (R.is_error()) {
+            auto error = R.move_as_error();
+            LOG(ERROR) << "Failed to asseble traces for seqno " << mc_seqno << ": " << error;
+            td::actor::send_closure(SelfId, &IndexScheduler::handle_seqno_failure, mc_seqno,
+                                    std::string("index_postgres.trace_assembly_error"), std::move(error), false);
+            return;
+        }
+        td::actor::send_closure(SelfId, &IndexScheduler::seqno_traces_assembled, mc_seqno, R.move_as_ok());
+    });
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::assemble, mc_seqno, std::move(parsed_block), std::move(P));
+}
+
+void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) try {
+    LOG(DEBUG) << "Assembled traces for seqno " << mc_seqno;
+    finish_seqno_otel_stage(mc_seqno);
+    std::vector<mch::ClassifyInput> jobs;
+    if (payload_buffer_) {
+        start_seqno_otel_stage(mc_seqno, "classify");
+        auto memory = td::mem_stat();
+        if (memory.is_error()) {
+            abort_classification(mc_seqno, memory.move_as_error());
+            return;
+        }
+        if (memory.ok().resident_size_ > run_->policy.rss_budget_bytes) {
+            const auto &c = payload_buffer_->counters();
+            if (run_->mode == mch::RunMode::task) {
+                LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
+                           << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
+                           << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+                           << " buffered_memo=" << c.buffered_memo_accounts
+                           << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
+                           << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
+                           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root;
+                abort_classification(mc_seqno, td::Status::Error("Classification RSS budget exceeded"));
+                return;
+            }
+            const auto before = c.buffered_txs;
+            if (before == 0) {
+                if (rss_over_budget_blocks_++ % 100 == 0) {
+                    LOG(ERROR) << "RSS budget exceeded with an empty payload buffer seqno=" << mc_seqno
+                               << " rss=" << memory.ok().resident_size_
+                               << " budget=" << run_->policy.rss_budget_bytes
+                               << "; eviction cannot help, memory is held elsewhere";
+                }
+            } else {
+                const auto evicted = payload_buffer_->evict(before / 2 + 1);
+                LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
+                           << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
+                           << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+                           << " buffered_memo=" << c.buffered_memo_accounts
+                           << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
+                           << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
+                           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root
+                           << "; evicted=" << evicted << " buffered_txs " << before << " -> " << c.buffered_txs;
+            }
+        }
+        auto inputs = payload_buffer_->add_block(mc_seqno, *parsed_block);
+        for (auto &input : inputs) {
+            if (input.trace.mc_seqno_end < run_->classify_from || input.trace.mc_seqno_end > run_->classify_to ||
+                (run_->classify_filter && input.trace.trace_id != *run_->classify_filter)) {
+                ++suppressed_;
+                continue;
+            }
+            if (input.skipped) {
+                ++classify_outcomes_[*input.skipped];
+                block_results_[mc_seqno].traces.push_back({std::move(input.trace), *input.skipped, {}, ""});
+            } else {
+                jobs.push_back(std::move(input));
+            }
+        }
+    }
+    if (jobs.empty()) {
+        seqno_classified(mc_seqno, std::move(parsed_block), td::Unit());
+        return;
+    }
+    ++blocks_waited_;
+    td::MultiPromise barrier;
+    auto guard = barrier.init_guard();
+    guard.add_promise(td::PromiseCreator::lambda(
+        [SelfId = actor_id(this), mc_seqno, parsed_block](td::Result<td::Unit> result) mutable {
+            td::actor::send_closure(SelfId, &IndexScheduler::seqno_classified,
+                                    mc_seqno, std::move(parsed_block), std::move(result));
+        }));
+    for (auto &input : jobs) {
+        auto promise = td::PromiseCreator::lambda(
+            [SelfId = actor_id(this), mc_seqno, original = input.trace, done = guard.get_promise()]
+            (td::Result<mch::TraceClassificationResult> result) mutable {
+                td::actor::send_closure(SelfId, &IndexScheduler::seqno_trace_classified,
+                                        mc_seqno, std::move(original), std::move(result), std::move(done));
+            });
+        td::actor::send_closure(classify_workers_[jobs_dispatched_ % classify_workers_.size()].get(), &mch::ClassifyWorker::classify,
+                                mch::ClassifyJob{std::move(input), parsed_block}, std::move(promise));
+        ++jobs_dispatched_;
+    }
+} catch (const std::exception &e) {
+    abort_classification(mc_seqno, td::Status::Error(td::Slice(e.what())));
+} catch (...) {
+    abort_classification(mc_seqno, td::Status::Error("Unknown classification dispatch exception"));
+}
+
+void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, schema::Trace original,
+                                            td::Result<mch::TraceClassificationResult> result,
+                                            td::Promise<td::Unit> promise) try {
+    if (result.is_error()) {
+        if (run_ && run_->mode == mch::RunMode::task) {
+            abort_classification(mc_seqno, result.move_as_error());
+            return;
+        }
+        ++worker_errors_;
+        auto error = result.move_as_error();
+        LOG(ERROR) << "Classification worker error seqno=" << mc_seqno
+                   << " trace=" << td::base64_encode(original.trace_id.as_slice()) << ": " << error;
+        result = mch::TraceClassificationResult{std::move(original), mch::TraceOutcome::skipped_incomplete,
+                                      {}, error.message().str()};
+    }
+    auto trace = result.move_as_ok();
+    ++jobs_done_;
+    slow_jobs_ += trace.slow;
+    classify_stats_ += trace.stats;
+    ++classify_outcomes_[trace.outcome];
+    block_results_[mc_seqno].traces.push_back(std::move(trace));
+    promise.set_value(td::Unit());
+} catch (const std::exception &e) {
+    abort_classification(mc_seqno, td::Status::Error(td::Slice(e.what())));
+} catch (...) {
+    abort_classification(mc_seqno, td::Status::Error("Unknown classification result exception"));
+}
+
+void IndexScheduler::abort_classification(std::uint32_t mc_seqno, td::Status error) {
+    LOG(ERROR) << "Classification aborted seqno=" << mc_seqno << ": " << error;
+    if (run_ && run_->mode == mch::RunMode::task) run_done_.set_error(std::move(error));
+    watcher_.reset();
+    stop();
+}
+
+void IndexScheduler::seqno_classified(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block,
+                                      td::Result<td::Unit> result) try {
+    if (result.is_error()) {
+        abort_classification(mc_seqno, result.move_as_error());
+        return;
+    }
+    auto block = block_results_.extract(mc_seqno);
+    if (!block.empty() && !block.mapped().traces.empty()) {
+        parsed_block->classification_ = std::make_shared<mch::BlockClassification>(std::move(block.mapped()));
+    } else if (run_ && run_->mode == mch::RunMode::live &&
+               mc_seqno >= run_->classify_from && mc_seqno <= run_->classify_to) {
+        parsed_block->classification_ = std::make_shared<mch::BlockClassification>();
+    }
+    if (run_ && run_->mode == mch::RunMode::task &&
+        mc_seqno >= run_->classify_from && mc_seqno <= run_->classify_to) {
+        auto &report = run_report_.blocks[mc_seqno];
+        if (parsed_block->classification_) {
+            report = *parsed_block->classification_;
+        }
+    }
+    finish_seqno_otel_stage(mc_seqno);
     start_seqno_otel_stage(mc_seqno, "detect_actions");
 
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
@@ -530,6 +783,10 @@ void IndexScheduler::seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBl
         td::actor::send_closure(SelfId, &IndexScheduler::seqno_actions_processed, mc_seqno, R.move_as_ok());
     });
     td::actor::create_actor<ActionDetector>("ActionDetector", std::move(parsed_block), std::move(P)).release();
+} catch (const std::exception &e) {
+    abort_classification(mc_seqno, td::Status::Error(td::Slice(e.what())));
+} catch (...) {
+    abort_classification(mc_seqno, td::Status::Error("Unknown classification barrier exception"));
 }
 
 void IndexScheduler::seqno_actions_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
@@ -537,6 +794,10 @@ void IndexScheduler::seqno_actions_processed(std::uint32_t mc_seqno, ParsedBlock
     finish_seqno_otel_stage(mc_seqno);
     const auto* mc_block = find_masterchain_block(*parsed_block);
     const std::int32_t block_gen_utime = mc_block ? mc_block->gen_utime : 0;
+    if (run_ && mc_seqno < run_->no_insert_below) {
+        seqno_processed_without_insert(mc_seqno, "replay", block_gen_utime);
+        return;
+    }
     if (!should_insert_seqno(mc_seqno)) {
         seqno_processed_without_insert(mc_seqno, mc_seqno < static_cast<std::uint32_t>(from_seqno_) ? "prewarm" : "already_present", block_gen_utime);
         return;
@@ -579,6 +840,7 @@ void IndexScheduler::seqno_processed_without_insert(std::uint32_t mc_seqno, cons
     note_indexed_block_utime(block_gen_utime);
     processing_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
+    ++indexed_total_;
     if (mc_seqno > static_cast<std::uint32_t>(last_indexed_seqno_)) {
         last_indexed_seqno_ = static_cast<std::int32_t>(mc_seqno);
     }
@@ -612,15 +874,49 @@ ton::BlockSeqno IndexScheduler::prewarm_start_seqno(ton::BlockSeqno seqno) const
     return seqno - prewarm_count_;
 }
 
-void IndexScheduler::maybe_finish_bounded_range() {
-    if (!is_bounded_archive_range()) {
+void IndexScheduler::maybe_finish_warmup() {
+    if (!warmup_until_ || contiguous_indexed_seqno_ < static_cast<std::int32_t>(warmup_until_)) {
+        return;
+    }
+    const auto S = warmup_until_;
+    warmup_until_ = 0;
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::set_expected_seqno, S + 1);
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::install_preloaded);
+    const auto orphans = payload_buffer_->retain_pending(warmup_pending_ids_);
+    for (const auto &id : warmup_seeds_) payload_buffer_->seed(id, mch::TraceOutcome::skipped_capped);
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::start_persisting,
+        static_cast<ton::BlockSeqno>(std::max(contiguous_indexed_seqno_, 0)));
+    const auto &c = payload_buffer_->counters();
+    LOG(INFO) << "Warmup complete: snapshot=" << S << " scan_from=" << warmup_scan_from_
+              << " depth=" << (S - warmup_scan_from_ + 1) << " healthy=" << snapshot_healthy_
+              << " seeds=" << warmup_seeds_.size() << " orphans=" << orphans
+              << " no_insert_below=" << run_->no_insert_below
+              << " classify_from=" << run_->classify_from
+              << " payload_buffer_entries=" << c.entries << " buffered_txs=" << c.buffered_txs;
+    warmup_seeds_.clear();
+    warmup_seeds_.shrink_to_fit();
+    warmup_pending_ids_.clear();
+    warmup_pending_ids_.shrink_to_fit();
+}
+
+void IndexScheduler::maybe_finish_run() {
+    maybe_finish_warmup();
+    if (!is_bounded_archive_range() && !(run_ && run_->mode == mch::RunMode::task && to_seqno_ > 0)) {
         return;
     }
     if (last_known_seqno_ < to_seqno_ || !queued_seqnos_.empty() || !processing_seqnos_.empty() || !inserting_seqnos_.empty()
         || cur_queue_state_.blocks_ != 0) {
         return;
     }
-    LOG(INFO) << "Finished bounded archive range " << from_seqno_ << ".." << to_seqno_;
+    if (run_ && run_->mode == mch::RunMode::task) {
+        print_stats();
+        payload_buffer_.reset();
+        run_report_.outcomes = std::move(classify_outcomes_);
+        run_report_.suppressed = suppressed_;
+        run_done_.set_result(std::move(run_report_));
+    } else {
+        LOG(INFO) << "Finished bounded archive range " << from_seqno_ << ".." << to_seqno_;
+    }
     watcher_.reset();
     stop();
 }
@@ -646,6 +942,31 @@ void IndexScheduler::print_stats() {
     }
     if (!db_event_fifo_path_.empty()) {
         sb << (mc_applied_events_fresh() ? "\tev[ok]" : "\tev[stale]");
+    }
+    if (payload_buffer_) {
+        const auto &c = payload_buffer_->counters();
+        sb << "\tpayload_buffer[entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+           << " buffered_memo=" << c.buffered_memo_accounts
+           << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
+           << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
+           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root
+           << " jobs_dispatched=" << jobs_dispatched_ << " jobs_done=" << jobs_done_
+           << " slow_jobs=" << slow_jobs_ << " blocks_waited=" << blocks_waited_;
+        for (const auto &[outcome, count] : classify_outcomes_) {
+            sb << " " << mch::trace_outcome_name(outcome) << "=" << count;
+        }
+        sb << "]";
+    }
+    if (payload_buffer_) {
+        sb << "\t" << classify_stats_.format();
+    }
+    if (run_) {
+        sb << "\trun[scan=" << run_->scan_from << ".." << run_->scan_to
+           << " classify=" << run_->classify_from << ".." << run_->classify_to
+           << " no_insert_below=" << run_->no_insert_below
+           << " suppressed=" << suppressed_
+           << " snapshot=" << snapshot_seqno_ << " warmup=" << warmup_until_
+           << " restore_failures=" << restore_failures_ << " worker_errors=" << worker_errors_ << "]";
     }
     LOG(INFO) << sb.as_cslice().str();
 }
@@ -686,17 +1007,19 @@ void IndexScheduler::seqno_inserted(std::uint32_t mc_seqno, std::int32_t block_g
     note_indexed_block_utime(block_gen_utime);
     inserting_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
+    ++indexed_total_;
     if (mc_seqno > last_indexed_seqno_) {
         last_indexed_seqno_ = mc_seqno;
     }
     advance_contiguous_indexed_seqno();
     g_statistics.record_time(PROCESS_SEQNO, timers_[mc_seqno].elapsed() * 1e3);
     timers_.erase(mc_seqno);
-    maybe_finish_bounded_range();
+    maybe_finish_run();
 }
 
 void IndexScheduler::advance_contiguous_indexed_seqno() {
     while (indexed_seqnos_.count(static_cast<std::uint32_t>(contiguous_indexed_seqno_ + 1)) > 0) {
+        indexed_seqnos_.erase(static_cast<std::uint32_t>(contiguous_indexed_seqno_ + 1));
         ++contiguous_indexed_seqno_;
     }
 }
@@ -707,6 +1030,10 @@ void IndexScheduler::get_contiguous_indexed_seqno(td::Promise<std::int32_t> prom
 
 void IndexScheduler::handle_seqno_failure(std::uint32_t mc_seqno, std::string error_type, td::Status error, bool silent) {
     fail_seqno_otel_trace(mc_seqno, error_type, error, silent);
+    if (run_ && run_->mode == mch::RunMode::task) {
+        abort_classification(mc_seqno, std::move(error));
+        return;
+    }
     inserting_seqnos_.erase(mc_seqno);
     reschedule_seqno(mc_seqno, silent);
 }
@@ -719,7 +1046,7 @@ void IndexScheduler::schedule_next_seqnos() {
         schedule_seqno(seqno);
     }
 
-    maybe_finish_bounded_range();
+    maybe_finish_run();
 }
 
 void IndexScheduler::start_seqno_otel_trace(std::uint32_t mc_seqno, bool is_in_sync) {

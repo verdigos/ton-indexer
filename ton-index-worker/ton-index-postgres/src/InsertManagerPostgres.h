@@ -60,5 +60,11 @@ public:
                            td::Promise<InsertManagerInterface::InsertResult> promise) override;
   void get_existing_seqnos(td::Promise<std::vector<std::uint32_t>> promise, std::int32_t from_seqno = 0, std::int32_t to_seqno = 0) override;
   void ensure_resume_state_initialized(td::Promise<bool> promise, std::int32_t from_seqno = 0) override;
+  void get_trace_inventory(std::uint32_t from_seqno, std::uint32_t to_seqno,
+                           td::Promise<std::vector<TraceInventoryRow>> promise) override;
+  void get_partitioned_seqno_bounds(
+      td::Promise<std::pair<std::uint32_t, std::uint32_t>> promise) override;
+  static std::vector<TraceInventoryRow> read_trace_inventory(
+      pqxx::connection &c, std::uint32_t from_seqno, std::uint32_t to_seqno);
   void get_resume_seqno(td::Promise<InsertManagerInterface::ResumeState> promise, std::int32_t from_seqno = 0, std::int32_t to_seqno = 0) override;
 };

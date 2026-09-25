@@ -4,6 +4,8 @@ add_executable(ton-index-postgres
     src/main.cpp
     src/FailoverWatchdog.cpp
     src/InsertManagerPostgres.cpp
+    src/ClassifierWriter.cpp
+    src/ClassificationTaskRunner.cpp
     src/KvrocksClient.cpp
     src/KvrocksProgress.cpp
     src/PartitionManagerPostgres.cpp
@@ -36,3 +38,13 @@ target_link_libraries(ton-index-postgres-migrate pqxx tdutils)
 target_link_options(ton-index-postgres-migrate PUBLIC -rdynamic)
 
 install(TARGETS ton-index-postgres-migrate RUNTIME DESTINATION bin)
+
+add_executable(classifier-failure-test
+    test/ClassifierFailureTest.cpp
+)
+target_include_directories(classifier-failure-test PRIVATE src)
+target_compile_features(classifier-failure-test PRIVATE cxx_std_20)
+target_link_libraries(classifier-failure-test PRIVATE pqxx)
+
+enable_testing()
+add_test(NAME classifier_failure COMMAND classifier-failure-test)

@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -15,6 +16,9 @@
 #include "DataParser.h"
 #include "smc-interfaces/InterfacesDetector.h"
 #include "Otel.h"
+#include "ReplayRun.h"
+#include "TracePayloadBuffer.h"
+#include "ClassifyWorker.h"
 
 using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                       NftItemDetectorR, NftCollectionDetectorR,
@@ -34,6 +38,29 @@ private:
   td::actor::ActorId<InsertManagerInterface> insert_manager_;
   td::actor::ActorId<ParseManager> parse_manager_;
   td::actor::ActorOwn<TraceAssembler> trace_assembler_;
+  std::optional<mch::ReplayRun> run_;
+  std::shared_ptr<const mch::MchEnginePrep> prep_;
+  std::vector<td::actor::ActorOwn<mch::ClassifyWorker>> classify_workers_;
+  td::Promise<mch::RunReport> run_done_;
+  mch::RunReport run_report_;
+  std::map<std::uint32_t, mch::BlockClassification> block_results_;
+  std::uint64_t suppressed_{0};
+  std::uint64_t jobs_dispatched_{0};
+  std::uint64_t jobs_done_{0};
+  std::uint64_t slow_jobs_{0};
+  std::uint64_t blocks_waited_{0};
+  std::uint32_t warmup_until_{0};
+  std::uint32_t warmup_scan_from_{0};
+  std::uint32_t snapshot_seqno_{0};
+  std::size_t snapshot_healthy_{0};
+  std::vector<td::Bits256> warmup_seeds_;
+  std::vector<td::Bits256> warmup_pending_ids_;
+  std::uint64_t restore_failures_{0};
+  std::uint64_t worker_errors_{0};
+  std::uint64_t rss_over_budget_blocks_{0};
+  std::optional<mch::TracePayloadBuffer> payload_buffer_;
+  std::map<mch::TraceOutcome, std::uint64_t> classify_outcomes_;
+  mch::ClassifyStats classify_stats_;
   std::shared_ptr<td::Destructor> watcher_;
 
   std::string working_dir_;
@@ -63,6 +90,7 @@ private:
   td::Timestamp last_alarm_timestamp_;
   std::double_t avg_tps_{0};
   std::int64_t last_indexed_seqno_count_{0};
+  std::uint64_t indexed_total_{0};
 
   QueueState max_queue_{30000, 30000, 500000, 500000};
   QueueState cur_queue_state_;
@@ -84,11 +112,28 @@ public:
   IndexScheduler(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<InsertManagerInterface> insert_manager,
       td::actor::ActorId<ParseManager> parse_manager, std::string working_dir, std::int32_t from_seqno = 0, std::int32_t to_seqno = 0, bool force_index = false,
       std::uint32_t max_active_tasks = 32, QueueState max_queue = QueueState{30000, 30000, 500000, 500000}, std::int32_t stats_timeout = 10,
-      std::shared_ptr<td::Destructor> watcher = nullptr, std::uint32_t prewarm_count = 50, std::string db_event_fifo_path = {})
-    : db_scanner_(db_scanner), insert_manager_(insert_manager), parse_manager_(parse_manager), working_dir_(std::move(working_dir)),
+      std::shared_ptr<td::Destructor> watcher = nullptr, std::uint32_t prewarm_count = 50, std::string db_event_fifo_path = {},
+      std::optional<mch::ReplayRun> run = std::nullopt, std::shared_ptr<const mch::MchEnginePrep> prep = nullptr,
+      td::Promise<mch::RunReport> run_done = {})
+    : db_scanner_(db_scanner), insert_manager_(insert_manager), parse_manager_(parse_manager),
+      run_(std::move(run)), prep_(std::move(prep)), run_done_(std::move(run_done)), working_dir_(std::move(working_dir)),
       from_seqno_(from_seqno), to_seqno_(to_seqno), force_index_(force_index), max_active_tasks_(max_active_tasks),
       prewarm_count_(prewarm_count), max_queue_(std::move(max_queue)), stats_timeout_(stats_timeout), watcher_(watcher),
-      db_event_fifo_path_(std::move(db_event_fifo_path)) {};
+      db_event_fifo_path_(std::move(db_event_fifo_path)) {
+        CHECK((!run_ || !is_bounded_archive_range()) && "ReplayRun and bounded archive mode are mutually exclusive");
+        CHECK(static_cast<bool>(run_) == static_cast<bool>(prep_));
+        if (run_) {
+          CHECK(run_->policy.workers > 0);
+          to_seqno_ = 0;
+          if (run_->mode == mch::RunMode::task) {
+            CHECK((run_->scan_from > 0 && run_->scan_from <= run_->scan_to &&
+                   run_->scan_to < static_cast<std::uint32_t>(INT32_MAX)) && "Task scan bounds must fit the scheduler");
+            CHECK(run_->no_insert_below == UINT32_MAX && "Task runs must disable inserts");
+            from_seqno_ = 0;
+            to_seqno_ = static_cast<std::int32_t>(run_->scan_to);
+          }
+        }
+      };
 
   void start_up() override;
   void alarm() override;
@@ -102,8 +147,12 @@ private:
   void reschedule_seqno(std::uint32_t mc_seqno, bool silent = false);
   void seqno_fetched(std::uint32_t mc_seqno, schema::MasterchainBlockDataState block_data_state);
   void seqno_parsed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
-  void seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
   void seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
+  void seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
+  void seqno_trace_classified(std::uint32_t mc_seqno, schema::Trace original, td::Result<mch::TraceClassificationResult> result,
+                              td::Promise<td::Unit> promise);
+  void seqno_classified(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block, td::Result<td::Unit> result);
+  void abort_classification(std::uint32_t mc_seqno, td::Status error);
   void seqno_actions_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
   void seqno_queued_to_insert(std::uint32_t mc_seqno, QueueState status);
   void set_seqno_otel_attribute(std::uint32_t mc_seqno, const std::string& key,
@@ -121,6 +170,9 @@ private:
 
   void process_force_resume_state_initialized(td::Result<bool> R, ton::BlockSeqno start_seqno);
   void process_resume_seqno(td::Result<InsertManagerInterface::ResumeState> R);
+  void process_replay_resume(InsertManagerInterface::ResumeState resume, td::Result<ton::BlockSeqno> oldest);
+  void process_replay_snapshot(std::uint32_t next_seqno, std::uint32_t pg_next_seqno,
+                               std::uint32_t oldest_available, td::Result<PendingSummary> summary);
   void process_archive_existing_seqnos(td::Result<std::vector<std::uint32_t>> R);
   void start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_assembler);
   void got_newest_mc_seqno(std::uint32_t newest_mc_seqno);
@@ -128,7 +180,8 @@ private:
   bool should_insert_seqno(std::uint32_t mc_seqno) const;
   ton::BlockSeqno prewarm_start_seqno(ton::BlockSeqno seqno) const;
   void seqno_processed_without_insert(std::uint32_t mc_seqno, const char* reason, std::int32_t block_gen_utime);
-  void maybe_finish_bounded_range();
+  void maybe_finish_run();
+  void maybe_finish_warmup();
 
   void got_insert_queue_state(QueueState status);
 

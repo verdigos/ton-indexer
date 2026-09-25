@@ -211,6 +211,27 @@ bool try_acquire_partition_manager_lock(pqxx::work& txn) {
 
 }  // namespace
 
+std::pair<std::uint32_t, std::uint32_t> PartitionManagerPostgres::get_action_seqno_bounds(
+    pqxx::connection& c) {
+  pqxx::work txn(c);
+  const auto ranges = get_existing_partition_ranges(get_existing_partitions(txn, "actions"), "actions");
+  if (ranges.empty()) {
+    return {1, 0};
+  }
+  auto end = ranges.front().end;
+  for (const auto& range : ranges) {
+    if (range.start > end) {
+      throw std::runtime_error("Actions partitions contain a gap");
+    }
+    end = std::max(end, range.end);
+  }
+  if (ranges.front().start > UINT32_MAX) {
+    return {1, 0};
+  }
+  return {static_cast<std::uint32_t>(ranges.front().start),
+          static_cast<std::uint32_t>(std::min<std::uint64_t>(end - 1, UINT32_MAX))};
+}
+
 void PartitionManagerPostgres::ensure_partitions(pqxx::connection& c, std::uint32_t min_seqno,
                                                  std::uint32_t max_seqno) const {
   if (!config_.enabled) {

@@ -388,11 +388,11 @@ struct PreparedTelemintRow {
   td::RefInt256 min_bid;
   std::uint32_t end_time;
   std::optional<block::StdAddress> beneficiary_address;
-  td::RefInt256 initial_min_bid;
-  td::RefInt256 max_bid;
-  td::RefInt256 min_bid_step;
-  std::uint32_t min_extend_time;
-  std::uint32_t duration;
+  std::optional<td::RefInt256> initial_min_bid;
+  std::optional<td::RefInt256> max_bid;
+  std::optional<td::RefInt256> min_bid_step;
+  std::optional<std::uint32_t> min_extend_time;
+  std::optional<std::uint32_t> duration;
   int royalty_numerator;
   int royalty_denominator;
   block::StdAddress royalty_destination;

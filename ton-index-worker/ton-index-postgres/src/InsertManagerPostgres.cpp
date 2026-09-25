@@ -1,7 +1,9 @@
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/crypto.h"
+#include "td/utils/base64.h"
 #include "td/utils/misc.h"
 #include "InsertManagerPostgres.h"
+#include "ClassifierWriter.h"
 #include "convert-utils.h"
 #include "Statistics.h"
 #include "version.h"
@@ -13,6 +15,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -183,6 +186,8 @@ private:
                                               td::Result<std::shared_ptr<LatestAccountStatesChunkPreparedResult>> result);
   void maybe_commit_prepared_batch();
   void commit_prepared_batch();
+  void write_classifications(pqxx::connection &c,
+      const std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> &classifications);
   void reset_prepare_state(bool keep_prepared_batch = false);
   void acquire_leader_heartbeat();
   void release_leader_heartbeat();
@@ -674,11 +679,11 @@ struct PreparedTelemintRow {
   td::RefInt256 min_bid;
   uint32_t end_time;
   std::optional<block::StdAddress> beneficiary_address;
-  td::RefInt256 initial_min_bid;
-  td::RefInt256 max_bid;
-  td::RefInt256 min_bid_step;
-  uint32_t min_extend_time;
-  uint32_t duration;
+  std::optional<td::RefInt256> initial_min_bid;
+  std::optional<td::RefInt256> max_bid;
+  std::optional<td::RefInt256> min_bid_step;
+  std::optional<uint32_t> min_extend_time;
+  std::optional<uint32_t> duration;
   int royalty_numerator;
   int royalty_denominator;
   block::StdAddress royalty_destination;
@@ -1467,11 +1472,11 @@ PreparedTelemintRow make_destroyed_telemint_row(const DestroyedAccountState& sta
     .min_bid = zero_refint(),
     .end_time = 0,
     .beneficiary_address = std::nullopt,
-    .initial_min_bid = zero_refint(),
-    .max_bid = zero_refint(),
-    .min_bid_step = zero_refint(),
-    .min_extend_time = 0,
-    .duration = 0,
+    .initial_min_bid = std::nullopt,
+    .max_bid = std::nullopt,
+    .min_bid_step = std::nullopt,
+    .min_extend_time = std::nullopt,
+    .duration = std::nullopt,
     .royalty_numerator = 0,
     .royalty_denominator = 0,
     .royalty_destination = state.address,
@@ -3069,6 +3074,15 @@ void InsertBatchPostgres::commit_prepared_batch() {
 
   td::Timer data_timer;
   pqxx::work txn(c);
+  std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> classifications;
+  for (const auto &task : insert_tasks_) {
+    if (task.parsed_block_->classification_) {
+      classifications.emplace_back(task.mc_seqno_, task.parsed_block_->classification_.get());
+    }
+  }
+  std::stable_sort(classifications.begin(), classifications.end(), [](const auto &a, const auto &b) {
+    return a.first < b.first;
+  });
   if (disable_progress_advance_) {
     txn.exec0("SET LOCAL ton_indexer.advance_progress = 'off'");
   }
@@ -3134,12 +3148,89 @@ void InsertBatchPostgres::commit_prepared_batch() {
   }
   promise_.set_result(get_insert_result());
 
+  write_classifications(c, classifications);
+
   g_statistics.record_time(INSERT_BATCH_CONNECT, connect_timer.elapsed() * 1e3);
   g_statistics.record_time(INSERT_BATCH_EXEC_DATA, data_timer.elapsed() * 1e3);
   g_statistics.record_time(INSERT_BATCH_EXEC_STATES, states_timer.elapsed() * 1e3);
   g_statistics.record_time(INSERT_BATCH_COMMIT, commit_timer.elapsed() * 1e3);
 
   stop();
+}
+
+namespace {
+constexpr auto kClassificationStatementTimeout = "SET LOCAL statement_timeout = '30s'";
+constexpr auto kClassificationLockTimeout = "SET LOCAL lock_timeout = '10s'";
+}  // namespace
+
+void InsertBatchPostgres::write_classifications(pqxx::connection &c,
+    const std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> &classifications) {
+  const auto record_failure = [&](const char *what) {
+    LOG(ERROR) << "Classification write failed: seqnos=" << classifications.front().first
+               << ".." << classifications.back().first << " count=" << classifications.size()
+               << " " << what;
+    try {
+      std::string reason(what);
+      reason = reason.substr(0, reason.find_first_of("\r\n"));
+      reason = "action_write_failed: " + reason.substr(0, 200);
+      pqxx::connection failure_connection(connection_string_);
+      pqxx::work txn(failure_connection);
+      txn.exec(kClassificationStatementTimeout);
+      txn.exec(kClassificationLockTimeout);
+      for (const auto &[seqno, classification] : classifications) {
+        mch::record_block_issue(txn, seqno, reason);
+      }
+      txn.commit();
+    } catch (...) {
+    }
+  };
+  try {
+    if (classifications.empty()) return;
+    pqxx::work txn(c);
+    txn.exec(kClassificationStatementTimeout);
+    txn.exec(kClassificationLockTimeout);
+    std::vector<std::uint32_t> seqnos;
+    for (const auto &[seqno, classification] : classifications) {
+      seqnos.push_back(seqno);
+    }
+    mch::classify_lock_blocks(txn, seqnos);
+    mch::ClassifierWriterStats st;
+    for (const auto &[seqno, classification] : classifications) {
+      const auto before = st;
+      try {
+        pqxx::subtransaction sub(txn, "classification");
+        mch::classify_live_write(sub, seqno, *classification, st);
+        sub.commit();
+      } catch (const pqxx::broken_connection &) {
+        throw;
+      } catch (const pqxx::in_doubt_error &) {
+        throw;
+      } catch (const std::bad_alloc &) {
+        throw;
+      } catch (const std::exception &e) {
+        std::string reason(e.what());
+        reason = "action_write_failed: " + reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
+        mch::record_block_issue(txn, seqno, reason);
+        LOG(ERROR) << "Classification write failed: seqno=" << seqno << " " << reason;
+        st = before;
+        ++st.blocks_unmarked;
+      }
+    }
+    if (!no_leader_) {
+      ensure_still_leader(txn, worker_id_);
+    }
+    txn.commit();
+    LOG(INFO) << "Classification batch: blocks_written=" << st.blocks_written
+              << " blocks_already_marked=" << st.blocks_already_marked
+              << " rows=" << st.rows << " account_rows=" << st.account_rows
+              << " failed_traces=" << st.failed_traces << " rejected=" << st.rejected_traces
+              << " blocks_unmarked=" << st.blocks_unmarked << " rescue_unset=" << st.rescue_unset
+              << " rescue_rejected=" << st.rescue_rejected;
+  } catch (const std::exception &e) {
+    record_failure(e.what());
+  } catch (...) {
+    record_failure("unknown exception");
+  }
 }
 
 void InsertBatchPostgres::insert_kvrocks() {
@@ -4442,8 +4533,8 @@ void InsertManagerPostgres::start_up() {
     std::_Exit(2);
   }
   if (*db_version != latest_version) {
-    LOG(ERROR) << "Database version mismatch: expected " << latest_version.str() << ", got " << db_version->str();
-    LOG(ERROR) << "Run `ton-index-postgres-migrate` to update the database schema";
+    LOG(ERROR) << "database version " << db_version->str() << ", writer requires "
+               << latest_version.str() << " (payload v2 actions)";
     std::_Exit(2);
   }
 
@@ -4682,8 +4773,10 @@ void InsertManagerPostgres::get_resume_seqno(td::Promise<InsertManagerInterface:
     // Kvrocks projection. Replayed blocks are idempotent on both sides.
     auto resume_seqno = pg_resume_seqno;
     bool kvrocks_rewind = false;
+    std::optional<std::uint32_t> kvrocks_next_seqno;
     auto watermark = ensure_kvrocks_progress_initialized(finalized_seqno);
     if (watermark.has_value()) {
+      kvrocks_next_seqno = static_cast<std::uint32_t>(*watermark + 1);
       const auto floor_seqno = static_cast<std::int64_t>(initialized_from_cli ? initial_from_seqno
                                                                               : first_indexable_mc_seqno);
       auto kvrocks_resume_seqno = *watermark + 1;
@@ -4707,8 +4800,53 @@ void InsertManagerPostgres::get_resume_seqno(td::Promise<InsertManagerInterface:
 
     const auto starts_exactly_from_cli =
         initialized_from_cli && finalized_seqno == finalized_before_fast_forward && !kvrocks_rewind;
-    promise.set_result(InsertManagerInterface::ResumeState{resume_seqno, starts_exactly_from_cli});
+    promise.set_result(InsertManagerInterface::ResumeState{resume_seqno, starts_exactly_from_cli,
+                                                         pg_resume_seqno, kvrocks_next_seqno});
   } catch (const std::exception &e) {
     promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading resume state: " << e.what()));
   }
+}
+
+void InsertManagerPostgres::get_trace_inventory(std::uint32_t from_seqno, std::uint32_t to_seqno,
+                                               td::Promise<std::vector<TraceInventoryRow>> promise) {
+  try {
+    pqxx::connection c(credential_.get_connection_string());
+    promise.set_result(read_trace_inventory(c, from_seqno, to_seqno));
+  } catch (const std::exception& e) {
+    promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading trace inventory: " << e.what()));
+  }
+}
+
+void InsertManagerPostgres::get_partitioned_seqno_bounds(
+    td::Promise<std::pair<std::uint32_t, std::uint32_t>> promise) {
+  try {
+    pqxx::connection c(credential_.get_connection_string());
+    promise.set_result(PartitionManagerPostgres::get_action_seqno_bounds(c));
+  } catch (const std::exception& e) {
+    promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading actions partition bounds: " << e.what()));
+  }
+}
+
+std::vector<InsertManagerInterface::TraceInventoryRow> InsertManagerPostgres::read_trace_inventory(
+    pqxx::connection &c, std::uint32_t from_seqno, std::uint32_t to_seqno) {
+  pqxx::read_transaction txn(c);
+  const auto rows = txn.exec(
+      "SELECT trace_id, mc_seqno_start, mc_seqno_end, nodes_ FROM traces "
+      "WHERE mc_seqno_end BETWEEN $1 AND $2 AND state = 'complete'",
+      pqxx::params{from_seqno, to_seqno});
+  std::vector<TraceInventoryRow> inventory;
+  inventory.reserve(rows.size());
+  for (const auto& row : rows) {
+    auto decoded = td::base64_decode(row[0].as<std::string>());
+    if (decoded.is_error() || decoded.ok().size() != 32) {
+      throw std::runtime_error("Invalid trace_id in trace inventory");
+    }
+    TraceInventoryRow trace;
+    trace.trace_id.as_slice().copy_from(td::Slice(decoded.ok()));
+    trace.mc_seqno_start = row[1].as<std::uint32_t>();
+    trace.mc_seqno_end = row[2].as<std::uint32_t>();
+    trace.nodes = row[3].as<std::uint32_t>();
+    inventory.push_back(std::move(trace));
+  }
+  return inventory;
 }

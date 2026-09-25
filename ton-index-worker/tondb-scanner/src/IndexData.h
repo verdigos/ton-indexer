@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory>
 #include <variant>
 #include <set>
 #include "crypto/common/refcnt.hpp"
@@ -9,6 +10,8 @@
 #include "crypto/block/block-auto.h"
 #include "crypto/block/block-parse.h"
 #include "smc-interfaces/InterfacesDetector.h"
+
+namespace mch { struct BlockClassification; }
 
 namespace schema {
 
@@ -436,11 +439,11 @@ struct TelemintData
   uint32_t end_time;
   // Auction config
   std::optional<block::StdAddress> beneficiary_address;
-  td::RefInt256 initial_min_bid;
-  td::RefInt256 max_bid;
-  td::RefInt256 min_bid_step;
-  uint32_t min_extend_time;
-  uint32_t duration;
+  std::optional<td::RefInt256> initial_min_bid;
+  std::optional<td::RefInt256> max_bid;
+  std::optional<td::RefInt256> min_bid_step;
+  std::optional<uint32_t> min_extend_time;
+  std::optional<uint32_t> duration;
   // Royalty
   int royalty_numerator;
   int royalty_denominator;
@@ -854,6 +857,7 @@ struct ParsedBlock {
   std::vector<schema::MasterchainBlockShard> shard_state_;
 
   std::vector<schema::Trace> traces_;
+  std::shared_ptr<mch::BlockClassification> classification_;
 
   std::vector<schema::BlockchainEvent> events_;
   std::vector<schema::ValidatorElection> validator_elections_;
