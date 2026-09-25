@@ -2,8 +2,18 @@
 
 #include "vm/cells/CellSlice.h"
 #include "vm/dict.h"
+#include "vm/excno.hpp"
 
 namespace ton_abi {
+namespace {
+
+// A message body carries at most 8192 distinct cells, so a dictionary that
+// yields more logical entries than that can only be a DAG whose forks share a
+// subtree -- k cells encoding 2^k key paths. Stopping at the cap keeps decoding
+// linear in the entries actually storable instead of exponential in key width.
+constexpr std::size_t kMaxDictEntries = 8192;
+
+}  // namespace
 
 td::Status load_dict(vm::CellSlice &cs, int key_bits,
                      const std::function<td::Status(vm::CellSlice &, vm::CellSlice &)> &on_entry) {
@@ -11,14 +21,20 @@ td::Status load_dict(vm::CellSlice &cs, int key_bits,
     return td::Status::Error(PSLICE() << "map: key width " << key_bits << " out of (0,1023]");
   }
   // Reads the HashmapE maybe-bit (+ ref if present) from cs and advances it.
-  // Explicit validation keeps malformed roots on the Status error path.
+  // The shallow root check keeps malformed roots on the Status error path;
+  // check_for_each would throw on them instead.
   vm::Dictionary dict{vm::DictAdvance{}, cs, key_bits, false};
   if (!dict.validate()) {
     return td::Status::Error("map: malformed dictionary");
   }
 
   td::Status err = td::Status::OK();
-  bool ok = dict.check_for_each([&](td::Ref<vm::CellSlice> value, td::ConstBitPtr key, int key_len) -> bool {
+  std::size_t seen = 0;
+  auto visit = [&](td::Ref<vm::CellSlice> value, td::ConstBitPtr key, int key_len) -> bool {
+    if (++seen > kMaxDictEntries) {
+      err = td::Status::Error(PSLICE() << "map: more than " << kMaxDictEntries << " entries");
+      return false;
+    }
     vm::CellBuilder kb;
     if (!kb.store_bits_bool(key, key_len)) {
       err = td::Status::Error("map: cannot materialize key bits");
@@ -32,7 +48,18 @@ td::Status load_dict(vm::CellSlice &cs, int key_bits,
       return false;
     }
     return true;
-  });
+  };
+
+  // Nodes below the root are label-checked during iteration and report damage
+  // by throwing; keep those on the Status error path too.
+  bool ok = false;
+  try {
+    ok = dict.check_for_each(visit);
+  } catch (const vm::VmError &) {
+    ok = false;
+  } catch (const vm::VmVirtError &) {
+    ok = false;
+  }
   if (err.is_error()) {
     return err;
   }

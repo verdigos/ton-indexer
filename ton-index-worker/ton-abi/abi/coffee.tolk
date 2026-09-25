@@ -44,6 +44,19 @@ struct (0xc0ffee30) CoffeeSwapEvent {
 }
 
 @overflow1023_policy("suppress")
+struct (0xc0ffee00) CoffeeSwapNative {
+    _query_id: bits64;
+    amount: coins;
+}
+
+@overflow1023_policy("suppress")
+struct (0xc0ffee21) CoffeePayoutInternal {
+    _query_id: bits64;
+    recipient: any_address;
+    amount: coins;
+}
+
+@overflow1023_policy("suppress")
 struct (0xc0ffee27) CoffeeCreateLiquidityDepositoryRequest {
     _query_id: bits64;
     amount: coins;
@@ -120,7 +133,7 @@ struct (0xcb03bfaf) CoffeeStakingPositionWithdraw2 {
     points: coins;
 }
 
-type AllowedMessage = CoffeeCreateVault | CoffeeSwapEvent | CoffeeCreateLiquidityDepositoryRequest | CoffeeDepositLiquiditySuccessfulEvent | CoffeeLiquidityWithdrawalEvent | CoffeeCreatePoolCreatorRequest | CoffeeCreatePoolRequest | CoffeeMevProtectFailedSwap | CoffeeStakingClaimRewards | CoffeeStakingPositionWithdraw2
+type AllowedMessage = CoffeeCreateVault | CoffeeSwapEvent | CoffeeSwapNative | CoffeePayoutInternal | CoffeeCreateLiquidityDepositoryRequest | CoffeeDepositLiquiditySuccessfulEvent | CoffeeLiquidityWithdrawalEvent | CoffeeCreatePoolCreatorRequest | CoffeeCreatePoolRequest | CoffeeMevProtectFailedSwap | CoffeeStakingClaimRewards | CoffeeStakingPositionWithdraw2
 
 contract CoffeeMessages {
     incomingMessages: AllowedMessage

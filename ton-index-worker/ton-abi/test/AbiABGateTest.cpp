@@ -400,6 +400,7 @@ TEST_CASE("A/B gate corpus: full vector set present, no orphan dispatch entries"
 // Implicit-prefix EAT and no-match-without-void are vector-covered.
 TEST_CASE("union dispatch forms (generated): explicit peek, T|void, void-last") {
   namespace lw = ton_abi::gen::lots_of_wrappers;
+  // w8-hand-union.abi.json is hand-written and has no .tolk source.
   namespace whu = ton_abi::gen::w8_hand_union;
 
   SUBCASE("explicit prefix is peeked, not consumed") {

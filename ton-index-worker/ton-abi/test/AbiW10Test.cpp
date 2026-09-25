@@ -81,6 +81,7 @@ TEST_CASE("W10 OnlyHeader: outgoing/emitted/thrown_errors from the contract head
 }
 
 TEST_CASE("W10 LotsOfAnnotations: contract properties, message/getter descriptions (spec :29-85)") {
+  // Hand-kept: produced by tolk 1.4.1 while the vendored compiler is 1.4.0, so it is not generated at build time; regenerate when the vendored compiler reaches 1.4.1.
   ContractABI abi = load_fixture_abi("lots-of-annotations");
 
   SUBCASE("ABI common properties (compiler_version PINNED exact, not the reference's regex)") {
@@ -211,6 +212,7 @@ TEST_CASE("W10 LotsOfThrows: unnamed/plain_int throws, descriptions, external sl
 }
 
 TEST_CASE("W10 LotsOfStorage: default_value ABIConstExpression trees, incl. the big bigint (spec :51-94)") {
+  // Hand-kept: produced by a newer Tolk than vendored 1.4.0, so it is not generated at build time; regenerate when the vendored compiler catches up.
   ContractABI abi = load_fixture_abi("lots-of-storage");
   const ABIStruct *st = find_struct(abi, "StWithAllDefaults");
   REQUIRE(st != nullptr);

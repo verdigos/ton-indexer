@@ -3,6 +3,8 @@
 
 #include "AbiTestSupport.h"
 
+#include <chrono>
+#include <cstddef>
 #include <utility>
 #include <vector>
 
@@ -112,4 +114,65 @@ TEST_CASE("mapKV: load propagates a walker error") {
   auto r = load_dict(cs, 8, on_entry);
   REQUIRE(r.is_error());
   CHECK(r.message().str().find("boom") != std::string::npos);
+}
+
+TEST_CASE("mapKV: 267-bit keys round-trip with the exact key bits") {
+  std::vector<int> ids{7, 2, 9};
+  auto emit = [&](std::size_t idx, vm::CellBuilder &kb, vm::CellBuilder &vb) -> td::Status {
+    if (!kb.store_zeroes_bool(259) || !kb.store_long_bool(ids[idx], 8)) {
+      return td::Status::Error("cannot build key");
+    }
+    return store_uint(vb, td::make_refint(ids[idx] * 2), 8);
+  };
+  vm::CellBuilder cb;
+  REQUIRE(store_dict(cb, 267, ids.size(), emit).is_ok());
+  auto cs = vm::load_cell_slice(cb.finalize());
+
+  std::vector<std::pair<std::string, std::string>> out;
+  auto on_entry = [&](vm::CellSlice &k, vm::CellSlice &v) -> td::Status {
+    if (k.size() != 267 || !k.advance(259)) {
+      return td::Status::Error("unexpected key width");
+    }
+    TRY_RESULT(kv, load_uint(k, 8));
+    TRY_RESULT(vv, load_uint(v, 8));
+    out.emplace_back(kv->to_dec_string(), vv->to_dec_string());
+    return td::Status::OK();
+  };
+  REQUIRE(load_dict(cs, 267, on_entry).is_ok());
+  std::vector<std::pair<std::string, std::string>> expect{{"2", "4"}, {"7", "14"}, {"9", "18"}};
+  CHECK(out == expect);
+}
+
+TEST_CASE("mapKV: shared-subtree dict stops at the entry cap") {
+  // Each fork stores the SAME child cell in both refs, so 269 cells encode
+  // 2^267 distinct key paths. Nothing but the entry cap ends the walk.
+  vm::CellBuilder leaf;
+  REQUIRE(leaf.store_long_bool(0, 2));  // hml_short with a zero-length label
+  REQUIRE(leaf.store_long_bool(0xAA, 8));
+  td::Ref<vm::Cell> node = leaf.finalize();
+  for (int level = 0; level < 267; ++level) {
+    vm::CellBuilder fork;
+    REQUIRE(fork.store_long_bool(0, 2));  // zero-length label: one key bit per level
+    REQUIRE(fork.store_ref_bool(node));
+    REQUIRE(fork.store_ref_bool(node));
+    node = fork.finalize();
+  }
+  vm::CellBuilder root;
+  REQUIRE(root.store_long_bool(1, 1));
+  REQUIRE(root.store_ref_bool(node));
+  auto cs = vm::load_cell_slice(root.finalize());
+
+  std::size_t calls = 0;
+  auto on_entry = [&](vm::CellSlice &, vm::CellSlice &) -> td::Status {
+    ++calls;
+    return td::Status::OK();
+  };
+  auto started = std::chrono::steady_clock::now();
+  td::Status status;
+  CHECK_NOTHROW(status = load_dict(cs, 267, on_entry));
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
+  REQUIRE(status.is_error());
+  CHECK(status.message().str().find("8192") != std::string::npos);
+  CHECK(calls == 8192);
+  CHECK(elapsed.count() < 2000);
 }

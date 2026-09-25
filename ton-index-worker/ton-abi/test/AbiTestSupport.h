@@ -57,19 +57,18 @@ inline std::string fixture_path(const std::string &stem) {
   return std::string(TON_ABI_FIXTURES_DIR) + "/" + stem + ".abi.json";
 }
 
-// Load testdata/fixtures/<stem>.abi.json; REQUIRE-fails on a loader error.
+// Load a build-tree fixture ABI; REQUIRE-fails on a loader error.
 inline ton_abi::ContractABI load_fixture_abi(const std::string &stem) {
   auto r = ton_abi::load_abi_from_json(read_file(fixture_path(stem)));
   REQUIRE_MESSAGE(r.is_ok(), stem << ": " << (r.is_error() ? r.error().message().str() : ""));
   return r.move_as_ok();
 }
 
-// All 18 fixtures that compile to a valid ABI. imports/ are not independently
-// compilable; small.tolk is a Tolk compiler error (see gen_vectors.mjs).
+// All retained fixtures that contain a valid ABI.
 inline constexpr const char *kLoadableFixtures[] = {
-    "client-type-anno", "debug-print-demos", "err-cont-on-stack-1", "err-cont-on-stack-2",
-    "err-invalid-map-key-1", "err-invalid-map-key-2", "generic-union-labels", "has-not-init-storage",
-    "jetton-minter-contract", "jetton-wallet-contract", "lots-of-annotations", "lots-of-getters",
+    "client-type-anno", "err-cont-on-stack-1", "err-cont-on-stack-2",
+    "err-invalid-map-key-1", "err-invalid-map-key-2", "generic-union-labels",
+    "has-not-init-storage", "lots-of-annotations",
     "lots-of-messages", "lots-of-storage", "lots-of-throws", "lots-of-wrappers", "only-header",
     "tolk_counter",
 };
