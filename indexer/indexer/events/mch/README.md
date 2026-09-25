@@ -381,6 +381,7 @@ Field access, literals, comparisons, `and`/`or`/`not`, the `??` default, `x if c
 Every build expression can read `anchor`, the anchor block, and `consumed`, the de-duplicated consumed-block list.
 
 `CAPTURE.msg` is the message envelope with `msg_hash`, `tx_hash`, `tx_lt`, `direction`, `source`, `destination`, `value`, `opcode`, `created_lt`, `created_at`, `bounce`, `bounced` and `transaction`.
+The envelope set is closed: a field the trace loader does not carry (such as `fwd_fee`) faults, so a spec reads only the fields listed above (`msg_envelope` in `ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp`).
 `CAPTURE.msg.transaction` carries `hash`, `lt`, `now`, `account`, `aborted`, `orig_status`, `end_status` and `compute_exit_code`.
 `msg.source`, `msg.destination` and `msg.transaction.account` are already `AccountId` values, so a spec never wraps them in `account(...)`.
 
