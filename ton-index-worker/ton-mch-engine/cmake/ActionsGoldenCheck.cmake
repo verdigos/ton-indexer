@@ -1,9 +1,14 @@
 # Regenerates the per-fixture actions dump into a scratch dir and compares it
 # against goldens/actions/. Any difference fails with the regen command.
+# ENGINE_ARGS is an optional extra-arguments list appended after the engine
+# binary (empty by default).
+if(NOT DEFINED ENGINE_ARGS)
+    set(ENGINE_ARGS)
+endif()
 file(REMOVE_RECURSE "${WORK_DIR}")
 file(MAKE_DIRECTORY "${WORK_DIR}")
 execute_process(
-    COMMAND "${ENGINE}" --actions -T "${TRACES}" -O "${WORK_DIR}" --fixtures "${FIXTURES}"
+    COMMAND "${ENGINE}" ${ENGINE_ARGS} --actions -T "${TRACES}" -O "${WORK_DIR}" --fixtures "${FIXTURES}"
     RESULT_VARIABLE run_rc ERROR_VARIABLE run_err)
 if(NOT run_rc EQUAL 0)
     message(FATAL_ERROR "--actions run failed (${run_rc}):\n${run_err}")

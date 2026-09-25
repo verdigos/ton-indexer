@@ -107,7 +107,7 @@ std::string btype_constant_name(const std::string &btype) {
   return out;
 }
 
-// One builder per matcher. Only fields that differ from the struct default
+// One factory per matcher. Only fields that differ from the struct default
 // are assigned; the defaults are the contract (IrTables.h).
 std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   std::vector<std::string> out;
@@ -120,7 +120,6 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   line("CompiledMatcher m;");
   line("m.name = " + cstr(m.name) + ";");
   line("m.artifact_index = " + std::to_string(m.artifact_index) + ";");
-  set_if(m.has_build_program, "has_build_program", "true");
   set_if(!m.produces.empty(), "produces", str_list(m.produces));
   line("m.anchor_kind = " + std::string(anchor_name(m.anchor_kind)) + ";");
   set_if(!m.anchor_opcodes.empty(), "anchor_opcodes", opcode_set(m.anchor_opcodes));
@@ -155,8 +154,7 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
     nl.push_back("    CompiledNode &n = m.nodes[" + std::to_string(i) + "];");
     nl.push_back("    n.kind = " + std::string(kind_name(n.kind)) + ";");
     nset(true, "global_id", std::to_string(n.global_id));
-    nset(n.has_opcode, "opcode", hex32(n.opcode));
-    nset(n.has_opcode, "has_opcode", "true");
+    nset(n.kind == NodeKind::Contract, "opcode", hex32(n.opcode));
     nset(!n.btype.empty(), "btype", cstr(n.btype));
     nset(!n.pred_name.empty(), "pred_name", cstr(n.pred_name));
     nset(!n.where_name.empty(), "where_name", cstr(n.where_name));
@@ -164,6 +162,8 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
     nset(n.slot >= 0, "slot", std::to_string(n.slot));
     nset(n.optional, "optional", "true");
     nset(n.peek, "peek", "true");
+    nset(n.many, "many", "true");
+    nset(n.max > 0, "max", std::to_string(n.max));
     nset(n.child >= 0, "child", std::to_string(n.child));
     nset(!n.children.empty(), "children", int_list(n.children));
     nset(n.parent >= 0, "parent", std::to_string(n.parent));
@@ -183,7 +183,6 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   set_if(!m.include_excess, "include_excess", "false");
   set_if(!m.include_bounces, "include_bounces", "false");
   set_if(!m.ref_preds.empty(), "ref_preds", str_set(m.ref_preds));
-  set_if(!m.ref_builders.empty(), "ref_builders", str_set(m.ref_builders));
   set_if(!m.ref_shapers.empty(), "ref_shapers", str_set(m.ref_shapers));
   set_if(!m.ref_msgtypes.empty(), "ref_msgtypes", str_set(m.ref_msgtypes));
   set_if(!m.ref_lookups.empty(), "ref_lookups", str_set(m.ref_lookups));

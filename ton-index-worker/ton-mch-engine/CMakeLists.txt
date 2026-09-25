@@ -24,19 +24,16 @@ target_link_libraries(mch-codegen tdutils mch-ir-load)
 # --- generated sources ---------------------------------------------------------
 # EVERY generated mch-codegen table is a build step whose output lives in the
 # build tree (${CMAKE_CURRENT_BINARY_DIR}/generated/), never in the source tree
-# or git. The manifest/specs and conformance JSON are version-controlled inputs;
-# the production IR and .cpp tables are derived artifacts.
-#
-# Per-document tables: mch-codegen emits gen_*_<suffix>() symbols, so the tables
-# generated from the CLASSIFY artifact and the one from ir/build_vectors.json
-# (--build-vectors) both link into the binary, each permanently paired with its
-# input document.
+# or git. The production IR, expression vectors and .cpp tables are derived
+# artifacts.
 set(MCH_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(MCH_GENERATED_IR "${MCH_GEN_DIR}/mch_ir.json")
 set(MCH_GENERATED_IR_SECOND "${MCH_GEN_DIR}/mch_ir.second.json")
+set(MCH_EXPR_VECTORS "${MCH_GEN_DIR}/expr_vectors.json")
 set(MCH_INDEXER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../indexer" CACHE PATH
     "Path to the repository indexer/ directory used for MCH IR generation")
 file(MAKE_DIRECTORY "${MCH_GEN_DIR}")
+set(MCH_PAYLOAD_KEYS_HEADER "${MCH_GEN_DIR}/payload_keys_generated.h")
 
 find_package(Python3 3.10 QUIET COMPONENTS Interpreter)
 if(NOT Python3_Interpreter_FOUND)
@@ -50,6 +47,7 @@ endif()
 
 file(GLOB MCH_SPEC_SOURCES CONFIGURE_DEPENDS
     "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/*.mch"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/lib/*.mch"
 )
 set(MCH_FRONTEND_PY_SOURCES
     "${MCH_INDEXER_ROOT}/indexer/__init__.py"
@@ -65,7 +63,6 @@ set(MCH_FRONTEND_PY_SOURCES
     "${MCH_INDEXER_ROOT}/indexer/events/mch/ir_emit.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/lexer.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/parser.py"
-    "${MCH_INDEXER_ROOT}/indexer/events/mch/recursion.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/registry.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/resolver.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/tokens.py"
@@ -79,7 +76,33 @@ add_custom_command(
             -o "${MCH_GENERATED_IR_SECOND}"
     WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
     DEPENDS ${MCH_SPEC_SOURCES} ${MCH_FRONTEND_PY_SOURCES}
+            "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/manifest.yaml"
     COMMENT "Generate deterministic MCH IR from .mch specs"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${MCH_EXPR_VECTORS}"
+    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${MCH_INDEXER_ROOT}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ir/generate_expr_vectors.py"
+            "${MCH_EXPR_VECTORS}"
+    WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ir/generate_expr_vectors.py"
+            ${MCH_FRONTEND_PY_SOURCES}
+    COMMENT "Generate MCH expression conformance vectors"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${MCH_PAYLOAD_KEYS_HEADER}"
+    COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.payload_keys
+            --registry "${CMAKE_CURRENT_SOURCE_DIR}/payload-keys.yaml" cpp
+            --out "${MCH_PAYLOAD_KEYS_HEADER}"
+    WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/payload-keys.yaml"
+            "${MCH_INDEXER_ROOT}/indexer/events/mch/payload_keys.py"
+    COMMENT "Generate MCH compact payload key table"
     VERBATIM
 )
 
@@ -128,6 +151,7 @@ add_custom_command(
 )
 # The generated matcher, build and where tables are linked by the classify loop.
 set(MCH_GENERATED_SOURCES
+    ${MCH_PAYLOAD_KEYS_HEADER}
     ${MCH_GEN_DIR}/btypes_gen.h
     ${MCH_GEN_DIR}/matchers_ir_generated.cpp
     ${MCH_GEN_DIR}/builds_ir_generated.cpp
@@ -136,13 +160,10 @@ set(MCH_GENERATED_SOURCES
 add_custom_target(mch_generate_sources
     DEPENDS ${MCH_GENERATED_IR} ${MCH_GENERATED_IR_SECOND}
             ${MCH_GENERATED_SOURCES})
+add_custom_target(mch_generate_test_vectors DEPENDS ${MCH_EXPR_VECTORS})
 
-# --- mch-classify: the classification CORE static library (Phase G step 3,
-# The pure pipeline TUs (no CLI/dump/harness) - ton-index-
-# postgres links THIS; the CLI exe below links it + the harness TUs. Action-row
-# construction (Action struct + build_action + the fill_*) lives here in
-# ActionBuild.cpp; only the dump-side render_action + stdout printing stayed
-# with the harness Classify.cpp.
+# --- mch-classify: the pure pipeline TUs (no CLI/dump/harness) that
+# ton-index-postgres links; the CLI exe below links them plus the harness TUs.
 # ton-abi generated pairs live here (fixture pairs for the harness test below;
 # the PRODUCTION pairs compiled into mch-classify).
 set(TON_ABI_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/../ton-abi/generated)
@@ -173,27 +194,24 @@ add_library(mch-classify STATIC
     src/host/DexRecords.cpp
     src/host/BlockViews.cpp
     src/host/HostAdapter.cpp
-    src/host/HostNominator.cpp
     src/host/HostEvaa.cpp
     src/host/HostDedust.cpp
-    src/host/HostLayerZero.cpp
     src/host/HostTonstakers.cpp
-    src/host/HostVesting.cpp
-    src/host/HostCocoon.cpp
     src/host/HostNft.cpp
     src/host/HostNftSale.cpp
     src/host/HostTgbtc.cpp
-    src/host/HostCoffee.cpp
     src/host/HostStonfi.cpp
     src/host/HostDedustDeposit.cpp
     src/host/HostTonco.cpp
     src/BuildRuntime.cpp
     src/BuildDriver.cpp
     src/ActionBuild.cpp
+    src/ActionPayload.cpp
+    src/ActionJson.cpp
     src/GhostExternal.cpp
     src/ClassifyCore.cpp
     src/SchemaTraceLoader.cpp
-    src/ParsedBlockLookupSource.cpp
+    src/TieredLookupSource.cpp
     src/EnginePrep.cpp
     src/MsgParse.cpp
     src/AbiBridge.cpp
@@ -215,7 +233,7 @@ target_include_directories(mch-classify
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
 # ton-abi bridge: mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
-target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi)
+target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi msgpack-cxx)
 add_dependencies(mch-classify ton_abi_generate_sources)
 add_dependencies(mch-classify mch_generate_sources)
 
@@ -228,8 +246,8 @@ add_dependencies(mch-classify mch_generate_sources)
 # fixture sources named in one variable, referenced by exactly one target,
 # with the reason stated here.
 #
-# lz4 and msgpack are used by FixtureLoader.cpp and by nothing else in the
-# tree, so the lz4 link edge lives here rather than on the product lib.
+# FixtureLoader.cpp uses lz4 and msgpack; lz4 remains confined to this test
+# library while the product classifier also uses msgpack for action payloads.
 set(MCH_FIXTURE_SOURCES
     src/fixtures/FixtureLoader.cpp
     src/fixtures/FixtureLookupSource.cpp
@@ -262,24 +280,25 @@ add_dependencies(mch-fixtures mch_generate_sources)
 # --- In-process classifier for ton-trace-emulator.
 # Split in two so the emulator-free side (converter / interfaces / actor) stays
 # linkable without emulator_static.
-add_library(mch-emu STATIC
+add_library(mch-classification-runtime STATIC
+    src/Classify.cpp
     src/emu/EmuTraceConvert.cpp
-    src/emu/EmuInterfaces.cpp
+    src/DetectorInterfaceAdapter.cpp
     src/emu/EmuClassifierActor.cpp
-    src/emu/EmuActionSerialize.cpp
-    src/emu/EmuCelldbLookup.cpp
-    src/emu/EmuJvaultChain.cpp
+    src/RedisActionSerialize.cpp
+    src/CelldbTier2Lookup.cpp
+    src/JvaultLookup.cpp
 )
-target_include_directories(mch-emu PUBLIC src)
-target_compile_features(mch-emu PUBLIC cxx_std_20)
-target_link_libraries(mch-emu PUBLIC mch-classify)
+target_include_directories(mch-classification-runtime PUBLIC src)
+target_compile_features(mch-classification-runtime PUBLIC cxx_std_20)
+target_link_libraries(mch-classification-runtime PUBLIC mch-classify)
 
 # EmuClassifierBridge.cpp is the ONLY TU that includes TraceEmulator.h.
 # ton-trace-emulator-core is add_subdirectory'd after this one; link libraries
 # resolve at generate time, and the core lib knows nothing of mch (no cycle).
 add_library(mch-emu-bridge STATIC src/emu/EmuClassifierBridge.cpp)
 target_compile_features(mch-emu-bridge PUBLIC cxx_std_20)
-target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
+target_link_libraries(mch-emu-bridge PUBLIC mch-classification-runtime ton-trace-emulator-core)
 
 # The upstream CLI/gate executable over the product boundary.
 # Bridge self-test (--abi-bridge-test): build-time ton-abi generated fixture
@@ -295,26 +314,49 @@ set(ABI_BRIDGE_TEST_FIXTURES
 
 set_source_files_properties(${ABI_BRIDGE_TEST_FIXTURES} PROPERTIES GENERATED TRUE)
 
+add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
+    COMMAND mch-codegen --vectors ${MCH_EXPR_VECTORS}
+            -o ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
+    DEPENDS mch-codegen ${MCH_EXPR_VECTORS}
+    COMMENT "Generate MCH expression conformance functions"
+    VERBATIM
+)
+
 add_executable(ton-mch-engine
     src/main.cpp
-    harness/Classify.cpp
+    harness/ClassifyDump.cpp
     harness/AbiBridgeTest.cpp
-    harness/EmuActionSerializeTest.cpp
-    harness/EmuCelldbLookupTest.cpp
+    harness/RedisActionSerializeTest.cpp
+    harness/CelldbTier2LookupTest.cpp
+    harness/ClassifyCoreTest.cpp
+    harness/ActionJsonTest.cpp
     harness/GhostExternalTest.cpp
+    harness/ExprVectorsTest.cpp
+    harness/WalkerCasesTest.cpp
+    ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src harness ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
-# mch-emu (not just mch-classify): --actions-msgpack-test gates the write-back
+target_compile_definitions(ton-mch-engine PRIVATE
+    MCH_ACTION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/goldens/fixtures.json"
+    MCH_ACTION_TRACES="${CMAKE_CURRENT_SOURCE_DIR}/../../indexer/tests/traces"
+)
+# mch-classification-runtime (not just mch-classify): --actions-msgpack-test gates the write-back
 # writer, which lives there. Still no emulator dependency — mch-emu-bridge is
 # the only target that knows ::Trace. mch-fixtures is linked HERE and only here.
-target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-emu)
+target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-classification-runtime)
 add_dependencies(ton-mch-engine mch_generate_sources)
+add_dependencies(ton-mch-engine mch_generate_test_vectors)
+
+add_executable(mch-smc-pruned-cells-test harness/SmcPrunedCellsTest.cpp)
+target_link_libraries(mch-smc-pruned-cells-test PRIVATE smc-envelope)
+target_compile_features(mch-smc-pruned-cells-test PRIVATE cxx_std_20)
+add_dependencies(ton-mch-engine mch-smc-pruned-cells-test)
 
 # Deliberately NOT install()ed: this is the gate/dev harness, not a product
 # binary, and it has no place in the production bin dir
-#
 
 # --- CTest wiring --------------------------------------------------------------
 # The deterministic, self-contained gate modes as native tests (`ctest -R mch`).
@@ -323,10 +365,20 @@ add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
 add_test(NAME mch_actions_msgpack
     COMMAND ton-mch-engine --actions-msgpack-test)
+add_test(NAME mch_actions_json
+    COMMAND ton-mch-engine --actions-json-test)
 add_test(NAME mch_celldb_tier2
     COMMAND ton-mch-engine --celldb-tier2-test)
 add_test(NAME mch_ghost_external
     COMMAND ton-mch-engine --ghost-external-test)
+add_test(NAME mch_classify_core
+    COMMAND ton-mch-engine --classify-core-test)
+add_test(NAME mch_expr_vectors
+    COMMAND ton-mch-engine --expr-vectors-test ${MCH_EXPR_VECTORS})
+add_test(NAME mch_smc_pruned_cells
+    COMMAND mch-smc-pruned-cells-test)
+add_test(NAME mch_walker_cases
+    COMMAND ton-mch-engine --walker-cases-test)
 add_test(NAME mch_actions_golden
     COMMAND "${CMAKE_COMMAND}"
             -DENGINE=$<TARGET_FILE:ton-mch-engine>
@@ -339,4 +391,3 @@ add_test(NAME mch_actions_golden
 add_test(NAME mch_ir_equivalence
     COMMAND "${CMAKE_COMMAND}" -E compare_files
             "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}")
-
