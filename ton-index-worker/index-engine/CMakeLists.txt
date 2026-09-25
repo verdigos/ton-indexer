@@ -7,6 +7,7 @@ add_library(index-engine-core
         src/ReplayRun.cpp
         src/TaskPlanning.cpp
         src/BlockInterfacesDetector.cpp
+        src/DexTap.cpp
 )
 target_include_directories(index-engine-core
         PUBLIC src/
@@ -17,3 +18,12 @@ target_link_libraries(index-engine-core
         ton-observability
         mch-classify
         mch-classification-runtime)
+
+add_executable(dex-tap-test
+        test/DexTapTest.cpp
+)
+target_compile_features(dex-tap-test PRIVATE cxx_std_20)
+target_link_libraries(dex-tap-test PRIVATE index-engine-core)
+
+enable_testing()
+add_test(NAME dex_tap COMMAND dex-tap-test)

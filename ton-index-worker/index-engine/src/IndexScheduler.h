@@ -19,6 +19,7 @@
 #include "ReplayRun.h"
 #include "TracePayloadBuffer.h"
 #include "ClassifyWorker.h"
+#include "DexTap.h"
 
 using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                       NftItemDetectorR, NftCollectionDetectorR,
@@ -108,6 +109,7 @@ private:
   };
   std::unordered_map<std::uint32_t, SeqnoOtelTraceState> seqno_otel_traces_;
   std::unordered_map<std::uint32_t, std::uint32_t> seqno_attempts_;
+  std::shared_ptr<DexTap> dex_tap_;
 public:
   IndexScheduler(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<InsertManagerInterface> insert_manager,
       td::actor::ActorId<ParseManager> parse_manager, std::string working_dir, std::int32_t from_seqno = 0, std::int32_t to_seqno = 0, bool force_index = false,
@@ -139,6 +141,7 @@ public:
   void alarm() override;
   void run();
   void get_contiguous_indexed_seqno(td::Promise<std::int32_t> promise);
+  void set_dex_tap(std::shared_ptr<DexTap> dex_tap) { dex_tap_ = std::move(dex_tap); }
 private:
   void advance_contiguous_indexed_seqno();
   void schedule_next_seqnos();

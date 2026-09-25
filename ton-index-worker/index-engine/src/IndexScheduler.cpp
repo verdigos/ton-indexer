@@ -610,6 +610,9 @@ void IndexScheduler::seqno_parsed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_
 
 void IndexScheduler::seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
     LOG(DEBUG) << "Interfaces processed for seqno " << mc_seqno;
+    if (dex_tap_) {
+        dex_tap_->publish(mc_seqno, *parsed_block);
+    }
     finish_seqno_otel_stage(mc_seqno);
     start_seqno_otel_stage(mc_seqno, "assemble_traces");
 

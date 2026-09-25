@@ -41,6 +41,7 @@ int main(int argc, char *argv[]) {
   std::string db_root;
   std::string working_dir;
   std::string db_event_fifo_path;
+  std::string dex_tap_socket;
   td::uint32 last_known_seqno = 0;
   td::uint32 from_seqno = 0;
   td::uint32 to_seqno = 0;
@@ -90,6 +91,9 @@ int main(int argc, char *argv[]) {
   });
   p.add_option('\0', "workdir", "Path to index working dir for secondary rocksdb logs", [&](td::Slice fname) {
     working_dir = fname.str();
+  });
+  p.add_option('\0', "dex-tap-socket", "Send DEX pool states to this unix datagram socket (prototype, see docs/dex-prices/mvp-plan.md)", [&](td::Slice fname) {
+    dex_tap_socket = fname.str();
   });
   p.add_option('\0', "db-event-fifo", "Path to TON node DB events FIFO (validator-engine --db-event-fifo) for low-latency event-driven indexing; polling remains as a fallback", [&](td::Slice fname) {
     db_event_fifo_path = fname.str();
@@ -736,6 +740,15 @@ int main(int argc, char *argv[]) {
       insert_manager_.get(), parse_manager_.get(), working_dir, from_seqno, to_seqno, force_index, max_active_tasks, max_queue, stats_timeout, watcher, prewarm_count,
       db_event_fifo_path, mch_run, mch_prep);
     });
+    if (!dex_tap_socket.empty()) {
+      auto dex_tap = DexTap::open(dex_tap_socket);
+      if (dex_tap.is_error()) {
+        LOG(FATAL) << "Failed to open DEX tap: " << dex_tap.move_as_error();
+      }
+      scheduler.run_in_context([&, tap = std::shared_ptr<DexTap>(dex_tap.move_as_ok())] {
+        td::actor::send_closure(index_scheduler_, &IndexScheduler::set_dex_tap, tap);
+      });
+    }
     if (!bounded_archive_range && failover_check_interval > 0) {
       scheduler.run_in_context([&] {
         std::shared_ptr<sw::redis::Redis> watchdog_kvrocks;

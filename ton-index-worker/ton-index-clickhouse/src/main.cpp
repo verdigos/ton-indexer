@@ -35,6 +35,7 @@ int main(int argc, char *argv[]) {
   td::uint32 from_seqno = 0;
   td::uint32 to_seqno = 0;
   bool force_index = false;
+  std::string dex_tap_socket;
   InsertManagerClickhouse::Credential credential;
   bool testnet = false;
 
@@ -83,6 +84,9 @@ int main(int argc, char *argv[]) {
     }
     to_seqno = v;
     return td::Status::OK();
+  });
+  p.add_option('\0', "dex-tap-socket", "Send DEX pool states to this unix datagram socket (prototype, see docs/dex-prices/mvp-plan.md)", [&](td::Slice fname) {
+    dex_tap_socket = fname.str();
   });
   p.add_option('\0', "force", "Ignore existing seqnos and force reindex", [&]() {
     force_index = true;
@@ -274,6 +278,15 @@ int main(int argc, char *argv[]) {
   scheduler.run_in_context([&, watcher = std::move(watcher)] { index_scheduler_ = td::actor::create_actor<IndexScheduler>("indexscheduler", db_scanner_.get(), 
     insert_manager_.get(), parse_manager_.get(), working_dir, from_seqno, to_seqno, force_index, max_active_tasks, max_queue, stats_timeout, watcher);
   });
+  if (!dex_tap_socket.empty()) {
+    auto dex_tap = DexTap::open(dex_tap_socket);
+    if (dex_tap.is_error()) {
+      LOG(FATAL) << "Failed to open DEX tap: " << dex_tap.move_as_error();
+    }
+    scheduler.run_in_context([&, tap = std::shared_ptr<DexTap>(dex_tap.move_as_ok())] {
+      td::actor::send_closure(index_scheduler_, &IndexScheduler::set_dex_tap, tap);
+    });
+  }
   scheduler.run_in_context([&] { 
     td::actor::send_closure(insert_manager_, &InsertManagerClickhouse::set_parallel_inserts_actors, max_insert_actors);
     td::actor::send_closure(insert_manager_, &InsertManagerClickhouse::set_insert_batch_size, batch_size);
