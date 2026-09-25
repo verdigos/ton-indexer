@@ -9,6 +9,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "crypto/vm/cp0.h"
 #include "vm/cells/CellBuilder.h"
 
 namespace {
@@ -123,6 +124,7 @@ void test_publish() {
 }  // namespace
 
 int main() {
+  CHECK(vm::init_op_cp0());
   test_line_format();
   test_whitelist();
   test_publish();

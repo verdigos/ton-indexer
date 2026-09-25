@@ -23,7 +23,7 @@ add_executable(dex-tap-test
         test/DexTapTest.cpp
 )
 target_compile_features(dex-tap-test PRIVATE cxx_std_20)
-target_link_libraries(dex-tap-test PRIVATE index-engine-core)
+target_link_libraries(dex-tap-test PRIVATE index-engine-core tondb-scanner ton-observability)
 
 enable_testing()
 add_test(NAME dex_tap COMMAND dex-tap-test)
