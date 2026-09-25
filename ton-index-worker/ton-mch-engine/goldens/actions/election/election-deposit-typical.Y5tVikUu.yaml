@@ -1,0 +1,110 @@
+# election / Election deposit, typical amount
+# note: Median-sized successful election deposit from signed window 6
+# trace: Y5tVikUunaDaXAozUjgAuxrG_uErWSsRcBHXstkqbDw=
+actions:
+  - type: call_contract
+    anchor: call_contract#4e73744b@101953648000006
+    id: RuHdsJEmHuf+Dj1iXCszumfe3V4Q4OKoxBRdwF+ANYU=
+    success: true
+    source: 0:C5BE7C6EC80DA880D3CEA048F596EF7AF14E0F3FCFC5CC97EB39652C8BFA3508
+    source_secondary: null
+    destination: "-1:F7AB16D1976AEE43B8EACC794341D38E72A924A134A580EEF8F5A43A3C6CB008"
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1689503767544911
+    opcode: 0x4e73744b
+    tx_hashes:
+      - mi7FH5iTbSBqeRWXzfuvhwh2qY6Rdyjqok2uWZg5fZg=
+      - WaCuEWLPQc1Z2wJDuUwzQsLY0NI6Mp9tlorBeZn1bLw=
+    accounts:
+      - "-1:F7AB16D1976AEE43B8EACC794341D38E72A924A134A580EEF8F5A43A3C6CB008"
+      - 0:C5BE7C6EC80DA880D3CEA048F596EF7AF14E0F3FCFC5CC97EB39652C8BFA3508
+    start_lt: 101953648000006
+    end_lt: 101953650000001
+    start_utime: 1788799835
+    end_utime: 1788799836
+    mc_seqno_end: 91217603
+  - type: call_contract
+    anchor: call_contract#a2065f2c@101953648000004
+    id: Ydwzu9eEbCXTOcin5ZXtOHdf4sukXIAaxr8mvKjl+JY=
+    success: true
+    source: 0:01C4181FC50F4508DFF8CF10967A27A77180937BFEB4EF26E37E1DAD8AE3DBD5
+    source_secondary: null
+    destination: 0:C5BE7C6EC80DA880D3CEA048F596EF7AF14E0F3FCFC5CC97EB39652C8BFA3508
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 2000000000
+    opcode: 0xa2065f2c
+    tx_hashes:
+      - Y5tVikUunaDaXAozUjgAuxrG/uErWSsRcBHXstkqbDw=
+      - mi7FH5iTbSBqeRWXzfuvhwh2qY6Rdyjqok2uWZg5fZg=
+    accounts:
+      - 0:01C4181FC50F4508DFF8CF10967A27A77180937BFEB4EF26E37E1DAD8AE3DBD5
+      - 0:C5BE7C6EC80DA880D3CEA048F596EF7AF14E0F3FCFC5CC97EB39652C8BFA3508
+    start_lt: 101953648000004
+    end_lt: 101953648000005
+    start_utime: 1788799835
+    end_utime: 1788799835
+    mc_seqno_end: 91217603
+  - type: call_contract
+    anchor: call_contract#f374484c@101953650000006
+    id: 9a6dW5+6r8w/Xcf/DyKzqyvodyDNRolS7av0FEBgZ6M=
+    success: true
+    source: "-1:F7AB16D1976AEE43B8EACC794341D38E72A924A134A580EEF8F5A43A3C6CB008"
+    source_secondary: null
+    destination: 0:C5BE7C6EC80DA880D3CEA048F596EF7AF14E0F3FCFC5CC97EB39652C8BFA3508
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 956860000
+    opcode: 0xf374484c
+    tx_hashes:
+      - 2zLfKUfkRfpZce0X0Pyv0MCysCVqX5XOi6UUPuhXKMA=
+      - KxaJfAj71EsDQ9wsbLj7d5kF0XGFvHf6TeCuNHLFTJg=
+    accounts:
+      - "-1:F7AB16D1976AEE43B8EACC794341D38E72A924A134A580EEF8F5A43A3C6CB008"
+      - 0:C5BE7C6EC80DA880D3CEA048F596EF7AF14E0F3FCFC5CC97EB39652C8BFA3508
+    start_lt: 101953650000006
+    end_lt: 101953652000001
+    start_utime: 1788799836
+    end_utime: 1788799837
+    mc_seqno_end: 91217607
+  - type: election_deposit
+    matcher: election_deposit
+    anchor: election_deposit@101953650000002
+    id: SIclz34JiKuzwr8GpbiOmE6XfCIDOaMi5BN7x2mHJmo=
+    success: true
+    source: "-1:F7AB16D1976AEE43B8EACC794341D38E72A924A134A580EEF8F5A43A3C6CB008"
+    source_secondary: null
+    destination: null
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 1689503703732554
+    value: null
+    opcode: null
+    tx_hashes:
+      - WaCuEWLPQc1Z2wJDuUwzQsLY0NI6Mp9tlorBeZn1bLw=
+      - 2zLfKUfkRfpZce0X0Pyv0MCysCVqX5XOi6UUPuhXKMA=
+      - FEwY9D50wys8yZvhvXi7Srl+w9lh25dOP0sCtcqjVEE=
+    accounts:
+      - "-1:3333333333333333333333333333333333333333333333333333333333333333"
+      - "-1:F7AB16D1976AEE43B8EACC794341D38E72A924A134A580EEF8F5A43A3C6CB008"
+    start_lt: 101953650000002
+    end_lt: 101953650000005
+    start_utime: 1788799836
+    end_utime: 1788799836
+    mc_seqno_end: 91217603

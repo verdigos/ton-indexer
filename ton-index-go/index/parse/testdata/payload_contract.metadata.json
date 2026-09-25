@@ -1,28 +1,28 @@
 {
-  "api_bytes": 4352652,
-  "api_reference": "_analysis-scratch/payload-wave/regen/preserve-reference.jsonl",
-  "api_sha256": "caa7c2c166e6b19e71a1216efa9249c2d0b4ff46b907c68b57e9baa2ed00dfd4",
+  "api_bytes": 4367192,
+  "api_reference": "_analysis-scratch/payload-wave/election/preserve-reference.jsonl",
+  "api_sha256": "6a64e2e9d1485ba19b71021e51638e3295ff4414836e8218bf2976ba92b88367",
   "engine_binary_mtime_utc": "2026-09-24T23:35:47.545278+00:00",
-  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-6241daf5-401e51e.jsonl -T indexer/tests/traces",
+  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-ebccb943-401e51e.jsonl -T indexer/tests/traces",
   "generator": "devtools/bk-tools/generate_baseline.py",
-  "generator_command": "python3 devtools/bk-tools/generate_baseline.py --preserve-api-from _analysis-scratch/payload-wave/regen/preserve-reference.jsonl",
-  "golden_files": 294,
-  "golden_set_sha256": "0b3f5dd4fcb67ce7e320117a7979431330bed263624ea2736105e88d8dd658d1",
-  "gzip_bytes": 804601,
-  "gzip_sha256": "72424488412fad9c268d4358250cb96178ec63ffbf6d32a49a7843e414c3adf8",
-  "main_sha": "6241daf5",
+  "generator_command": "python3 devtools/bk-tools/generate_baseline.py --preserve-api-from _analysis-scratch/payload-wave/election/preserve-reference.jsonl",
+  "golden_files": 296,
+  "golden_set_sha256": "c46265213b90eca0087e7843b346223baecf298634277cc8424e9d2b0cc6667a",
+  "gzip_bytes": 807543,
+  "gzip_sha256": "8fd95ea0fd4da99ae6f9fa01b47733ab5d91b46efbd6c01fb865a50ebe1fe195",
+  "main_sha": "ebccb943",
   "overlay_sha": "401e51e",
-  "payload_bytes": 2847817,
-  "payload_sha256": "825cea2440a5ffb260464955c981760060ce81dbebddd3c00a21dd1e52537750",
-  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-6241daf5-401e51e.jsonl ../_analysis-scratch/payload-wave/baseline/api-6241daf5-401e51e.jsonl ../_analysis-scratch/payload-wave/regen/preserve-reference.jsonl",
+  "payload_bytes": 2857013,
+  "payload_sha256": "213512ccc812d5c539803d456d8e3562ead4263632f027f7953ebe192ff72f2b",
+  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-ebccb943-401e51e.jsonl ../_analysis-scratch/payload-wave/baseline/api-ebccb943-401e51e.jsonl ../_analysis-scratch/payload-wave/election/preserve-reference.jsonl",
   "render_cwd": "ton-index-go",
   "repo_data": "ton-index-go/index/parse/testdata/payload_contract.jsonl.gz",
   "repo_metadata": "ton-index-go/index/parse/testdata/payload_contract.metadata.json",
-  "rows": 1218,
+  "rows": 1224,
   "rows_by_type": {
     "auction_bid": 3,
     "auction_outbid": 2,
-    "call_contract": 591,
+    "call_contract": 595,
     "change_dns": 5,
     "change_wallet_key": 2,
     "cocoon_client_change_secret_hash": 1,
@@ -52,6 +52,7 @@
     "dex_withdraw_liquidity": 17,
     "dns_purchase": 9,
     "dns_release": 5,
+    "election_deposit": 2,
     "election_recover": 1,
     "evaa_liquidate": 11,
     "evaa_supply": 4,
@@ -114,9 +115,9 @@
       "rows": 2
     },
     "call_contract": {
-      "bytes": 1474082,
-      "gzip_bytes": 246521,
-      "rows": 591
+      "bytes": 1483961,
+      "gzip_bytes": 248547,
+      "rows": 595
     },
     "change_dns": {
       "bytes": 17747,
@@ -262,6 +263,11 @@
       "bytes": 13937,
       "gzip_bytes": 3229,
       "rows": 5
+    },
+    "election_deposit": {
+      "bytes": 4661,
+      "gzip_bytes": 1822,
+      "rows": 2
     },
     "election_recover": {
       "bytes": 2327,

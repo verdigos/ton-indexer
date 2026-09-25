@@ -1561,6 +1561,18 @@
    "group": "evaa",
    "name": "Ton supply success, no note",
    "slug": "ton-supply-success-no-note"
+  },
+  "Y5tVikUunaDaXAozUjgAuxrG_uErWSsRcBHXstkqbDw=": {
+   "group": "election",
+   "name": "Election deposit, typical amount",
+   "slug": "election-deposit-typical",
+   "note": "Median-sized successful election deposit from signed window 6"
+  },
+  "vvrJBGqKy47TpcraThtQAM1eVOImbvrQoU9_JBDnuio=": {
+   "group": "election",
+   "name": "Election deposit, low amount",
+   "slug": "election-deposit-low-amount",
+   "note": "Low-sized successful election deposit from signed window 9"
   }
  }
 }
