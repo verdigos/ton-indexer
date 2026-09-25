@@ -47,7 +47,7 @@ _Avoid_: pool type, formula
 The amounts of both Assets a Pool holds at a moment; together with the Curve they determine the Spot price.
 
 **Pool snapshot**:
-A Pool's Reserves and Spot price as of the end of one shard block.
+A Pool's Reserves and Spot price as of the end of one masterchain block.
 _Avoid_: pool state row, tick
 
 **Spot price**:
