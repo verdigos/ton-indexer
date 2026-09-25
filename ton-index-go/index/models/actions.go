@@ -1,7 +1,6 @@
 package models
 
 import (
-	"fmt"
 	"math/big"
 )
 
@@ -251,43 +250,9 @@ type RawActionJettonSwapPeerSwap struct {
 	AmountOut *string
 }
 
-func (p *RawActionJettonSwapPeerSwap) ScanNull() error {
-	return fmt.Errorf("cannot scan NULL into RawActionJettonSwapPeerSwap")
-}
-
-func (p *RawActionJettonSwapPeerSwap) ScanIndex(i int) any {
-	switch i {
-	case 0:
-		return &p.AssetIn
-	case 1:
-		return &p.AmountIn
-	case 2:
-		return &p.AssetOut
-	case 3:
-		return &p.AmountOut
-	default:
-		panic("invalid index")
-	}
-}
-
 type RawActionVaultExcessEntry struct {
 	Asset  *AccountAddress
 	Amount *string
-}
-
-func (p *RawActionVaultExcessEntry) ScanNull() error {
-	return fmt.Errorf("cannot scan NULL into RawActionVaultExcessEntry")
-}
-
-func (p *RawActionVaultExcessEntry) ScanIndex(i int) any {
-	switch i {
-	case 0:
-		return &p.Asset
-	case 1:
-		return &p.Amount
-	default:
-		panic("invalid index")
-	}
 }
 
 // RawActionJvaultClaimReward is one entry of the jvault claim payload's

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import json
 import os
@@ -27,8 +28,6 @@ import msgpack
 from dotenv import dotenv_values
 from pytoniq_core import (Address, Cell, ExternalMsgInfo, ExternalOutMsgInfo, HashMap, InternalMsgInfo, Slice,
                           Transaction, VmStack)
-from pytvm.engine import EmulatorEngineC
-from pytvm.utils import get_method_id
 
 
 V2_URL = "https://toncenter.com/api/v2/"
@@ -166,6 +165,8 @@ class ApiClient:
                        stack: list | None = None) -> dict | None:
         # Get methods run locally on the account state at `seqno`; only the state and
         # library cells come from the API.
+        from pytvm.utils import get_method_id
+
         state = self.get_address_information(address, seqno)
         if not state or not state.get("code") or not state.get("data"):
             return None
@@ -220,6 +221,8 @@ _ENGINE: EmulatorEngineC | None = None
 
 
 def _tvm_engine() -> EmulatorEngineC:
+    from pytvm.engine import EmulatorEngineC
+
     global _ENGINE
     if _ENGINE is None:
         library = Path(os.environ.get("TVM_EMULATOR_LIB", "~/libemulator-linux-x86_64.so")).expanduser()
@@ -505,10 +508,21 @@ def _signers(entry: dict) -> list[str]:
     return [normalize_address(values[key].load_address()) for key in sorted(values)]
 
 
+@contextlib.contextmanager
+def _probe():
+    """Run one interface probe: an API error propagates, any other failure drops the probe."""
+    try:
+        yield
+    except ApiError:
+        raise
+    except Exception:
+        pass
+
+
 def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: str) -> dict:
     found: dict[str, Any] = {}
     stacks = {name: _method(client, address, name, seqno) for name in GET_METHODS}
-    try:
+    with _probe():
         s = stacks["get_wallet_data"]
         if s and len(s) == 4:
             owner, master = stack_address(s[1]), stack_address(s[2])
@@ -517,11 +531,7 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                 raise ValueError("jetton master returned another wallet address")
             found["JettonWallet"] = {"balance": fixture_int(stack_number(s[0])), "address": address,
                                       "owner": owner, "jetton": master}
-    except ApiError:
-        raise
-    except Exception:
-        pass
-    try:
+    with _probe():
         s = stacks["get_nft_data"]
         if s and len(s) == 5:
             collection = stack_address(s[2])
@@ -543,37 +553,21 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                                 "index": fixture_int(stack_number(s[1])), "collection_address": collection,
                                 "owner_address": stack_address(s[3]), "content": content,
                                 "code_hash": code_hash}
-    except ApiError:
-        raise
-    except Exception:
-        pass
-    try:
+    with _probe():
         s = stacks["get_sale_data"]
         if s and len(s) == 11 and stack_number(s[0]) == 0x46495850:
             found["NftSale"] = _sale(address, s, code_hash)
         elif s and len(s) >= 20 and stack_number(s[0]) == 0x415543:
             found["NftAuction"] = _auction(s, code_hash)
-    except ApiError:
-        raise
-    except Exception:
-        pass
-    try:
+    with _probe():
         s = stacks["get_fix_price_data_v4"]
         if s and len(s) == 13:
             found["NftSale"] = _sale(address, s, code_hash, offset=-1)
-    except ApiError:
-        raise
-    except Exception:
-        pass
-    try:
+    with _probe():
         s = stacks["get_auction_data_v4"]
         if s and len(s) == 26:
             found["NftAuction"] = _auction(s, code_hash)
-    except ApiError:
-        raise
-    except Exception:
-        pass
-    try:
+    with _probe():
         s = stacks["get_order_data"]
         if s and len(s) == 9:
             multisig, seqno_value = stack_address(s[0]), stack_number(s[1])
@@ -590,11 +584,7 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                 "signers": _signers(s[4]), "order_boc": order_boc, "last_transaction_lt": None,
                 "code_hash": code_hash, "data_hash": None,
             }
-    except ApiError:
-        raise
-    except Exception:
-        pass
-    try:
+    with _probe():
         v2 = bool(stacks["get_pool_data"])
         s = stacks["get_pool_data"] or stacks["get_assets"]
         if s and len(s) >= 2:
@@ -606,11 +596,7 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
                 if not verified or len(verified) != 1 or stack_address(verified[0]) != address:
                     raise ValueError("DeDust factory returned another pool address")
             found["DedustPool"] = {"assets": [_asset(item, v2) for item in pair]}
-    except ApiError:
-        raise
-    except Exception:
-        pass
-    try:
+    with _probe():
         token = stacks["get_telemint_token_name"]
         config = stacks["get_telemint_auction_config"]
         royalty = stacks["royalty_params"]
@@ -626,10 +612,6 @@ def _interface_methods(client: ApiClient, address: str, seqno: int, code_hash: s
         stack_number(royalty[1])
         stack_address(royalty[2])
         found["Telemint"] = {"address": address}
-    except ApiError:
-        raise
-    except Exception:
-        pass
     return found
 
 

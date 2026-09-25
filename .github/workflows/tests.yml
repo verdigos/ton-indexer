@@ -29,7 +29,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt', '**/requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
@@ -84,7 +84,7 @@ jobs:
     # byte-compares two independent build-tree emissions for determinism.
     - name: Test mch engine
       working-directory: ${{github.workspace}}/build/ton-index-worker/ton-mch-engine
-      run: ctest -R 'mch_|classifier_failure|task_emulator_with_actions' --output-on-failure
+      run: ctest -R 'mch_' --output-on-failure
 
     # enable_testing() and add_test live in the subdirectories, so these two ctests
     # are registered in their own build directories, not in ton-mch-engine.
@@ -97,7 +97,8 @@ jobs:
       run: ctest -R 'task_emulator_with_actions' --output-on-failure
 
     # G2: the write-back wire contract, run through ton-index-go's REAL decoder
-    # over bytes the REAL C++ writer produced.
+    # over the committed engine-produced baselines (actions_wire.msgpack and the
+    # payload_contract rows), which CI reads but does not regenerate.
     - name: Test ton-index-go
       working-directory: ${{github.workspace}}/ton-index-go
       run: go test ./...

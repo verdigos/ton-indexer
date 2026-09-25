@@ -215,7 +215,6 @@ type Action struct {
 	EndUtime              *uint32              `msgpack:"end_utime"`
 	TraceEndLt            *uint64              `msgpack:"trace_end_lt"`
 	TraceEndUtime         *uint32              `msgpack:"trace_end_utime"`
-	TraceStartLt          *uint64              `msgpack:"trace_start_lt"`
 	TraceMcSeqnoEnd       *uint32              `msgpack:"trace_mc_seqno_end"`
 	Source                *string              `msgpack:"source"`
 	SourceSecondary       *string              `msgpack:"source_secondary"`
@@ -634,14 +633,9 @@ func (a *Action) ToRawAction() (*models.RawAction, error) {
 	}
 
 	// The emulator row carries the same payload bytes as the DB `payload` column; the
-	// DB path and this one share DecodeActionPayload. A row without a payload column
-	// has no details.
-	if len(a.Payload) != 0 {
-		if err := parse.DecodeActionPayload(a.Payload, raw); err != nil {
-			// The marker the stored-action scan uses: a caller can skip this one
-			// undecodable action instead of failing the whole response.
-			return nil, fmt.Errorf("%w: %v", parse.ErrPayloadDecode, err)
-		}
+	// DB path and this one share DecodeActionPayload.
+	if err := parse.DecodeActionPayload(a.Payload, raw); err != nil {
+		return nil, err
 	}
 	return raw, nil
 }

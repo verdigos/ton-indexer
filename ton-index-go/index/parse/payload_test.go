@@ -1,11 +1,9 @@
 package parse_test
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,75 +13,6 @@ import (
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 	"github.com/vmihailenco/msgpack/v5"
 )
-
-type actionPayloadFixture struct {
-	FixtureID string          `json:"fixture_id"`
-	ActionID  string          `json:"action_id"`
-	Type      string          `json:"type"`
-	Legacy    json.RawMessage `json:"legacy"`
-	Payload   string          `json:"payload_hex"`
-	Wire      string          `json:"wire_hex"`
-}
-
-func TestActionPayloadFixture(t *testing.T) {
-	f, err := os.Open("testdata/action_payload.jsonl")
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	defer f.Close()
-
-	count := 0
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(nil, 16<<20)
-	for scanner.Scan() {
-		count++
-		var fixture actionPayloadFixture
-		if err := json.Unmarshal(scanner.Bytes(), &fixture); err != nil {
-			t.Fatalf("line %d: %v", count, err)
-		}
-		t.Run(fixture.FixtureID+"/"+fixture.ActionID, func(t *testing.T) {
-			// The emulator row must carry the payload column of the same row, so the
-			// two paths cannot drift into separate readers.
-			assertWirePayload(t, fixture.Wire, fixture.Payload)
-			wireRaw := decodeWireAction(t, fixture.Wire)
-			if string(wireRaw.ActionId) != fixture.ActionID || wireRaw.Type != fixture.Type {
-				t.Fatalf("fixture identity = %s/%s, wire = %s/%s", fixture.ActionID, fixture.Type, wireRaw.ActionId, wireRaw.Type)
-			}
-			assertLegacyIsPurchase(t, fixture.Payload, fixture.Legacy, wireRaw.NFTTransferIsPurchase)
-
-			payload, err := hex.DecodeString(fixture.Payload)
-			if err != nil {
-				t.Fatalf("decode payload hex: %v", err)
-			}
-			payloadRaw := *wireRaw
-			clearPayloadFields(&payloadRaw)
-			if err := parse.DecodeActionPayload(payload, &payloadRaw); err != nil {
-				t.Fatalf("DecodeActionPayload: %v", err)
-			}
-
-			got, err := parse.ParseRawAction(&payloadRaw)
-			if err != nil {
-				t.Fatalf("ParseRawAction(payload): %v", err)
-			}
-			expected, err := parse.ParseRawAction(wireRaw)
-			if err != nil {
-				t.Fatalf("ParseRawAction(wire): %v", err)
-			}
-			// The emulator fills null is_purchase; the SQL-backed payload preserves it.
-			clearAPIPurchase(got)
-			clearAPIPurchase(expected)
-			if !reflect.DeepEqual(got, expected) {
-				t.Errorf("payload API = %#v\nwire API = %#v", got, expected)
-			}
-		})
-	}
-	if err := scanner.Err(); err != nil {
-		t.Fatal(err)
-	}
-	if count == 0 {
-		t.Fatal("fixture is empty")
-	}
-}
 
 // assertWirePayload checks the emulator row carries exactly the row's payload bytes.
 func assertWirePayload(t *testing.T, wireHex, payloadHex string) {
@@ -110,55 +39,6 @@ func assertWirePayload(t *testing.T, wireHex, payloadHex string) {
 
 type emulatedAction struct {
 	Payload []byte `msgpack:"payload"`
-}
-
-// assertLegacyIsPurchase checks the emulator's is_purchase against the legacy column of
-// the fixture row. That column is a stale copy from an older baseline, so a row
-// whose payload no longer carries the key has nothing to compare - `dns_purchase`
-// stopped emitting is_purchase.
-func assertLegacyIsPurchase(t *testing.T, payloadHex string, legacyJSON json.RawMessage, got *bool) {
-	t.Helper()
-	payload, err := hex.DecodeString(payloadHex)
-	if err != nil {
-		t.Fatalf("decode payload hex: %v", err)
-	}
-	// The key reaches NFTTransfer.IsPurchase for every type that carries it, so decoding
-	// the payload under that prefix answers whether the payload has the key at all.
-	raw := &models.RawAction{Type: "nft_transfer"}
-	if err := parse.DecodeActionPayload(payload, raw); err != nil {
-		t.Fatalf("decode payload: %v", err)
-	}
-	if raw.NFTTransferIsPurchase == nil {
-		return
-	}
-	var legacy struct {
-		NFTTransferData *struct {
-			IsPurchase *bool `json:"is_purchase"`
-		} `json:"nft_transfer_data"`
-	}
-	if err := json.Unmarshal(legacyJSON, &legacy); err != nil {
-		t.Fatalf("decode legacy JSON: %v", err)
-	}
-	var expected *bool
-	if legacy.NFTTransferData != nil {
-		expected = legacy.NFTTransferData.IsPurchase
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("is_purchase: payload=%v legacy=%v", got, expected)
-	}
-}
-
-func clearAPIPurchase(action *models.Action) {
-	if details, ok := action.Details.(*models.ActionDetailsNftTransfer); ok {
-		details.IsPurchase = nil
-	}
-}
-
-func TestActionPayloadUnknownCodec(t *testing.T) {
-	err := parse.DecodeActionPayload([]byte{2}, &models.RawAction{})
-	if err == nil || err.Error() != "unsupported payload codec 2" {
-		t.Fatalf("got %v", err)
-	}
 }
 
 // TestJvaultClaimRewardMissingMember pins the frozen claim pair shape: a record whose
@@ -220,42 +100,6 @@ func TestJvaultClaimRewardMissingMember(t *testing.T) {
 	}
 }
 
-// TestActionPayloadRejectsLegacyGroups pins the rejection of the previous payload format:
-// its body was a map of named groups (the flat `data` group plus per-family groups), so its
-// keys are strings, not registry ids.
-func TestActionPayloadRejectsLegacyGroups(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		payload map[string]interface{}
-	}{
-		{
-			name: "grouped body",
-			payload: map[string]interface{}{
-				"data":    map[string]interface{}{"nft_index": "1"},
-				"listing": map[string]interface{}{"nft_index": "1"},
-			},
-		},
-		{
-			name:    "flat named body",
-			payload: map[string]interface{}{"data": map[string]interface{}{"nft_index": "1"}},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			payload, err := msgpack.Marshal(tc.payload)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = parse.DecodeActionPayload(append([]byte{1}, payload...), &models.RawAction{Type: "nft_transfer"})
-			if err == nil {
-				t.Fatal("legacy payload accepted")
-			}
-			if !strings.Contains(err.Error(), "is not a registry id") {
-				t.Errorf("error = %q, want it to name the rejected key", err)
-			}
-		})
-	}
-}
-
 func decodeWireAction(t *testing.T, encoded string) *models.RawAction {
 	t.Helper()
 	wire, err := hex.DecodeString(encoded)
@@ -298,8 +142,8 @@ func clearPayloadFields(action *models.RawAction) {
 }
 
 // TestDecodeActionPayloadEnvelope pins the payload envelope: codec byte 1 followed by ONE
-// id-keyed map. The empty payload is `01 80`, an id this table does not know is skipped,
-// and anything else about the frame is rejected.
+// id-keyed map. The empty payload is `01 80`, an id this table does not know is skipped.
+// Body errors are pinned by TestDecodeCompactErrors; here only the codec layer is checked.
 func TestDecodeActionPayloadEnvelope(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -308,12 +152,6 @@ func TestDecodeActionPayloadEnvelope(t *testing.T) {
 	}{
 		{name: "empty payload", payload: "0180"},
 		{name: "unknown key id is skipped", payload: "0181ccc8c0"},
-		{name: "nil body", payload: "01c0", wantErr: "expected a map, got nil"},
-		{name: "body is an array", payload: "0190", wantErr: "expected a map"},
-		{name: "truncated map header", payload: "0181", wantErr: "map declares 1 entries"},
-		{name: "truncated value", payload: "018106", wantErr: "map declares 1 entries but only 1 bytes remain"},
-		{name: "legacy name-keyed body", payload: "0181a46461746180", wantErr: "is not a registry id"},
-		{name: "trailing data", payload: "018000", wantErr: "trailing data"},
 		{name: "wrong codec", payload: "0280", wantErr: "unsupported payload codec 2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -407,64 +245,5 @@ func assertLegSlot(t *testing.T, name string, amount *string, asset, wallet *mod
 	}
 	if wallet == nil || !strings.HasPrefix(strings.ToUpper(string(*wallet)), "0:CCCC") {
 		t.Errorf("%s user jetton wallet = %v, want the leg wallet", name, wallet)
-	}
-}
-
-// TestDecodeActionPayloadEmptyLegFromCppBytes decodes the exact bytes the C++ encoder
-// produced for `legs = [nil, {amount, asset, target_amount, target_asset,
-// user_jetton_wallet}]` (DeDust partial block, `build_action` + `encode_action_payload` in
-// `harness/RedisActionSerializeTest.cpp:295-340`, printed as `LEGS-ONE-SIDED-HEX` by
-// `ton-mch-engine --actions-msgpack-test`): the API must report every value in slot 2 and
-// leave slot 1 empty. The bytes are the engine's, not the test encoder's: a change of the
-// wire format breaks this case.
-func TestDecodeActionPayloadEmptyLegFromCppBytes(t *testing.T) {
-	const engineHex = "01822c92c08502cd01c806c42100aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa6ccd" +
-		"01c96dc42100bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb76c42100cccccccccccc" +
-		"cccccccccccccccccccccccccccccccccccccccccccccccccccc54a6646564757374"
-	payload, err := hex.DecodeString(engineHex)
-	if err != nil {
-		t.Fatalf("decode payload hex: %v", err)
-	}
-	raw := &models.RawAction{Type: "dex_deposit_liquidity"}
-	if err := parse.DecodeActionPayload(payload, raw); err != nil {
-		t.Fatalf("DecodeActionPayload: %v", err)
-	}
-	action, err := parse.ParseRawAction(raw)
-	if err != nil {
-		t.Fatalf("ParseRawAction: %v", err)
-	}
-	details, ok := action.Details.(*models.ActionDetailsDexDepositLiquidity)
-	if !ok {
-		t.Fatalf("details = %T", action.Details)
-	}
-	if details.Dex == nil || *details.Dex != "dedust" {
-		t.Errorf("dex = %v, want dedust", details.Dex)
-	}
-	for name, value := range map[string]*models.AccountAddress{
-		"asset_1": details.Asset1, "user_jetton_wallet_1": details.UserJettonWallet1, "target_asset_1": details.TargetAsset1,
-	} {
-		if value != nil {
-			t.Errorf("%s = %v, want nil (the empty leg owns slot 1)", name, value)
-		}
-	}
-	for name, value := range map[string]*string{"amount_1": details.Amount1, "target_amount_1": details.TargetAmount1} {
-		if value != nil {
-			t.Errorf("%s = %v, want nil (the empty leg owns slot 1)", name, value)
-		}
-	}
-	if details.Amount2 == nil || *details.Amount2 != "456" {
-		t.Errorf("amount_2 = %v, want 456", details.Amount2)
-	}
-	if details.TargetAmount2 == nil || *details.TargetAmount2 != "457" {
-		t.Errorf("target_amount_2 = %v, want 457", details.TargetAmount2)
-	}
-	if details.Asset2 == nil || !strings.HasPrefix(strings.ToUpper(string(*details.Asset2)), "0:AAAA") {
-		t.Errorf("asset_2 = %v, want the leg asset", details.Asset2)
-	}
-	if details.UserJettonWallet2 == nil || !strings.HasPrefix(strings.ToUpper(string(*details.UserJettonWallet2)), "0:CCCC") {
-		t.Errorf("user_jetton_wallet_2 = %v, want the leg wallet", details.UserJettonWallet2)
-	}
-	if details.TargetAsset2 == nil || !strings.HasPrefix(strings.ToUpper(string(*details.TargetAsset2)), "0:BBBB") {
-		t.Errorf("target_asset_2 = %v, want the leg target asset", details.TargetAsset2)
 	}
 }

@@ -19,15 +19,20 @@ const contractRows = 1224
 var contractPath = flag.String("payload-contract-file", "testdata/payload_contract.jsonl.gz", "API contract baseline")
 
 type payloadContractRow struct {
-	actionPayloadFixture
-	API json.RawMessage `json:"api"`
+	FixtureID string          `json:"fixture_id"`
+	ActionID  string          `json:"action_id"`
+	Type      string          `json:"type"`
+	Payload   string          `json:"payload_hex"`
+	Wire      string          `json:"wire_hex"`
+	API       json.RawMessage `json:"api"`
 }
 
-// Any exception needs a row key and the reason the API difference is accepted.
-var allowedPayloadContractDifferences = map[string]string{}
-
-func TestPayloadContract(t *testing.T) {
-	f, err := os.Open(*contractPath)
+// checkAPIBaseline decodes every row of a gzip jsonl contract baseline through the payload
+// decoder and requires the API JSON of each row byte for byte. It returns the row keys in
+// file order.
+func checkAPIBaseline(t *testing.T, path string, rows int) []string {
+	t.Helper()
+	f, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,23 +42,16 @@ func TestPayloadContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer z.Close()
+	keys := make([]string, 0, rows)
 	s := bufio.NewScanner(z)
 	s.Buffer(nil, 16<<20)
-	seen := make(map[string]bool)
-	lastKey := ""
-	count := 0
 	for s.Scan() {
 		var row payloadContractRow
 		if err := json.Unmarshal(s.Bytes(), &row); err != nil {
-			t.Fatalf("row %d: %v", count+1, err)
+			t.Fatalf("row %d: %v", len(keys)+1, err)
 		}
 		key := fmt.Sprintf("%s/%s/%s", row.FixtureID, row.ActionID, row.Type)
-		if seen[key] || key <= lastKey {
-			t.Fatalf("duplicate or unsorted row %q after %q", key, lastKey)
-		}
-		seen[key] = true
-		lastKey = key
-		count++
+		keys = append(keys, key)
 		t.Run(key, func(t *testing.T) {
 			if len(row.API) == 0 {
 				t.Fatal("missing API JSON")
@@ -82,10 +80,6 @@ func TestPayloadContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !bytes.Equal(got, row.API) {
-				if reason := allowedPayloadContractDifferences[key]; reason != "" {
-					t.Logf("accepted API change: %s", reason)
-					return
-				}
 				t.Errorf("API changed\nwant: %s\ngot:  %s", row.API, got)
 			}
 		})
@@ -93,12 +87,23 @@ func TestPayloadContract(t *testing.T) {
 	if err := s.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if count != contractRows {
-		t.Fatalf("baseline has %d rows, want %d", count, contractRows)
+	if len(keys) != rows {
+		t.Fatalf("baseline has %d rows, want %d", len(keys), rows)
 	}
-	for key, reason := range allowedPayloadContractDifferences {
-		if !seen[key] || reason == "" {
-			t.Errorf("invalid allowed difference %q: %q", key, reason)
+	return keys
+}
+
+// TestPayloadContract requires the API JSON of the current decoder over the committed
+// baseline, whose rows must be sorted and free of duplicates.
+func TestPayloadContract(t *testing.T) {
+	keys := checkAPIBaseline(t, *contractPath, contractRows)
+	seen := make(map[string]bool, len(keys))
+	lastKey := ""
+	for _, key := range keys {
+		if seen[key] || key <= lastKey {
+			t.Fatalf("duplicate or unsorted row %q after %q", key, lastKey)
 		}
+		seen[key] = true
+		lastKey = key
 	}
 }

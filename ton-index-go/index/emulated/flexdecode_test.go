@@ -8,46 +8,44 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
-	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// pythonExclusions lists top-level fields kept numeric by the Python encoder.
-var pythonExclusions = map[string]bool{
+// stringNumberExclusions lists the top-level fields the string-number form keeps native.
+var stringNumberExclusions = map[string]bool{
 	"start_lt": true, "end_lt": true, "start_utime": true, "end_utime": true,
-	"opcode": true, "trace_start_lt": true, "finality": true, "trace_end_lt": true,
+	"opcode": true, "finality": true, "trace_end_lt": true,
 	"trace_end_utime": true, "mc_seqno_end": true, "trace_mc_seqno_end": true,
 }
 
-// pythonStyle reproduces the production Python numeric conversion.
-func pythonStyle(m map[string]interface{}) map[string]interface{} {
+// stringNumbers reproduces the string-number form: every value but the exclusions above
+// arrives as a decimal string.
+func stringNumbers(m map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{}, len(m))
 	for k, v := range m {
-		if pythonExclusions[k] {
+		if stringNumberExclusions[k] {
 			out[k] = v
 		} else {
-			out[k] = pythonConvert(v)
+			out[k] = stringNumberValue(v)
 		}
 	}
 	return out
 }
 
-func pythonConvert(v interface{}) interface{} {
+func stringNumberValue(v interface{}) interface{} {
 	switch t := v.(type) {
 	case map[string]interface{}:
 		out := make(map[string]interface{}, len(t))
 		for k, item := range t {
-			out[k] = pythonConvert(item)
+			out[k] = stringNumberValue(item)
 		}
 		return out
 	case []interface{}:
 		out := make([]interface{}, len(t))
 		for i, item := range t {
-			out[i] = pythonConvert(item)
+			out[i] = stringNumberValue(item)
 		}
 		return out
 	case bool, string, nil, []string, []byte:
@@ -57,10 +55,10 @@ func pythonConvert(v interface{}) interface{} {
 	}
 }
 
-// pythonStyleAction applies Python's string encoding to the whole row; the payload
+// stringNumbersAction applies the string-number form to the whole row; the payload
 // bytes pass through untouched.
-func pythonStyleAction(t *testing.T) map[string]interface{} {
-	return pythonStyle(naturalAction(t))
+func stringNumbersAction(t *testing.T) map[string]interface{} {
+	return stringNumbers(naturalAction(t))
 }
 
 // naturalAction carries numeric fields in their native msgpack forms.
@@ -74,17 +72,16 @@ func naturalAction(t *testing.T) map[string]interface{} {
 		"tx_hashes":                []string{"aGFzaDE=", "aGFzaDI="},
 		"success":                  true,
 
-		// top-level numbers Python keeps native
+		// top-level numbers the string-number form keeps native
 		"start_lt":           uint64(58913247000001),
 		"end_lt":             uint64(58913247000007),
 		"start_utime":        uint32(1753800000),
 		"end_utime":          uint32(1753800003),
-		"trace_start_lt":     uint64(58913247000000),
 		"opcode":             uint32(0x0f8a7ea5),
 		"finality":           1,
 		"trace_mc_seqno_end": uint32(48210934),
 
-		// top-level *string fields Python stringifies
+		// top-level *string fields the string-number form stringifies
 		"value":  uint64(1500000000),
 		"amount": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
 
@@ -93,103 +90,25 @@ func naturalAction(t *testing.T) map[string]interface{} {
 		"asset":       "0:AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899",
 
 		// the row carries the same payload bytes as the DB `payload` column
-		"payload": encodePayload(t, naturalData()),
+		"payload": payloadBytes(t, jettonTransferPayloadHex),
 	}
 }
 
-func naturalData() map[string]interface{} {
-	return map[string]interface{}{
-		"query_id":             "18446744073709551615",
-		"response_destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-		"forward_amount":       "400000000",
-		"comment":              "hello",
-		"comment_encrypted":    false,
-	}
-}
+// The two fixture payloads in the compact codec. The jetton_transfer bytes are the ones
+// the engine wrote into testdata/actions_wire.msgpack.
+const (
+	jettonTransferPayloadHex = "01850da568656c6c6f0ec220ce17d7840059cfffffffffffffffff5dc42100bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	accountsAddedPayloadHex  = "01810191d942303a41414242434344444545464630303131323233333434353536363737383839394141424243434444454546463030313132323333343435353636373738383939"
+)
 
-// payloadKeyIDsForTest maps the payload keys of these fixtures to their registry ids
-// (`ton-index-worker/ton-mch-engine/payload-keys.yaml`). The decoder resolves the ids
-// back, so a stale id here fails the test instead of passing silently.
-var payloadKeyIDsForTest = map[string]uint8{
-	"accounts_added":       1,
-	"comment":              13,
-	"comment_encrypted":    14,
-	"forward_amount":       32,
-	"query_id":             89,
-	"response_destination": 93,
-}
-
-// encodePayload builds a codec-1 payload: one msgpack map keyed by registry id, keys in
-// ascending id order. Only the value forms these fixtures carry are supported - a decimal
-// uint, an address, a string, a bool and the `accounts_added` pass-through list.
-func encodePayload(t *testing.T, data map[string]interface{}) []byte {
+// payloadBytes decodes one of the payload constants above.
+func payloadBytes(t *testing.T, encoded string) []byte {
 	t.Helper()
-	names := make([]string, 0, len(data))
-	for name := range data {
-		if _, ok := payloadKeyIDsForTest[name]; !ok {
-			t.Fatalf("unknown payload key %q", name)
-		}
-		names = append(names, name)
-	}
-	sort.Slice(names, func(i, j int) bool { return payloadKeyIDsForTest[names[i]] < payloadKeyIDsForTest[names[j]] })
-
-	var buf bytes.Buffer
-	buf.WriteByte(1)
-	buf.WriteByte(0x80 | byte(len(names)))
-	for _, name := range names {
-		buf.WriteByte(payloadKeyIDsForTest[name])
-		switch name {
-		case "response_destination":
-			appendEncoded(t, &buf, addressBytes(t, data[name].(string)))
-		case "comment":
-			appendEncoded(t, &buf, data[name].(string))
-		case "comment_encrypted":
-			appendEncoded(t, &buf, data[name].(bool))
-		case "accounts_added":
-			items := data[name].([]string)
-			buf.WriteByte(0x90 | byte(len(items)))
-			for _, item := range items {
-				appendEncoded(t, &buf, item)
-			}
-		default:
-			number, err := strconv.ParseUint(data[name].(string), 10, 64)
-			if err != nil {
-				t.Fatalf("payload %s: %v", name, err)
-			}
-			appendEncoded(t, &buf, number)
-		}
-	}
-	return buf.Bytes()
-}
-
-// addressBytes turns the canonical `W:HEX` text into the 33 byte form: signed workchain
-// then the hash.
-func addressBytes(t *testing.T, text string) []byte {
-	t.Helper()
-	workchain, hash, ok := strings.Cut(text, ":")
-	if !ok {
-		t.Fatalf("address %q has no workchain", text)
-	}
-	number, err := strconv.ParseInt(workchain, 10, 8)
+	raw, err := hex.DecodeString(encoded)
 	if err != nil {
-		t.Fatalf("address %q: %v", text, err)
+		t.Fatalf("decode payload hex: %v", err)
 	}
-	raw, err := hex.DecodeString(hash)
-	if err != nil || len(raw) != 32 {
-		t.Fatalf("address %q: %v (%d bytes)", text, err, len(raw))
-	}
-	return append([]byte{byte(int8(number))}, raw...)
-}
-
-func appendEncoded(t *testing.T, buf *bytes.Buffer, value interface{}) {
-	t.Helper()
-	raw, err := msgpack.Marshal(value)
-	if err != nil {
-		t.Fatalf("marshal payload value: %v", err)
-	}
-	if _, err := buf.Write(raw); err != nil {
-		t.Fatalf("write payload value: %v", err)
-	}
+	return raw
 }
 
 func mustMarshal(t *testing.T, v interface{}) []byte {
@@ -210,16 +129,16 @@ func decodeAction(t *testing.T, m map[string]interface{}) Action {
 	return a
 }
 
-// TestOldAndNewStyleDecodeIdentically checks both numeric wire representations.
-func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
-	old := decodeAction(t, pythonStyleAction(t))
+// TestStringNumbersAndNativeDecodeIdentically checks both numeric wire representations.
+func TestStringNumbersAndNativeDecodeIdentically(t *testing.T) {
+	old := decodeAction(t, stringNumbersAction(t))
 	new_ := decodeAction(t, naturalAction(t))
 
 	if !reflect.DeepEqual(old, new_) {
-		t.Fatalf("python-style and natural-style decode differ:\nold = %+v\nnew = %+v", old, new_)
+		t.Fatalf("string-number and native-style decode differ:\nold = %+v\nnew = %+v", old, new_)
 	}
 
-	// Python-style scalar values decode without changing their values.
+	// String-number scalar values decode without changing their values.
 	if old.ActionId != "9C7SqQ==" || old.Type != "jetton_transfer" || !old.Success {
 		t.Errorf("scalars: %+v", old)
 	}
@@ -258,23 +177,6 @@ func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
 	}
 	if raw.JettonTransferComment == nil || *raw.JettonTransferComment != "hello" {
 		t.Errorf("payload comment = %v", raw.JettonTransferComment)
-	}
-}
-
-// TestWireWithoutPayload checks a row that carries no details decodes to the envelope.
-func TestWireWithoutPayload(t *testing.T) {
-	a := decodeAction(t, map[string]interface{}{
-		"action_id": "a", "type": "jetton_burn", "amount": uint64(5),
-	})
-	raw, err := a.ToRawAction()
-	if err != nil {
-		t.Fatalf("ToRawAction: %v", err)
-	}
-	if raw.Amount == nil || *raw.Amount != "5" {
-		t.Errorf("amount = %v", raw.Amount)
-	}
-	if raw.JettonTransferQueryId != nil {
-		t.Errorf("query_id = %v, want nil", *raw.JettonTransferQueryId)
 	}
 }
 
@@ -404,10 +306,7 @@ func TestNormAddr(t *testing.T) {
 		"source":      lower,
 		"destination": upper,
 		"accounts":    []string{lower, upper},
-		"payload": encodePayload(t, map[string]interface{}{
-			// payload addresses are already canonical: the engine wrote them
-			"accounts_added": []string{upper},
-		}),
+		"payload":     payloadBytes(t, accountsAddedPayloadHex),
 	})
 	raw, err := a.ToRawAction()
 	if err != nil {
@@ -492,9 +391,9 @@ func TestConvertHSetBothEncodings(t *testing.T) {
 	}
 
 	natural := naturalAction(t)
-	oldTrace, err := ConvertHSet(build(pythonStyleAction(t), node, false), rootKey)
+	oldTrace, err := ConvertHSet(build(stringNumbersAction(t), node, false), rootKey)
 	if err != nil {
-		t.Fatalf("python-style ConvertHSet: %v", err)
+		t.Fatalf("string-number ConvertHSet: %v", err)
 	}
 	newTrace, err := ConvertHSet(build(natural, node, true), rootKey)
 	if err != nil {

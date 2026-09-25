@@ -26,15 +26,13 @@ const (
 // The compact payload (codec byte 1) is ONE msgpack map whose keys are registry ids and
 // whose values are typed by those ids, at every nesting level. decodeCompactPayload turns
 // such a body (everything after the codec byte) into the named map the routing layer and
-// setPayloadValue consume, in EXACTLY the text forms the previous name-keyed payload
-// carried: decimal strings for integers, `W:HEX` for addresses, standard padded base64
-// for BOCs and base64 hashes, 64 lowercase hex digits (with or without the `0x` prefix)
-// for the hash forms, msgpack str and bool as is.
+// setPayloadValue consume, in the text forms that layer expects: decimal strings for
+// integers, `W:HEX` for addresses, standard padded base64 for BOCs and base64 hashes,
+// 64 lowercase hex digits (with or without the `0x` prefix) for the hash forms, msgpack
+// str and bool as is.
 //
 // An id this table does not know (the engine is newer) has its value skipped and the rest
-// of the action decoded, the way the previous reader ignored an unknown data key. A key
-// that is not an integer id at all is rejected: the old name-keyed format is not
-// supported.
+// of the action decoded. A key that is not an integer id at all is rejected.
 func decodeCompactPayload(body []byte) (map[string]interface{}, error) {
 	reader := bytes.NewReader(body)
 	d := &compactDecoder{dec: msgpack.NewDecoder(reader), in: reader}
@@ -82,7 +80,7 @@ func (d *compactDecoder) record() (map[string]interface{}, error) {
 		}
 		id, ok := compactKeyID(key)
 		if !ok {
-			return nil, fmt.Errorf("payload map key %s is not a registry id; the old name-keyed payload format is not supported", compactKeyText(key))
+			return nil, fmt.Errorf("payload map key %s is not a registry id", compactKeyText(key))
 		}
 		info := payloadKeys[id]
 		if info.Name == "" {
@@ -123,32 +121,53 @@ func (d *compactDecoder) enter(what string) error {
 }
 
 // compactKeyID reads a registry id from a decoded msgpack key: any non-negative integer
-// up to 255, whatever msgpack width the encoder chose (positive fixint, uint8, uint16
-// and larger are all accepted).
+// up to 255, whatever msgpack width the encoder chose.
 func compactKeyID(key interface{}) (uint8, bool) {
-	switch key := key.(type) {
-	case int8:
-		return uint8(key), key >= 0
-	case int16:
-		return uint8(key), key >= 0 && key <= 255
-	case int32:
-		return uint8(key), key >= 0 && key <= 255
-	case int64:
-		return uint8(key), key >= 0 && key <= 255
-	case uint8:
-		return key, true
-	case uint16:
-		return uint8(key), key <= 255
-	case uint32:
-		return uint8(key), key <= 255
-	case uint64:
-		return uint8(key), key <= 255
+	number, _, ok := msgpackUint(key)
+	if !ok || number > 255 {
+		return 0, false
 	}
-	return 0, false
+	return uint8(number), true
 }
 
-// value decodes the value of one registry key. A null is an absent key for every type,
-// exactly as the previous reader skipped a null.
+// msgpackUint reads a non-negative integer of any msgpack width (a positive fixint
+// decodes to int8, so a non-negative int is a valid uint too). An integer below zero
+// returns ok false with `negative` carrying it, so the caller can name it in its error.
+func msgpackUint(value interface{}) (number uint64, negative int64, ok bool) {
+	switch value := value.(type) {
+	case int8:
+		if value < 0 {
+			return 0, int64(value), false
+		}
+		return uint64(value), 0, true
+	case int16:
+		if value < 0 {
+			return 0, int64(value), false
+		}
+		return uint64(value), 0, true
+	case int32:
+		if value < 0 {
+			return 0, int64(value), false
+		}
+		return uint64(value), 0, true
+	case int64:
+		if value < 0 {
+			return 0, value, false
+		}
+		return uint64(value), 0, true
+	case uint8:
+		return uint64(value), 0, true
+	case uint16:
+		return uint64(value), 0, true
+	case uint32:
+		return uint64(value), 0, true
+	case uint64:
+		return value, 0, true
+	}
+	return 0, 0, false
+}
+
+// value decodes the value of one registry key. A null is an absent key for every type.
 func (d *compactDecoder) value(info payloadKeyInfo) (interface{}, error) {
 	if info.Type == payloadTypeOther {
 		return d.container()
@@ -182,22 +201,16 @@ func compactTypedText(value interface{}, info payloadKeyInfo) (interface{}, erro
 		return base64.StdEncoding.EncodeToString(raw), nil
 	case payloadTypeUint:
 		return compactUintText(value)
-	case payloadTypeHash:
+	case payloadTypeHash, payloadTypeHashHex, payloadTypeHash0x:
 		raw, err := compactBin(value, 32, "hash")
 		if err != nil {
 			return nil, err
 		}
-		return base64.StdEncoding.EncodeToString(raw), nil
-	case payloadTypeHashHex:
-		raw, err := compactBin(value, 32, "hash")
-		if err != nil {
-			return nil, err
-		}
-		return hex.EncodeToString(raw), nil
-	case payloadTypeHash0x:
-		raw, err := compactBin(value, 32, "hash")
-		if err != nil {
-			return nil, err
+		switch info.Type {
+		case payloadTypeHash:
+			return base64.StdEncoding.EncodeToString(raw), nil
+		case payloadTypeHashHex:
+			return hex.EncodeToString(raw), nil
 		}
 		return "0x" + hex.EncodeToString(raw), nil
 	case payloadTypeString:
@@ -230,44 +243,17 @@ func compactBin(value interface{}, size int, what string) ([]byte, error) {
 }
 
 // compactUintText renders a uint value as its decimal text: a msgpack integer of any
-// width (a positive fixint decodes to int8, so a non-negative int is a valid uint too),
-// or a big-endian bin for the decimals above uint64 (`nft_index`, `order_seqno`,
+// width, or a big-endian bin for the decimals above uint64 (`order_seqno`,
 // `initial_price_x96`).
 func compactUintText(value interface{}) (interface{}, error) {
 	if raw, ok := value.([]byte); ok {
 		return new(big.Int).SetBytes(raw).String(), nil
 	}
-	var number uint64
-	switch value := value.(type) {
-	case int8:
-		if value < 0 {
-			return nil, fmt.Errorf("negative msgpack integer %d for a uint key", value)
+	number, negative, ok := msgpackUint(value)
+	if !ok {
+		if negative != 0 {
+			return nil, fmt.Errorf("negative msgpack integer %d for a uint key", negative)
 		}
-		number = uint64(value)
-	case int16:
-		if value < 0 {
-			return nil, fmt.Errorf("negative msgpack integer %d for a uint key", value)
-		}
-		number = uint64(value)
-	case int32:
-		if value < 0 {
-			return nil, fmt.Errorf("negative msgpack integer %d for a uint key", value)
-		}
-		number = uint64(value)
-	case int64:
-		if value < 0 {
-			return nil, fmt.Errorf("negative msgpack integer %d for a uint key", value)
-		}
-		number = uint64(value)
-	case uint8:
-		number = uint64(value)
-	case uint16:
-		number = uint64(value)
-	case uint32:
-		number = uint64(value)
-	case uint64:
-		number = value
-	default:
 		return nil, fmt.Errorf("expected a msgpack uint or a bin, got %s", compactTypeName(value))
 	}
 	return strconv.FormatUint(number, 10), nil
@@ -283,7 +269,7 @@ func (d *compactDecoder) scalar() (interface{}, error) {
 	}
 	switch {
 	case code == msgpcode.Nil || msgpcode.IsFixedNum(code) || msgpcode.IsFixedString(code) ||
-		code == msgpcode.True || code == msgpcode.False || code == msgpcode.Float || code == msgpcode.Double ||
+		code == msgpcode.True || code == msgpcode.False ||
 		code == msgpcode.Uint8 || code == msgpcode.Uint16 || code == msgpcode.Uint32 || code == msgpcode.Uint64 ||
 		code == msgpcode.Int8 || code == msgpcode.Int16 || code == msgpcode.Int32 || code == msgpcode.Int64:
 		return d.dec.DecodeInterface()

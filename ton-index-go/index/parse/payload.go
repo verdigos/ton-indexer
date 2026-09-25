@@ -82,9 +82,9 @@ var actionDataPrefixes = map[string][]string{
 	"vesting_send_message":             {"VestingSendMessage"},
 }
 
-// actionPayloadExtraKeys are engine-owned payload keys. They carry the engine's
-// metadata (former `extra` group) rather than a typed detail field, so they land in
-// RawAction.Extra where the API reads them through extraString.
+// actionPayloadExtraKeys are engine-owned payload keys. They carry engine metadata
+// rather than a typed detail field, so they land in RawAction.Extra where the API reads
+// them through extraString.
 var actionPayloadExtraKeys = map[string]bool{
 	"parent_gasless_action": true,
 	"btc_txid":              true,
@@ -120,8 +120,8 @@ var actionPayloadLegIndexBase = map[string]int{
 var actionPayloadFieldNames = map[string]string{
 	"ChangeDNSRecord.record_value":   "Value",
 	"CoffeeCreatePool.tokens_minted": "LpTokensMinted",
-	// The moved row columns land in the envelope fields the frozen API already read
-	// (registry odd moves); the values now come from the payload instead of the row.
+	// These two write the envelope fields the API reads; the values come from the
+	// payload, not from the row.
 	"CoffeeCreatePool.pool_first":           ".Asset2",
 	"CoffeeCreatePool.pool_second":          ".Asset2Secondary",
 	"Jvault.exit_code":                      ".Opcode",
@@ -153,18 +153,22 @@ var actionPayloadFieldNames = map[string]string{
 }
 
 // DecodeActionPayload applies the compact payload's details to an action whose Type is set.
+// Every error carries ErrPayloadDecode so a caller can skip one undecodable action.
 func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	if len(payload) == 0 {
-		return fmt.Errorf("empty action payload")
+		return fmt.Errorf("%w: empty action payload", ErrPayloadDecode)
 	}
 	if payload[0] != actionPayloadCodecMsgpack {
-		return fmt.Errorf("unsupported payload codec %d", payload[0])
+		return fmt.Errorf("%w: unsupported payload codec %d", ErrPayloadDecode, payload[0])
 	}
 	values, err := decodeCompactPayload(payload[1:])
 	if err != nil {
-		return fmt.Errorf("decode action payload: %w", err)
+		return fmt.Errorf("%w: decode action payload: %v", ErrPayloadDecode, err)
 	}
-	return applyActionPayload(action, values)
+	if err := applyActionPayload(action, values); err != nil {
+		return fmt.Errorf("%w: %v", ErrPayloadDecode, err)
+	}
+	return nil
 }
 
 // applyActionPayload routes a decoded payload map (names -> text values, one entry per
@@ -196,7 +200,7 @@ func fillActionPayload(target reflect.Value, action *models.RawAction, prefixes 
 				if action.Extra == nil {
 					action.Extra = map[string]interface{}{}
 				}
-				action.Extra[key] = normalizePayloadValue(value)
+				action.Extra[key] = value
 				continue
 			}
 			if key == "legs" {
@@ -234,8 +238,8 @@ func resolvePayloadField(target reflect.Value, prefixes []string, path string) r
 	return reflect.Value{}
 }
 
-// fillActionPayloadLegs expands the legs list into the type's indexed fields
-// (leg 0 -> suffix 1, leg 1 -> suffix 2, the order the positional payload keys had).
+// fillActionPayloadLegs expands the legs list into the type's indexed fields: leg 0 fills
+// suffix 1, leg 1 fills suffix 2.
 func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interface{}) error {
 	items, ok := value.([]interface{})
 	if !ok {
@@ -392,23 +396,4 @@ func setPayloadValue(target reflect.Value, value interface{}) error {
 		return fmt.Errorf("unsupported destination %s", target.Type())
 	}
 	return nil
-}
-
-func normalizePayloadValue(value interface{}) interface{} {
-	switch value := value.(type) {
-	case []byte:
-		return base64.StdEncoding.EncodeToString(value)
-	case map[string]interface{}:
-		return normalizePayloadMap(value)
-	default:
-		return value
-	}
-}
-
-func normalizePayloadMap(values map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{}, len(values))
-	for key, value := range values {
-		result[key] = normalizePayloadValue(value)
-	}
-	return result
 }

@@ -1,16 +1,10 @@
 package parse_test
 
 import (
-	"bufio"
-	"bytes"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"os"
 	"testing"
-
-	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 )
 
 // TestFrozenPayloadBytes decodes the frozen payload byte set of the compact codec transition
@@ -43,54 +37,5 @@ func TestFrozenPayloadBytes(t *testing.T) {
 	if got := hex.EncodeToString(digest[:]); got != frozenPayloadSHA256 {
 		t.Fatalf("frozen set sha256 = %s, want %s (created once at the codec transition, edit only with the owner's decision)", got, frozenPayloadSHA256)
 	}
-	z, err := gzip.NewReader(bytes.NewReader(blob))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer z.Close()
-
-	count := 0
-	s := bufio.NewScanner(z)
-	s.Buffer(nil, 16<<20)
-	for s.Scan() {
-		var row payloadContractRow
-		if err := json.Unmarshal(s.Bytes(), &row); err != nil {
-			t.Fatalf("row %d: %v", count+1, err)
-		}
-		count++
-		key := row.FixtureID + "/" + row.ActionID + "/" + row.Type
-		t.Run(key, func(t *testing.T) {
-			if len(row.API) == 0 {
-				t.Fatal("missing API JSON")
-			}
-			// The frozen wire and the frozen payload column must agree.
-			assertWirePayload(t, row.Wire, row.Payload)
-			raw := *decodeWireAction(t, row.Wire)
-			clearPayloadFields(&raw)
-			payload, err := hex.DecodeString(row.Payload)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := parse.DecodeActionPayload(payload, &raw); err != nil {
-				t.Fatal(err)
-			}
-			action, err := parse.ParseRawAction(&raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got, err := json.Marshal(action)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, row.API) {
-				t.Errorf("frozen payload decodes to a different API\nwant: %s\ngot:  %s", row.API, got)
-			}
-		})
-	}
-	if err := s.Err(); err != nil {
-		t.Fatal(err)
-	}
-	if count != frozenPayloadRows {
-		t.Fatalf("frozen set has %d rows, want %d", count, frozenPayloadRows)
-	}
+	checkAPIBaseline(t, frozenPayloadPath, frozenPayloadRows)
 }

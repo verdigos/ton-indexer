@@ -65,7 +65,9 @@ func compactActionPayload() []byte {
 
 // TestFillFromRawDataSkipsUndecodablePayload pins the pending path: one action whose payload
 // cannot be decoded is dropped and logged, the other actions of the same trace are returned
-// and the call reports no error - the behaviour the stored-action readers have.
+// and the call reports no error - the behaviour the stored-action readers have. A row without
+// a payload column is undecodable like a malformed one, since the writer emits the payload
+// for every action.
 func TestFillFromRawDataSkipsUndecodablePayload(t *testing.T) {
 	legacy := []byte{1, 0x81, 0xa4, 'd', 'a', 't', 'a', 0x80} // codec 1 + the old wrapped body
 	traceKey, rawData := pendingTraceHSet(t, []interface{}{
@@ -79,6 +81,11 @@ func TestFillFromRawDataSkipsUndecodablePayload(t *testing.T) {
 	if _, err := bad.ToRawAction(); err == nil || !errors.Is(err, parse.ErrPayloadDecode) {
 		t.Fatalf("ToRawAction error = %v, want ErrPayloadDecode", err)
 	}
+	// A row without a payload column is undecodable too.
+	empty := emulated.Action{ActionId: "empty", Type: "jetton_transfer"}
+	if _, err := empty.ToRawAction(); err == nil || !errors.Is(err, parse.ErrPayloadDecode) {
+		t.Fatalf("ToRawAction(no payload) error = %v, want ErrPayloadDecode", err)
+	}
 
 	context := NewEmptyContext(false)
 	if err := context.FillFromRawData(rawData); err != nil {
@@ -88,11 +95,13 @@ func TestFillFromRawDataSkipsUndecodablePayload(t *testing.T) {
 	for _, action := range context.GetAllActions() {
 		ids[string(action.ActionId)] = true
 	}
-	if !ids["good"] || !ids["empty"] {
-		t.Errorf("actions = %v, want the decodable ones", ids)
+	if !ids["good"] {
+		t.Errorf("actions = %v, want the decodable one", ids)
 	}
-	if ids["legacy"] {
-		t.Errorf("the undecodable action is still in the response: %v", ids)
+	for _, dropped := range []string{"legacy", "empty"} {
+		if ids[dropped] {
+			t.Errorf("the undecodable action %q is still in the response: %v", dropped, ids)
+		}
 	}
 	if len(context.GetTraces()) != 1 || string(*context.GetTraces()[0].TraceId) != traceKey {
 		t.Errorf("traces = %+v, want the one pending trace", context.GetTraces())
