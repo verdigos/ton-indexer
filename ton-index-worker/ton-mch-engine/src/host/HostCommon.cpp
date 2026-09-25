@@ -100,6 +100,15 @@ Value pp_field(const Value &d, const std::string &k) {
   const Value *v = d.field(k);
   return v != nullptr ? *v : Value::null();
 }
+void set_field(Value::Fields &fields, const std::string &key, Value value) {
+  for (auto &field : fields) {
+    if (field.first == key) {
+      field.second = std::move(value);
+      return;
+    }
+  }
+  fields.emplace_back(key, std::move(value));
+}
 bool pp_eq(const Value &a, const Value &b) {
   EvalResult r = rt_eq(a, b);
   return !r.faulted && r.value.t == VType::Bool && r.value.boolean;

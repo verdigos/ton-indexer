@@ -40,7 +40,7 @@ TieredLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
     for (const auto &iface : ifaces) {
       std::visit([&](const auto &r) {
         if constexpr (requires { to_schema(r); }) {
-          auto v = to_schema(r);
+          schema::BlockchainInterfaceV2 v = to_schema(r);
           set_nft_code_hash(v, code_hash);
           adapted.push_back(std::move(v));
         }

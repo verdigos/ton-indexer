@@ -42,6 +42,17 @@ void check(const std::string &name, bool ok) {
   if (!ok) g_fail++;
 }
 
+const msgpack::object *at_id(const msgpack::object &map, std::uint8_t id) {
+  if (map.type != msgpack::type::MAP) return nullptr;
+  for (std::uint32_t i = 0; i < map.via.map.size; ++i) {
+    const auto &entry = map.via.map.ptr[i];
+    if (entry.key.type == msgpack::type::POSITIVE_INTEGER && entry.key.via.u64 == id) {
+      return &entry.val;
+    }
+  }
+  return nullptr;
+}
+
 enum class HostThrow { vm_error, std_error, bad_alloc, no_gas, virt_error, unknown };
 HostThrow g_serious_kind = HostThrow::bad_alloc;
 
@@ -233,15 +244,10 @@ void test_payload_encode_failure_skips_one_action() {
         nft_result.rows.size() == 1 && nft_result.rows.front().type == "nft_transfer");
   if (nft_result.rows.size() == 1 && nft_result.rows.front().type == "nft_transfer") {
     const auto &payload = nft_result.rows.front().encoded_payload;
-    auto obj = msgpack::unpack(payload.data() + 1, payload.size() - 1).get();
-    bool round_trip = false;
-    if (obj.type == msgpack::type::MAP) {
-      for (std::uint32_t i = 0; i < obj.via.map.size; ++i) {
-        const auto &entry = obj.via.map.ptr[i];
-        if (entry.key.as<int>() == id_of("nft_index")) round_trip = entry.val.as<std::string>() == "-1";
-      }
-    }
-    check("nft_index/negative/payload_round_trip", round_trip);
+    auto decoded_payload = msgpack::unpack(payload.data() + 1, payload.size() - 1);
+    const auto *index = at_id(decoded_payload.get(), id_of("nft_index"));
+    check("nft_index/negative/payload_round_trip",
+          index != nullptr && index->as<std::string>() == "-1");
   }
 }
 

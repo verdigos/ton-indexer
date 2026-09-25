@@ -71,9 +71,6 @@ bool build_action(const ActionRow &row, Action &a);
 
 bool omitted(const Value &value);
 
-// Dispatched like the other fills; also driven directly by the serialize test.
-void fill_evaa_liquidate(const Value &data, Action &action);
-
 // Synthetic row a trace gets when classification succeeds but produces
 // nothing. Emitted when ClassifyResult::unknown_trace is set.
 //

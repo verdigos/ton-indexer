@@ -158,6 +158,7 @@ std::shared_ptr<const mch::TieredLookupSource::InterfaceMap> make_interfaces(
 }
 
 ActorFixture load_fixture() {
+  // Refresh with: indexer/venv/bin/python devtools/bk-tools/update_emu_actor_fixture.py
   const auto path = std::filesystem::path(__FILE__).parent_path() / "data" / "emu_actor.msgpack";
   const auto bytes = read_file(path);
   check(!bytes.empty(), "actor fixture loads");
@@ -216,7 +217,6 @@ void test_real_actor() {
 
   check(answered, "actor answers exactly once");
   check(result.outcome == mch::EmuClassifyOutcome::classified, "actor outcome is classified");
-  check(!result.failure, "actor reports no failure");
   check(result.skipped_payload_actions == 0, "actor skips no payload actions");
   check(!result.payload.actions_blob.empty(), "actor produced Redis wire bytes");
   if (result.payload.actions_blob.empty()) return;
@@ -235,45 +235,19 @@ void test_real_actor() {
         const auto* payload = field(row, "payload");
         if (id && id->as<std::string>() == expected.id) {
           found = true;
-          const auto bytes = unhex(expected.payload_hex);
+          const auto expected_payload = unhex(expected.payload_hex);
           const bool payload_matches = payload && payload->type == msgpack::type::BIN &&
-                                       payload->via.bin.size == bytes.size() &&
-                                       std::string(payload->via.bin.ptr, payload->via.bin.size) == bytes;
+                                       payload->via.bin.size == expected_payload.size() &&
+                                       std::string(payload->via.bin.ptr, payload->via.bin.size) == expected_payload;
           check(payload_matches, "compact payload bytes match for " + expected.id);
 
           const auto expected_wire = unhex(expected.wire_hex);
-          auto expected_decoded = msgpack::unpack(expected_wire.data(), expected_wire.size());
-          const auto& expected_rows = expected_decoded.get();
-          const msgpack::object* expected_row =
-              expected_rows.type == msgpack::type::ARRAY && expected_rows.via.array.size == 1
-                  ? &expected_rows.via.array.ptr[0]
-                  : nullptr;
-          const auto* type = field(row, "type");
-          const auto* success = field(row, "success");
-          const auto* expected_type = expected_row ? field(*expected_row, "type") : nullptr;
-          const auto* expected_success = expected_row ? field(*expected_row, "success") : nullptr;
-          const bool type_matches = type && expected_type &&
-                                    type->type == msgpack::type::STR &&
-                                    expected_type->type == msgpack::type::STR &&
-                                    type->as<std::string>() == expected_type->as<std::string>();
-          const bool success_matches = success && expected_success &&
-                                       success->type == msgpack::type::BOOLEAN &&
-                                       expected_success->type == msgpack::type::BOOLEAN &&
-                                       success->as<bool>() == expected_success->as<bool>();
-          check(type_matches, "action type matches for " + expected.id);
-          check(success_matches, "action success matches for " + expected.id);
-
           msgpack::sbuffer wire;
           msgpack::packer<msgpack::sbuffer> packer(wire);
           packer.pack_array(1);
           packer.pack(row);
           check(std::string(wire.data(), wire.size()) == expected_wire,
                 "Redis wire row matches for " + expected.id);
-          std::cout << "action " << expected.id
-                    << ": type=" << (type_matches ? type->as<std::string>() : "?")
-                    << " success=" << (success_matches && success->as<bool>() ? "true" : "false")
-                    << " payload=" << bytes.size()
-                    << " wire=" << wire.size() << " bytes" << std::endl;
           break;
         }
       }

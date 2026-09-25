@@ -40,51 +40,13 @@ bool decimal_string_key(const std::string &k) {
   return k == "amount" || k == "value";
 }
 
-// Native integer fields must fit signed int64. Encode an unexpected wider value
-// as nil rather than truncating it or invalidating the complete Go decode.
-void pack_int(Packer &pk, const Value &v, RedisActionSerializeStats &st) {
-  if (v.num.is_null() || !v.num->fits_bits(64)) {
-    st.unrenderable++;
-    pk.pack_nil();
-    return;
-  }
-  pk.pack(static_cast<std::int64_t>(v.num->to_long()));
-}
-
-void pack_value(Packer &pk, const Value &v, bool as_decimal_string, RedisActionSerializeStats &st) {
-  switch (v.t) {
-    case VType::Null:
-      pk.pack_nil();
-      return;
-    case VType::Int:
-      if (v.num.is_null()) {
-        st.unrenderable++;
-        pk.pack_nil();
-        return;
-      }
-      if (as_decimal_string) {
-        pack_text(pk, v.num->to_dec_string());
-      } else {
-        pack_int(pk, v, st);
-      }
-      return;
-    case VType::Amount:
-      // Value-domain by definition, so always a decimal string regardless of
-      // the key. (ActionBuild's av_amount converts Amount -> Int before it ever
-      // reaches a fill's output, so this arm is a backstop.)
-      if (v.num.is_null()) {
-        pk.pack_nil();
-        return;
-      }
-      pack_text(pk, v.num->to_dec_string());
-      return;
-    case VType::Str:
-      pack_text(pk, v.str);
-      return;
-    default:
-      st.unrenderable++;
-      pk.pack_nil();
-      return;
+void pack_value(Packer &pk, const Value &v, bool as_decimal_string) {
+  if (v.t == VType::Str) {
+    pack_text(pk, v.str);
+  } else if (as_decimal_string) {
+    pack_text(pk, v.num->to_dec_string());
+  } else {
+    pk.pack(static_cast<std::int64_t>(v.num->to_long()));
   }
 }
 
@@ -106,8 +68,7 @@ const std::vector<ActionField> &optional_fields() {
 // counted separately; fields unused by the Go consumer are not serialized.
 constexpr std::uint32_t kFixedKeys = 12;
 
-void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std::int64_t finality,
-                 RedisActionSerializeStats &st) {
+void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std::int64_t finality) {
   const std::vector<ActionField> &opt = optional_fields();
   std::uint32_t n = kFixedKeys + (a.ancestor_type.empty() ? 0 : 1);
   for (const ActionField &f : opt) {
@@ -146,8 +107,7 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
   // Both fields come from the view rather than mch::Action.
   pack_key(pk, "finality");
   pk.pack(finality);
-  // Go only surfaces it when it differs from trace_external_hash
-  // (models.go:930), so it must be written.
+  // Go surfaces this value when it differs from trace_external_hash.
   pack_key(pk, "trace_external_hash_norm");
   pack_text(pk, trace_key);
   // ancestor_type is present only for child rows.
@@ -167,16 +127,13 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
       continue;
     }
     pack_key(pk, f.key);
-    pack_value(pk, v, decimal_string_key(f.key), st);
+    pack_value(pk, v, decimal_string_key(f.key));
   }
 }
 
 }  // namespace
 
-std::string serialize_redis_actions(const std::vector<Action> &actions, const EmuTraceView &view,
-                                   RedisActionSerializeStats *stats) {
-  RedisActionSerializeStats discarded;
-  RedisActionSerializeStats &st = stats != nullptr ? *stats : discarded;
+std::string serialize_redis_actions(const std::vector<Action> &actions, const EmuTraceView &view) {
   // The payload and insert guard share the minimum node finality.
   const auto finality = static_cast<std::int64_t>(view_finality(view));
 
@@ -184,7 +141,7 @@ std::string serialize_redis_actions(const std::vector<Action> &actions, const Em
   Packer pk(&buf);
   pk.pack_array(static_cast<std::uint32_t>(actions.size()));
   for (const Action &a : actions) {
-    pack_action(pk, a, view.trace_id, finality, st);
+    pack_action(pk, a, view.trace_id, finality);
   }
   return std::string(buf.data(), buf.size());
 }

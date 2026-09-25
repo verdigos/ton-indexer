@@ -270,42 +270,6 @@ Value abi_value_to_mch(const AbiValue &v) {
 
 namespace {
 
-td::Result<Value> abi_parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &body) {
-  if (body.is_null()) {
-    return td::Status::Error("abi bridge: null body cell");
-  }
-  bool special = false;
-  [[maybe_unused]] vm::CellSlice checked_slice = vm::load_cell_slice_special(body, special);
-  if (special) {
-    return td::Status::Error("abi bridge: exotic cell not supported");
-  }
-
-  auto match = try_parse_first<evaa::EvaaWithdrawLockedExcess,
-                               evaa::EvaaWithdrawNotCollateralizedExcess,
-                               evaa::EvaaWithdrawMissingPricesExcess,
-                               evaa::EvaaWithdrawExecutionCrashed>(body);
-  if (match && std::holds_alternative<evaa::EvaaWithdrawLockedExcess>(*match)) {
-    return Value::make_obj({{"opcode", Value::make_int64(0x21e6)},
-                            {"reason", Value::make_str("withdraw_locked_excess")}});
-  }
-  if (match &&
-      std::holds_alternative<evaa::EvaaWithdrawNotCollateralizedExcess>(*match)) {
-    return Value::make_obj(
-        {{"opcode", Value::make_int64(0x21e7)},
-         {"reason", Value::make_str("withdraw_not_collateralized_excess")}});
-  }
-  if (match && std::holds_alternative<evaa::EvaaWithdrawMissingPricesExcess>(*match)) {
-    return Value::make_obj(
-        {{"opcode", Value::make_int64(0x21e8)},
-         {"reason", Value::make_str("withdraw_missing_prices_excess")}});
-  }
-  if (match && std::holds_alternative<evaa::EvaaWithdrawExecutionCrashed>(*match)) {
-    return Value::make_obj({{"opcode", Value::make_int64(0x21ec)},
-                            {"reason", Value::make_str("withdraw_execution_crashed")}});
-  }
-  return td::Status::Error("evaa fail excess: unknown opcode");
-}
-
 template <class T>
 td::Result<Value> abi_parse_evaa_liquidate_master_exact(const td::Ref<vm::Cell> &body) {
   if (body.is_null()) {
@@ -639,7 +603,6 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"EvaaSupplySuccess", &abi_parse_body<evaa::EvaaSupplySuccess>},
       {"EvaaWithdrawMaster", &abi_parse_body<evaa::EvaaWithdrawMaster>},
       {"EvaaWithdrawCollateralized", &abi_parse_body<evaa::EvaaWithdrawCollateralized>},
-      {"EvaaWithdrawFailExcess", &abi_parse_evaa_withdraw_fail_excess},
       {"EvaaSupplyJettonForward", &abi_parse_body<evaa_forward::EvaaSupplyJettonForward>},
       {"EvaaLiquidateMaster", &abi_parse_evaa_liquidate_master_exact<evaa::EvaaLiquidateMaster>},
       {"EvaaLiquidateMasterV7",

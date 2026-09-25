@@ -122,7 +122,7 @@ BuildOutcome run_two_phase(const BuildFn &fn, const Block *anchor,
   // trace boundary. Today's artifacts have max
   // lookup depth 2 and converge in <=2 rounds, so this never fires.
   if (!converged) {
-    throw std::runtime_error("two-phase lookup did not converge after 8 rounds");
+    throw LookupNotConverged("two-phase lookup did not converge after 8 rounds");
   }
 
   FilledLookupTable filled(kinds, std::move(fetched));

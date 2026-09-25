@@ -2,7 +2,7 @@
 // Covers the load-bearing design property (a hook-produced V2 renders through
 // the SAME code path tier 1 uses, so the two tiers cannot drift), the jvault
 // data-cell chain over synthetic cells, and the memo / fetch budget / wall-clock
-// budget. Same flag-driven pattern as --shape-test / --actions-msgpack-test.
+// budget. Same flag-driven pattern as --actions-msgpack-test.
 //
 // The account reads are injected (CelldbTier2Lookup::set_account_source), so no
 // celldb, no shard state and no node are needed. What that CANNOT cover is any

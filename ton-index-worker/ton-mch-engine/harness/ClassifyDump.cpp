@@ -395,7 +395,7 @@ int run_action_payload_dump(const std::vector<std::string> &paths, const std::st
         auto line = builder.enter_object();
         line("fixture_id", fs::path(fixture).stem().string());
         line("action_id", action.action_id)("type", action.type);
-        line("legacy", td::JsonRaw(action_legacy_details_json(action)));
+        line("data", td::JsonRaw(action_data_json(action)));
         line("payload_hex", td::hex_encode(payload));
         line("wire_hex", td::hex_encode(wire));
       }

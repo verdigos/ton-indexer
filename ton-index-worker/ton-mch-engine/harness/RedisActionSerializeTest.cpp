@@ -102,12 +102,6 @@ bool is_uint(const msgpack::object *value, std::uint64_t want) {
   return value != nullptr && value->type == msgpack::type::POSITIVE_INTEGER && value->via.u64 == want;
 }
 
-bool is_integer_text(const msgpack::object *value, const std::string &want) {
-  if (is_str(value, want)) return true;
-  return !want.starts_with('-') && value != nullptr &&
-         value->type == msgpack::type::POSITIVE_INTEGER && std::to_string(value->via.u64) == want;
-}
-
 bool is_bool(const msgpack::object *value, bool want) {
   return value != nullptr && value->type == msgpack::type::BOOLEAN && value->via.boolean == want;
 }
@@ -174,8 +168,6 @@ void test_fixed_envelope() {
   check("fixed/accounts", at(*row, "accounts") != nullptr);
   check("fixed/payload_binary", at(*row, "payload") != nullptr &&
                                    at(*row, "payload")->type == msgpack::type::BIN);
-  check("fixed/omits_data", absent(*row, "data"));
-  check("fixed/omits_legacy_composite", absent(*row, "ton_transfer_data"));
   check("fixed/exact_key_count", row->via.map.size == 12);
 }
 
@@ -212,27 +204,6 @@ void test_columns_and_payload() {
   check("columns/query_id_uint", is_uint(at_id(payload.root(), id_of("query_id")), UINT64_MAX));
   check("columns/comment", is_str(at_id(payload.root(), id_of("comment")), "hello"));
   check("columns/comment_encrypted", is_bool(at_id(payload.root(), id_of("comment_encrypted")), false));
-}
-
-void test_tonco_tick_spacing() {
-  for (const char *spacing : {"-1", "0", "8388607"}) {
-    const std::string label = std::string("tick_spacing/") + spacing;
-    try {
-      Action action = base_action();
-      action.type = "tonco_deploy_pool";
-      action.data = Value::make_dict({{"tick_spacing", Value::make_str(spacing)}});
-      Decoded rows(serialize_redis_actions({action}, make_view({EmuFinality::finalized})));
-      const auto *row = first_row(rows);
-      const std::string payload_bytes = row == nullptr ? std::string{} : binary_string(at(*row, "payload"));
-      Decoded payload(payload_bytes.size() > 1 ? payload_bytes.substr(1) : std::string{});
-      check(label, rows.ok() && rows.root().type == msgpack::type::ARRAY &&
-                       rows.root().via.array.size == 1 && payload.ok() &&
-                       payload.root().type == msgpack::type::MAP &&
-                       is_integer_text(at_id(payload.root(), id_of("tick_spacing")), spacing));
-    } catch (const std::exception &) {
-      check(label, false);
-    }
-  }
 }
 
 void test_finality_and_child_fields() {
@@ -376,6 +347,8 @@ void test_compact_types_and_errors() {
         std::all_of(big_payload.begin() + 6, big_payload.end(), [](char c) { return c == 0; }));
   check("compact/nft_index_signed", encoded({{"nft_index", Value::make_str("-1")}}) ==
         "\x01\x81\x43\xa2-1");
+  check("compact/tick_spacing_signed", encoded({{"tick_spacing", Value::make_str("-1")}}) ==
+        "\x01\x81\x6f\xa2-1");
   check("compact/boc_base64", encoded({{"custom_payload", Value::make_str("AQID")}}) ==
         "\x01\x81\x0f\xc4\x03\x01\x02\x03");
   check("compact/boc_binary", encoded({{"custom_payload", Value::make_bytes("\x01\x02\x03")}}) ==
@@ -463,33 +436,11 @@ void test_cached_payload() {
 
 }  // namespace
 
-std::string wire_fixture_bytes() {
-  Action action = base_action();
-  action.type = "jetton_transfer";
-  action.ancestor_type = {"jvault_stake"};
-  action.source = Value::make_str(kAddrA);
-  action.destination = Value::make_str(kAddrB);
-  action.asset = Value::make_str(kAddrA);
-  action.amount = Value::make_amount(td::string_to_int256(
-      std::string("340282366920938463463374607431768211456")));
-  action.opcode = Value::make_int64(0x0f8a7ea5);
-  action.data = Value::make_dict({
-      {"query_id", Value::make_int(td::string_to_int256(std::string("18446744073709551615")))},
-      {"response_destination", Value::make_account_raw(kAddrB)},
-      {"forward_amount", Value::make_amount(td::make_refint(400000000))},
-      {"comment", Value::make_str("hello")},
-      {"comment_encrypted", Value::make_bool(false)},
-  });
-  return serialize_redis_actions({action},
-                                 make_view({EmuFinality::confirmed, EmuFinality::finalized}));
-}
-
 int run_action_msgpack_test() {
   g_fail = 0;
   test_empty_actions();
   test_fixed_envelope();
   test_columns_and_payload();
-  test_tonco_tick_spacing();
   test_finality_and_child_fields();
   test_positional_legs();
   test_tx_hash_order();

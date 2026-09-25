@@ -7,10 +7,15 @@
 #include "Walker.h"
 
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace mch {
+
+struct LookupNotConverged : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
 
 // MATCH-inclusion filter: empty == the linked host supplies every predicate
 // the matcher's match phase consults; else the SKIP reason. Computed at

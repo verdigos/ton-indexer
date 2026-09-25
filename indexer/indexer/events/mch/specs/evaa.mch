@@ -34,6 +34,12 @@ fn evaa_refund_reason(code) = (
     "liquidation_prices_missing" if code == 0x31f7 else
     "liquidation_execution_crashed" if code == 0x31fe else null
 )
+fn evaa_withdraw_reason(code) = (
+    "withdraw_locked_excess" if code == 0x21e6 else
+    "withdraw_not_collateralized_excess" if code == 0x21e7 else
+    "withdraw_missing_prices_excess" if code == 0x21e8 else
+    "withdraw_execution_crashed" if code == 0x21ec else null
+)
 
 rule evaa_supply_flow =
     btype call_contract @user where (evaa_op(.) == 0x11)
@@ -146,7 +152,7 @@ matcher evaa_withdraw {
              op EvaaWithdrawCollateralized @coll_fail
                -> btype call_contract where (evaa_op(.) == 0x211f)
                -> op EvaaWithdrawNoFundsExcess
-             op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess as EvaaWithdrawFailExcess
+             op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess
          }
 
     let is_ton  = master.body.asset_id == 0x1A4219FE5E60D63AF2A3CC7DCE6FEC69B45C6B5718497A6148E7C232AC87BD8A
@@ -166,7 +172,7 @@ matcher evaa_withdraw {
         asset:                   (ton_asset() if is_ton else jetton_payout.data.asset) if success else null
         recipient_jetton_wallet: account(jetton_payout.data.receiver_wallet) if (success and not is_ton) else null
         master_jetton_wallet:    account(jetton_payout.data.sender_wallet) if (success and not is_ton) else null
-        fail_reason:             null if success else ("withdraw_no_funds_excess" if coll_fail != null else fail_excess.body.reason)
+        fail_reason:             null if success else ("withdraw_no_funds_excess" if coll_fail != null else evaa_withdraw_reason(fail_excess.msg.opcode))
     }
 }
 

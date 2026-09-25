@@ -29,7 +29,7 @@ std::exception_ptr capture(Exception exception) {
 template <class Expected>
 void check_propagates(std::exception_ptr error, const char *description) {
   try {
-    mch::classifier_failure_reason(error, "sql: ", "exception: ", true);
+    mch::classifier_failure_reason(error, "sql: ", "exception: ");
   } catch (const Expected &) {
     return;
   } catch (...) {
@@ -43,16 +43,16 @@ void check_propagates(std::exception_ptr error, const char *description) {
 
 int main() {
   const auto rejected = capture(pqxx::unique_violation{"duplicate key", "INSERT", "23505"});
-  check(mch::classifier_failure_reason(rejected, "sql: ", "exception: ", true) ==
+  check(mch::classifier_failure_reason(rejected, "sql: ", "exception: ") ==
             "sql: 23505 duplicate key",
         "23505 yields a reason");
   check(mch::classifier_failure_reason(
             capture(pqxx::data_exception{"division by zero", "INSERT", "22012"}),
-            "sql: ", "exception: ", true) == "sql: 22012 division by zero",
+            "sql: ", "exception: ") == "sql: 22012 division by zero",
         "22012 yields a reason");
   check(mch::classifier_failure_reason(
             capture(pqxx::sql_error{"program limit exceeded", "INSERT", "54001"}),
-            "sql: ", "exception: ", true) == "sql: 54001 program limit exceeded",
+            "sql: ", "exception: ") == "sql: 54001 program limit exceeded",
         "54001 yields a reason");
 
   check_propagates<pqxx::serialization_failure>(
@@ -67,7 +67,7 @@ int main() {
                                           "in_doubt_error propagates");
   check_propagates<std::bad_alloc>(capture(std::bad_alloc{}), "bad_alloc propagates");
   check(mch::classifier_failure_reason(capture(std::runtime_error{"bad json"}),
-                                       "sql: ", "exception: ", true) == "exception: bad json",
+                                       "sql: ", "exception: ") == "exception: bad json",
         "std::exception yields a reason");
 
   if (failures != 0) return 1;

@@ -77,11 +77,7 @@ struct EmuClassifyResult {
   EmuActionPayload payload;
   bool used_fallback{false};       // rows came from ClassifyResult::fallback_rows
   std::size_t skipped_payload_actions{0};
-  bool failure{false};
   std::string failure_reason;
-  FailureCategory failure_category{FailureCategory::none};
-  TieredLookupSource::LookupStats lookup_stats;
-  Tier2Stats tier2_stats;
   // Serialization and classification have separate latency measurements.
   std::int64_t queue_us{0}, classify_us{0}, serialize_us{0};
 };

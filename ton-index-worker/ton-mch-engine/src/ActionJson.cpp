@@ -116,7 +116,7 @@ ActionRowContext row_context(const schema::Trace &trace) {
           trace.mc_seqno_end};
 }
 
-std::string action_legacy_details_json(const Action &a) {
+std::string action_data_json(const Action &a) {
   return omitted(a.data) ? "{}" : value_json(a.data);
 }
 

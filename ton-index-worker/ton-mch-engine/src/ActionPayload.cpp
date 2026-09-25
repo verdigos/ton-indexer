@@ -23,13 +23,6 @@ void pack_binary(Packer &pk, std::string_view s) {
   pk.pack_bin(static_cast<std::uint32_t>(s.size()));
   pk.pack_bin_body(s.data(), static_cast<std::uint32_t>(s.size()));
 }
-bool absent(const Value &v) {
-  return v.t == VType::Null || v.t == VType::Block ||
-         ((v.t == VType::Int || v.t == VType::Amount) && v.num.is_null()) ||
-         (v.t == VType::Account && v.addr_none) ||
-         (v.t == VType::Asset && (v.is_ton || !v.has_jetton)) ||
-         (v.t == VType::Cell && v.cell.is_null());
-}
 std::string value_text(const Value &v) {
   if (v.t == VType::Int || v.t == VType::Amount) return v.num->to_dec_string();
   if (v.t == VType::Account || v.t == VType::Asset) return canonicalize_or_passthrough(v.str);
@@ -45,11 +38,8 @@ std::string typed_text(const Value &v, std::string_view name, std::string_view e
     invalid(name, expected, "non-text value");
   return value_text(v);
 }
-std::string typed_str(const Value &v, std::string_view name, std::string_view expected,
-                      bool address = false) {
+std::string typed_str(const Value &v, std::string_view name, std::string_view expected) {
   if (v.t == VType::Str) return v.str;
-  if (address && (v.t == VType::Account || v.t == VType::Asset))
-    return canonicalize_or_passthrough(v.str);
   invalid(name, expected, v.t == VType::Int || v.t == VType::Amount ? value_text(v) : "non-text value");
 }
 std::string cell_bytes(const Value &v, std::string_view name) {
@@ -91,20 +81,17 @@ std::string base64_bytes(std::string_view name, std::string_view text, bool hash
   return decoded.move_as_ok();
 }
 void pack_fields(Packer &pk, const Value::Fields &fields);
-void pack_plain(Packer &pk, const Value &v, std::string_view context = "other") {
+void pack_plain(Packer &pk, const Value &v, std::string_view name) {
   switch (v.t) {
-    case VType::Null: case VType::Block: pk.pack_nil(); return;
-    case VType::Bool: pk.pack(v.boolean); return;
-    case VType::Int: case VType::Amount: case VType::Str:
-    case VType::Account: case VType::Asset: pack_string(pk, value_text(v)); return;
-    case VType::Bytes: pack_binary(pk, v.str); return;
-    case VType::Cell: pack_binary(pk, cell_bytes(v, context)); return;
+    case VType::Null: pk.pack_nil(); return;
+    case VType::Str: pack_string(pk, typed_text(v, name, "string")); return;
     case VType::List: {
       pk.pack_array(static_cast<std::uint32_t>(v.items->size()));
-      for (const auto &item : *v.items) pack_plain(pk, item, context);
+      for (const auto &item : *v.items) pack_plain(pk, item, name);
       return;
     }
     case VType::Dict: case VType::Obj: pack_fields(pk, *v.fields); return;
+    default: invalid(name, "container", "non-container value");
   }
 }
 void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
@@ -112,13 +99,14 @@ void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
   switch (key.type) {
     case PayloadKeyType::Other: pack_plain(pk, v, name); return;
     case PayloadKeyType::String:
-      if (v.t != VType::Str && v.t != VType::Int && v.t != VType::Amount) invalid(name, "string", "non-text value");
-      pack_string(pk, value_text(v)); return;
+      pack_string(pk, typed_text(v, name, "string")); return;
     case PayloadKeyType::Bool:
       if (v.t != VType::Bool) invalid(name, "bool", "non-bool value");
       pk.pack(v.boolean); return;
     case PayloadKeyType::Address: {
-      auto text = typed_str(v, name, "W:HEX address", true);
+      auto text = v.t == VType::Account || v.t == VType::Asset
+                      ? canonicalize_or_passthrough(v.str)
+                      : typed_str(v, name, "W:HEX address");
       auto colon = text.find(':');
       if (colon == std::string::npos || text.size() != colon + 65) invalid(name, "W:HEX address", text);
       int wc = 0;
@@ -173,7 +161,7 @@ void pack_fields(Packer &pk, const Value::Fields &fields) {
   ordered.reserve(fields.size());
   for (const auto &[name, value] : fields) {
     const auto &key = key_info(name);
-    if (!absent(value)) ordered.emplace_back(&key, &value);
+    if (!omitted(value)) ordered.emplace_back(&key, &value);
   }
   std::sort(ordered.begin(), ordered.end(), [](const auto &a, const auto &b) { return a.first->id < b.first->id; });
   for (std::size_t i = 1; i < ordered.size(); ++i)

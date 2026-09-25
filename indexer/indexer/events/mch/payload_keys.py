@@ -68,8 +68,8 @@ def doc_text(rows):
         '`address` is 33 binary bytes (signed workchain byte plus 32 hash bytes);',
         '`boc` and the three hash forms are binary. `uint` is a MessagePack unsigned',
         'integer up to uint64, then minimal big-endian binary. `string` and `bool`',
-        'keep their MessagePack forms. `other` covers containers and pass-through',
-        'scalars; keys inside maps still use ids and their declared types.', '',
+        'keep their MessagePack forms. `other` covers containers; keys inside maps',
+        'still use ids and their declared types.', '',
         '| id | Key | Type | Shape | Uses |', '|---:|---|---|---|---|',
     ]
     for row in rows:

@@ -736,18 +736,13 @@ Block *stonfi_v2_leg_head(Block *block, Block *proxied) {
   return nullptr;
 }
 void stonfi_v2_data_merge(Block *final_b, Block *partial) {
-  auto set = [&](const std::string &k, Value v) {
-    if (!final_b->data.fields) return;
-    for (auto &kv : *final_b->data.fields) {
-      if (kv.first == k) { kv.second = std::move(v); return; }
-    }
-    final_b->data.fields->emplace_back(k, std::move(v));
-  };
-  set("amount_2", pp_field(partial->data, "amount_1"));
-  set("asset_2", pp_field(partial->data, "asset_1"));
-  set("sender_wallet_2", pp_field(partial->data, "sender_wallet_1"));
+  if (!final_b->data.fields) final_b->data = Value::make_dict({});
+  auto &fields = *final_b->data.fields;
+  set_field(fields, "amount_2", pp_field(partial->data, "amount_1"));
+  set_field(fields, "asset_2", pp_field(partial->data, "asset_1"));
+  set_field(fields, "sender_wallet_2", pp_field(partial->data, "sender_wallet_1"));
   if (pp_field(final_b->data, "lp_tokens_minted").is_null()) {
-    set("lp_tokens_minted", pp_field(partial->data, "lp_tokens_minted"));
+    set_field(fields, "lp_tokens_minted", pp_field(partial->data, "lp_tokens_minted"));
   }
 }
 
@@ -774,7 +769,8 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
       Value ap = pp_field(a->data, "pool"), bp = pp_field(b->data, "pool");
       Value al = pp_field(a->data, "lp_tokens_minted"), bl = pp_field(b->data, "lp_tokens_minted");
       Block *proxied = a->previous_block;
-      if (pp_eq(as, bs) && pp_eq(ap, bp) && !pp_eq(al, bl)) {
+      const bool merge_data = pp_eq(as, bs) && pp_eq(ap, bp) && !pp_eq(al, bl);
+      if (merge_data) {
         Block *in_transfer = stonfi_v2_leg_head(b, proxied);
         Block *proxy = arena.make(mch::btype::kEmpty);
         if (proxied != nullptr && in_transfer != nullptr) {
@@ -782,20 +778,17 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
         }
         b->children_blocks.push_back(a);
         b->children_blocks.push_back(proxy);
-        a->parent = b;
         proxy->parent = b;
         b->initiating_event_node = proxy->initiating_event_node;
-        for (const EventNode *n : a->event_nodes) b->event_nodes.push_back(n);
-        b->calculate_min_max_lt();
-        stonfi_v2_data_merge(b, a);
       } else {
         b->children_blocks.push_back(a);
         if (proxied != nullptr) b->children_blocks.push_back(proxied);
-        a->parent = b;
         if (proxied != nullptr) proxied->parent = b;
-        for (const EventNode *n : a->event_nodes) b->event_nodes.push_back(n);
-        b->calculate_min_max_lt();
       }
+      a->parent = b;
+      b->event_nodes.insert(b->event_nodes.end(), a->event_nodes.begin(), a->event_nodes.end());
+      b->calculate_min_max_lt();
+      if (merge_data) stonfi_v2_data_merge(b, a);
       blocks.erase(std::remove(blocks.begin(), blocks.end(), a), blocks.end());
       alive.erase(std::remove(alive.begin(), alive.end(), a), alive.end());
       removed.insert(a);

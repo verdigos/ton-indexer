@@ -57,6 +57,7 @@ bool same_account(const Value &a, const Value &b);
 // task-level equality the DeDust/STON.fi liquidity post-processors compare
 // assets with.
 Value pp_field(const Value &d, const std::string &k);
+void set_field(Value::Fields &fields, const std::string &key, Value value);
 bool pp_eq(const Value &a, const Value &b);
 
 }  // namespace mch

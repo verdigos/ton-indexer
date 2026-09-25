@@ -63,14 +63,14 @@ Block *wrap_root(BlockArena &arena, Block *root) {
   return wrapper;
 }
 
-std::pair<std::string, FailureCategory> exception_failure(std::exception_ptr error,
-                                                          bool lookup_infra) {
-  std::string reason = exception_message(error);
-  const auto category = lookup_infra &&
-                                reason.find("two-phase lookup did not converge") != std::string::npos
-                            ? FailureCategory::lookup_infra_fail
-                            : FailureCategory::engine_fault;
-  return {std::move(reason), category};
+std::pair<std::string, FailureCategory> exception_failure(std::exception_ptr error) {
+  try {
+    if (error) std::rethrow_exception(error);
+  } catch (const LookupNotConverged &e) {
+    return {e.what(), FailureCategory::lookup_infra_fail};
+  } catch (...) {
+  }
+  return {exception_message(error), FailureCategory::engine_fault};
 }
 
 // The flat spine list in canonical BFS order: `root` plus everything reachable
@@ -93,38 +93,33 @@ std::vector<Block *> collect_spine(Block *root) {
   return out;
 }
 
-// Scrub non-owning Block values before the TraceContext arena dies. Shared
-// container payloads make this a repair, so the count tracks every replacement.
-std::size_t scrub_value(Value &v) {
+// Scrub non-owning Block values before the TraceContext arena dies.
+void scrub_value(Value &v) {
   if (v.t == VType::Block) {
     v = Value::null();
-    return 1;
+    return;
   }
-  std::size_t n = 0;
   if (v.items) {
     for (Value &item : *v.items) {
-      n += scrub_value(item);
+      scrub_value(item);
     }
   }
   if (v.fields) {
     for (auto &[key, field] : *v.fields) {
-      n += scrub_value(field);
+      scrub_value(field);
     }
   }
-  return n;
 }
 
-std::size_t scrub_arena_refs(Action &a) {
-  std::size_t n = 0;
+void scrub_arena_refs(Action &a) {
   for (Value *v : {
 #define MCH_ACTION_REF(name) &a.name,
            MCH_ACTION_COLUMNS(MCH_ACTION_REF)
 #undef MCH_ACTION_REF
            &a.data,
        }) {
-    n += scrub_value(*v);
+    scrub_value(*v);
   }
-  return n;
 }
 
 bool try_build(const CompiledMatcher &m, const BuildFn &fn, Block *block,
@@ -222,45 +217,42 @@ bool serializes_to_row(const Block *b) {
 // A btype missing here silently starts emitting child rows.
 bool is_v1_op(const std::string &t) {
   static const std::set<std::string> ops{
-      "call_contract",
-      "contract_deploy",
-      "jetton_burn",
-      "tick_tock",
-      "jetton_transfer",
-      "nft_transfer",
-      "nft_mint",
-      "jetton_mint",
-      "ton_transfer",
-      "stake_deposit",
-      "stake_withdrawal",
-      "stake_withdrawal_request",
-      "dex_deposit_liquidity",
-      "jetton_swap",
-      "change_dns",
-      "delete_dns",
-      "renew_dns",
-      "subscribe",
-      "dex_withdraw_liquidity",
-      "unsubscribe",
-      "election_deposit",
-      "election_recover",
-      "auction_bid",
-      "nominator_pool_deposit",
-      "nominator_pool_withdraw_request",
-      "dedust_deposit_liquidity",
-      "dedust_deposit_liquidity_partial",
-      "dedust_v2_deposit_liquidity",
-      "dedust_v2_deposit_liquidity_partial",
-      "tonstakers_deposit",
-      "tonstakers_withdraw_request",
-      "tonstakers_withdraw",
-      "ethena_withdrawal_request",
-      "ethena_deposit",
-      "tonco_deposit_liquidity",
-      "tonco_withdraw_liquidity",
-      "coffee_deposit_liquidity",
-      "change_wallet_key",
-      "gasless_request",
+      mch::btype::kCallContract,
+      mch::btype::kContractDeploy,
+      mch::btype::kJettonBurn,
+      mch::btype::kTickTock,
+      mch::btype::kJettonTransfer,
+      mch::btype::kNftTransfer,
+      mch::btype::kNftMint,
+      mch::btype::kJettonMint,
+      mch::btype::kTonTransfer,
+      mch::btype::kDexDepositLiquidity,
+      mch::btype::kJettonSwap,
+      mch::btype::kChangeDns,
+      mch::btype::kDeleteDns,
+      mch::btype::kRenewDns,
+      mch::btype::kSubscribe,
+      mch::btype::kDexWithdrawLiquidity,
+      mch::btype::kUnsubscribe,
+      mch::btype::kElectionDeposit,
+      mch::btype::kElectionRecover,
+      mch::btype::kAuctionBid,
+      mch::btype::kNominatorPoolDeposit,
+      mch::btype::kNominatorPoolWithdrawRequest,
+      mch::btype::kDedustDepositLiquidity,
+      mch::btype::kDedustDepositLiquidityPartial,
+      mch::btype::kDedustV2DepositLiquidity,
+      mch::btype::kDedustV2DepositLiquidityPartial,
+      mch::btype::kTonstakersDeposit,
+      mch::btype::kTonstakersWithdrawRequest,
+      mch::btype::kTonstakersWithdraw,
+      mch::btype::kEthenaWithdrawalRequest,
+      mch::btype::kEthenaDeposit,
+      mch::btype::kToncoDepositLiquidity,
+      mch::btype::kToncoWithdrawLiquidity,
+      mch::btype::kCoffeeDepositLiquidity,
+      mch::btype::kChangeWalletKey,
+      mch::btype::kGaslessRequest,
   };
   return ops.count(t) != 0;
 }
@@ -527,7 +519,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // a leaf no matcher consumed emits a basic row.
     result.action_rows = serialize_rows(spine, "");
   } catch (...) {
-    auto [reason, category] = exception_failure(std::current_exception(), true);
+    auto [reason, category] = exception_failure(std::current_exception());
     result.failure = true;
     result.failure_reason = std::move(reason);
     result.failure_category = category;
@@ -579,7 +571,7 @@ SchemaClassifyResult classify_schema_trace(
       if (!build_action(row, action)) {
         continue;
       }
-      (void)scrub_arena_refs(action);
+      scrub_arena_refs(action);
       // Only payload validation is isolated per action. Engine faults still
       // reach the trace-level handler below.
       try {
@@ -606,7 +598,7 @@ SchemaClassifyResult classify_schema_trace(
     completed = true;
   } catch (...) {
     result.outcome = TraceOutcome::terminal_failure_empty;
-    auto [reason, category] = exception_failure(std::current_exception(), false);
+    auto [reason, category] = exception_failure(std::current_exception());
     result.failure_reason = std::move(reason);
     result.failure_category = category;
   }

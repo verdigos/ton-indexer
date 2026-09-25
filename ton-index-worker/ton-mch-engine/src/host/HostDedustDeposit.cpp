@@ -365,6 +365,24 @@ void sort_unique_children(std::vector<Block *> &children_blocks) {
                         children_blocks.end());
 }
 
+bool ambiguous_keys(const std::map<std::string, int> &used) {
+  return std::any_of(used.begin(), used.end(), [](const auto &entry) {
+    return entry.second > 2;
+  });
+}
+
+void absorb(std::vector<Block *> &blocks, std::set<Block *> &removed,
+            Block *into, Block *from) {
+  blocks.erase(std::remove(blocks.begin(), blocks.end(), from), blocks.end());
+  removed.insert(from);
+  into->event_nodes.insert(into->event_nodes.end(), from->event_nodes.begin(),
+                           from->event_nodes.end());
+  into->children_blocks.insert(into->children_blocks.end(), from->children_blocks.begin(),
+                               from->children_blocks.end());
+  sort_unique_children(into->children_blocks);
+  into->calculate_min_max_lt();
+}
+
 // Merge the partial (first) + final deposit records. Consistency failures
 // leave this pair unmerged without affecting other actions (do not fail the
 // whole trace).
@@ -412,20 +430,16 @@ Value combine_deposits(const Value &first, const Value &final_d) {
 
   Value::Fields out;
   if (final_d.fields) out = *final_d.fields;
-  auto set_field = [&](const std::string &k, Value v) {
-    for (auto &kv : out) {
-      if (kv.first == k) { kv.second = std::move(v); return; }
-    }
-    out.emplace_back(k, std::move(v));
-  };
   for (int i = 0; i < 2; i++) {
     std::string si = std::to_string(i + 1);
-    set_field("asset_" + si, tuples[i].asset);
-    set_field("amount_" + si, tuples[i].amount);
-    if (!tuples[i].wallet.is_null()) set_field("user_jetton_wallet_" + si, tuples[i].wallet);
+    set_field(out, "asset_" + si, tuples[i].asset);
+    set_field(out, "amount_" + si, tuples[i].amount);
+    if (!tuples[i].wallet.is_null()) {
+      set_field(out, "user_jetton_wallet_" + si, tuples[i].wallet);
+    }
   }
-  set_field("target_asset_1", tuples[0].asset);
-  set_field("target_asset_2", tuples[1].asset);
+  set_field(out, "target_asset_1", tuples[0].asset);
+  set_field(out, "target_asset_2", tuples[1].asset);
   return Value::make_dict(std::move(out));
 }
 
@@ -449,9 +463,7 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
       used[deposit_contract_key(b)]++;
     }
   }
-  for (const auto &kv : used) {
-    if (kv.second > 2) return;  // skip merging
-  }
+  if (ambiguous_keys(used)) return;
   for (Block *first : firsts) {
     auto it = final_by_key.find(deposit_contract_key(first));
     Block *final_b = (it != final_by_key.end()) ? it->second : nullptr;
@@ -462,13 +474,8 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     } catch (const std::exception &) {
       continue;  // Leave only this pair unmerged; other actions remain.
     }
-    blocks.erase(std::remove(blocks.begin(), blocks.end(), first), blocks.end());
-    removed.insert(first);
-    for (const EventNode *n : first->event_nodes) final_b->event_nodes.push_back(n);
     final_b->data = std::move(merged);
-    for (Block *cb : first->children_blocks) final_b->children_blocks.push_back(cb);
-    sort_unique_children(final_b->children_blocks);
-    final_b->calculate_min_max_lt();
+    absorb(blocks, removed, final_b, first);
   }
 }
 
@@ -492,9 +499,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
     }
   }
   if (partials.empty()) return;
-  for (const auto &kv : used) {
-    if (kv.second > 2) return;  // skip merging
-  }
+  if (ambiguous_keys(used)) return;
   for (Block *final_b : finals) {
     auto it = partial_by_key.find(deposit_contract_key(final_b));
     if (it == partial_by_key.end()) continue;
@@ -503,34 +508,22 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
 
     Value::Fields out;
     if (final_b->data.fields) out = *final_b->data.fields;
-    auto set_field = [&](const std::string &k, Value v) {
-      for (auto &kv : out) {
-        if (kv.first == k) { kv.second = std::move(v); return; }
-      }
-      out.emplace_back(k, std::move(v));
-    };
     for (int i = 1; i <= 2; i++) {
       const std::string si = std::to_string(i);
       if (!pp_field(final_b->data, "asset_" + si).is_null()) continue;
       Value partial_asset = pp_field(partial->data, "asset_" + si);
       if (partial_asset.is_null()) continue;
-      set_field("asset_" + si, std::move(partial_asset));
-      set_field("sender_wallet_" + si, pp_field(partial->data, "sender_wallet_" + si));
+      set_field(out, "asset_" + si, std::move(partial_asset));
+      set_field(out, "sender_wallet_" + si, pp_field(partial->data, "sender_wallet_" + si));
       if (pp_field(final_b->data, "amount_" + si).is_null()) {
-        set_field("amount_" + si, pp_field(partial->data, "amount_" + si));
+        set_field(out, "amount_" + si, pp_field(partial->data, "amount_" + si));
       }
     }
     final_b->data = Value::make_dict(std::move(out));
-
-    blocks.erase(std::remove(blocks.begin(), blocks.end(), partial), blocks.end());
-    removed.insert(partial);
     // Extend event_nodes without appending initiating_event_node or
     // deduplicating. Keep aligned with the V1 pass: both feed action account
     // and transaction-hash derivation.
-    for (const EventNode *n : partial->event_nodes) final_b->event_nodes.push_back(n);
-    for (Block *cb : partial->children_blocks) final_b->children_blocks.push_back(cb);
-    sort_unique_children(final_b->children_blocks);
-    final_b->calculate_min_max_lt();
+    absorb(blocks, removed, final_b, partial);
   }
 }
 }  // namespace mch

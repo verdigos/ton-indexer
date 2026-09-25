@@ -13,13 +13,13 @@ inline bool insert_rejected(const std::string &sqlstate) {
   return sqlstate.starts_with("22") || sqlstate.starts_with("23") || sqlstate.starts_with("54");
 }
 
+inline std::string bounded_reason(std::string reason) {
+  return reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
+}
+
 inline std::string classifier_failure_reason(std::exception_ptr error,
                                              std::string_view sql_prefix,
-                                             std::string_view exception_prefix,
-                                             bool classify_insert_sql_error = false) {
-  auto bounded = [](std::string reason) {
-    return reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
-  };
+                                             std::string_view exception_prefix) {
   try {
     std::rethrow_exception(error);
   } catch (const pqxx::broken_connection &) {
@@ -29,12 +29,12 @@ inline std::string classifier_failure_reason(std::exception_ptr error,
   } catch (const std::bad_alloc &) {
     throw;
   } catch (const pqxx::sql_error &e) {
-    if (!classify_insert_sql_error || !insert_rejected(e.sqlstate())) throw;
-    return bounded(std::string(sql_prefix) + e.sqlstate() + " " + e.what());
+    if (!insert_rejected(e.sqlstate())) throw;
+    return bounded_reason(std::string(sql_prefix) + e.sqlstate() + " " + e.what());
   } catch (const std::exception &e) {
-    return bounded(std::string(exception_prefix) + e.what());
+    return bounded_reason(std::string(exception_prefix) + e.what());
   } catch (...) {
-    return bounded(std::string(exception_prefix) + "unknown exception");
+    return bounded_reason(std::string(exception_prefix) + "unknown exception");
   }
 }
 

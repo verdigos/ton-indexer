@@ -5,7 +5,6 @@
 #include "td/utils/logging.h"
 
 #include <algorithm>
-#include <new>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -101,7 +100,7 @@ bool insert_trace(pqxx::dbtransaction &txn, const TraceClassificationResult &tra
     std::uint64_t failed = 0;
     if (is_failure_outcome(trace.outcome) || !trace.failure_reason.empty()) {
       failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id,
-          trace.failure_reason.substr(0, trace.failure_reason.find_first_of("\r\n")).substr(0, 200)}).affected_rows();
+          bounded_reason(trace.failure_reason)}).affected_rows();
     }
     sub.commit();
     st.rows += rows;
@@ -110,9 +109,8 @@ bool insert_trace(pqxx::dbtransaction &txn, const TraceClassificationResult &tra
     return true;
   } catch (...) {
     reason = classifier_failure_reason(std::current_exception(), "insert_rejected: ",
-                                       "insert_failed: ", true);
+                                       "insert_failed: ");
   }
-  reason = reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
   LOG(WARNING) << "Classification insert failed: " << reason;
   ++st.rejected_traces;
   if (!capped && trace.rescue.action_id.empty()) {
@@ -132,28 +130,20 @@ bool insert_trace(pqxx::dbtransaction &txn, const TraceClassificationResult &tra
     } catch (...) {
       reason = classifier_failure_reason(std::current_exception(),
                                          "insert_rejected_unknown: ",
-                                         "insert_failed_unknown: ", true);
+                                         "insert_failed_unknown: ");
     }
   }
   ++st.rescue_rejected;
-  reason = reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
   LOG(ERROR) << "Classification unknown insert failed: " << reason;
   try {
     pqxx::subtransaction sub(txn, "failure_record");
     const auto failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id, reason}).affected_rows();
     sub.commit();
     st.failed_traces += failed;
-  } catch (const pqxx::broken_connection &) {
-    throw;
-  } catch (const pqxx::in_doubt_error &) {
-    throw;
-  } catch (const std::bad_alloc &) {
-    throw;
-  } catch (const pqxx::sql_error &e) {
-    if (!insert_rejected(e.sqlstate())) throw;
-    LOG(ERROR) << "Classification failure record rejected: " << e.what();
-  } catch (const std::exception &e) {
-    LOG(ERROR) << "Classification failure record failed: " << e.what();
+  } catch (...) {
+    LOG(ERROR) << classifier_failure_reason(std::current_exception(),
+                                             "failure_record_rejected: ",
+                                             "failure_record_failed: ");
   }
   return false;
 }

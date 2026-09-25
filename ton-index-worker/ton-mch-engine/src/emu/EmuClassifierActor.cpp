@@ -20,26 +20,23 @@ constexpr std::size_t kMaxSeenTraces = 65536;
 
 void record_phase_exception(EmuClassifierStats &stats, EmuClassifyResult &res,
                             const std::string &message, bool past_conversion) {
-  res.failure = true;
   res.failure_reason = message;
   if (!past_conversion) {
     stats.convert_failed++;
     res.outcome = EmuClassifyOutcome::convert_failed;
-    res.failure_category = FailureCategory::malformed_trace;
     res.payload.state = "convert_failed";
   } else {
     stats.failed++;
     res.outcome = EmuClassifyOutcome::classify_failed;
-    res.failure_category = FailureCategory::engine_fault;
-    stats.by_category[res.failure_category]++;
+    stats.by_category[FailureCategory::engine_fault]++;
     res.payload.state = "fallback";
   }
 }
 
 // Build the Redis writeback payload while the view remains alive.
-EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Action> &rows,
-                               std::int64_t aai_score, std::string actions_blob) {
-  EmuActionPayload payload;
+void build_payload(EmuActionPayload &payload, const EmuTraceView &view,
+                   const std::vector<Action> &rows, std::int64_t aai_score,
+                   std::string actions_blob) {
   payload.action_count = rows.size();
   payload.aai_score = aai_score;
   payload.actions_blob = std::move(actions_blob);
@@ -55,7 +52,6 @@ EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Actio
       payload.aai.emplace_back(account, member);
     }
   }
-  return payload;
 }
 
 }  // namespace
@@ -106,13 +102,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
   try {
     auto r_txs = emu_to_schema_txs(view);
     if (r_txs.is_error()) {
-      stats_.convert_failed++;
-      res.outcome = EmuClassifyOutcome::convert_failed;
-      res.failure = true;
-      // Conversion failures use their own counter and a non-null failure category.
-      res.failure_category = FailureCategory::malformed_trace;
-      res.failure_reason = r_txs.move_as_error().message().str();
-      res.payload.state = "convert_failed";
+      record_phase_exception(stats_, res, r_txs.move_as_error().message().str(), false);
       LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                    << " CONVERT FAILED: " << res.failure_reason;
     } else {
@@ -121,31 +111,21 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       auto run = mch::classify(*cfg_.prep, view.trace_id, txs, *view.interfaces,
                                cfg_.tier2 ? &view.shard_states : nullptr, view.config);
       auto &classified = run.classified;
-      res.failure = is_failure_outcome(classified.outcome);
       res.failure_reason = std::move(classified.failure_reason);
-      res.failure_category = classified.failure_category;
       res.used_fallback = classified.outcome == TraceOutcome::fallback;
       res.skipped_payload_actions = classified.skipped_payload_actions;
-      res.lookup_stats = std::move(run.lookup_stats);
-      res.tier2_stats = run.tier2_stats;
+      stats_.lookups += run.lookup_stats;
+      stats_.tier2 += run.tier2_stats;
       // AAI uses the minimum transaction LT as the trace-start score. Redis
       // sorted-set scores lose integer precision above 2^53.
-      std::int64_t aai_score = 0;
-      bool first_tx = true;
-      for (const auto &tx : txs) {
-        const auto lt = static_cast<std::int64_t>(tx.lt);
-        aai_score = first_tx ? lt : std::min(aai_score, lt);
-        first_tx = false;
-      }
+      const auto first_tx = std::min_element(txs.begin(), txs.end(),
+          [](const auto &a, const auto &b) { return a.lt < b.lt; });
+      const std::int64_t aai_score = first_tx == txs.end()
+          ? 0 : static_cast<std::int64_t>(first_tx->lt);
       // Serialize and build routes while the view keeps the cell anchor alive.
       const std::int64_t ser_started_us = emu_now_us();
-      RedisActionSerializeStats serialize_stats;
-      auto actions_blob = serialize_redis_actions(classified.rows, view, &serialize_stats);
-      const std::uint8_t finality = res.payload.finality;
-      const std::uint64_t update_seq = res.payload.update_seq;
-      res.payload = build_payload(view, classified.rows, aai_score, std::move(actions_blob));
-      res.payload.finality = finality;
-      res.payload.update_seq = update_seq;
+      auto actions_blob = serialize_redis_actions(classified.rows, view);
+      build_payload(res.payload, view, classified.rows, aai_score, std::move(actions_blob));
       res.serialize_us = emu_now_us() - ser_started_us;
       if (res.serialize_us > 0) {
         auto us = static_cast<std::size_t>(res.serialize_us);
@@ -153,27 +133,20 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         stats_.serialize_us_max = std::max(stats_.serialize_us_max, us);
       }
       stats_.actions_blob_bytes += res.payload.actions_blob.size();
-      stats_.ser_unrenderable += serialize_stats.unrenderable;
-      if (serialize_stats.unrenderable != 0) {
-        LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << res.trace_id
-                     << " serializer saw unrenderable=" << serialize_stats.unrenderable;
-      }
       stats_.actions += classified.rows.size();
       if (res.used_fallback) {
         stats_.fallback_actions += classified.rows.size();
       }
       stats_.skipped_payload_actions += res.skipped_payload_actions;
-      stats_.lookups += res.lookup_stats;
-      stats_.tier2 += res.tier2_stats;
-      if (res.failure) {
+      if (is_failure_outcome(classified.outcome)) {
         stats_.failed++;
-        stats_.by_category[res.failure_category]++;
+        stats_.by_category[classified.failure_category]++;
         res.outcome = EmuClassifyOutcome::classify_failed;
         // Classification failures write the basic-action fallback payload.
         res.payload.state = "fallback";
         LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                      << " FAILED ("
-                     << failure_category_name(res.failure_category) << "): " << res.failure_reason;
+                     << failure_category_name(classified.failure_category) << "): " << res.failure_reason;
       } else {
         stats_.classified++;
         res.outcome = EmuClassifyOutcome::classified;
@@ -247,8 +220,7 @@ void EmuClassifierActor::alarm() {
             << " serialize_us{avg="
             << (stats_.latency_samples ? stats_.serialize_us_total / stats_.latency_samples : 0)
             << " max=" << stats_.serialize_us_max << "}"
-            << " blob_bytes=" << stats_.actions_blob_bytes
-            << " ser{unrenderable=" << stats_.ser_unrenderable << "}";
+            << " blob_bytes=" << stats_.actions_blob_bytes;
   prev_ = stats_;
   alarm_timestamp() = td::Timestamp::in(kStatsIntervalSec);
 }

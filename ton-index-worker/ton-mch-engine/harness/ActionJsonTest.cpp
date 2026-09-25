@@ -239,14 +239,14 @@ int run_actions_json_test() {
     action.accounts = {"0:" + std::string(64, 'a'), "0:" + std::string(64, 'A')};
     check_action(action, context, ddl);
     action.data = Value::make_dict({{"comment", Value::make_str(std::string("a\0b", 3))}});
-    auto comment_json = action_legacy_details_json(action);
+    auto comment_json = action_data_json(action);
     require(comment_json.find("\\u0000") == std::string::npos,
             action.action_id + ".data.comment", "JSON contains escaped NUL");
     auto comment_row = parse(comment_json, action.action_id);
     require(jstr(comment_row, "comment") == "ab",
             action.action_id + ".data.comment", "NUL must be stripped");
     action.data = Value::make_dict({{"parent_gasless_action", Value::make_str(context.trace_id)}});
-    auto extra_json = action_legacy_details_json(action);
+    auto extra_json = action_data_json(action);
     auto extra_row = parse(extra_json, action.action_id);
     require(jstr(extra_row, "parent_gasless_action") == context.trace_id,
             action.action_id + ".data", "populated data must round-trip exactly once");
