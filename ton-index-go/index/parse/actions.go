@@ -51,6 +51,9 @@ func preprocessStakingProvider(raw *models.RawAction) *string {
 	return raw.StakingDataProvider
 }
 
+// ParseEvaaAssetId resolves an EVAA asset id to its master address. The engine writes the
+// id as a full 64-digit lowercase `0x` text and the tables carry the same form, so only an
+// exact table hit resolves; the TON id is the known asset without a master address.
 func ParseEvaaAssetId(assetId string) (*models.AccountAddress, bool) {
 	if assetId == EVAA_TON_ASSET_ID {
 		return nil, true
@@ -156,9 +159,6 @@ func CollectAddressesFromAction(addr_list *map[models.AccountAddress]bool, raw_a
 	}
 
 	// EVAA fields
-	if v := raw_action.EvaaSupplySenderJettonWallet; v != nil {
-		(*addr_list)[*v] = true
-	}
 	if v := raw_action.EvaaSupplyRecipientJettonWallet; v != nil {
 		(*addr_list)[*v] = true
 	}
@@ -182,8 +182,10 @@ func CollectAddressesFromAction(addr_list *map[models.AccountAddress]bool, raw_a
 	if v := raw_action.JvaultStakeStakeWallet; v != nil {
 		(*addr_list)[*v] = true
 	}
-	for _, v := range raw_action.JvaultClaimClaimedJettons {
-		(*addr_list)[v] = true
+	for _, reward := range raw_action.JvaultClaimClaimedJettons {
+		if reward.Asset != "" {
+			(*addr_list)[reward.Asset] = true
+		}
 	}
 
 	if v := raw_action.EvaaLiquidateAssetId; v != nil {
@@ -536,7 +538,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		details.Owner = raw.Source
 		details.ListingAddress = raw.SourceSecondary
 		details.SaleAddress = raw.Destination
-		details.MarketplaceAddress = raw.DestinationSecondary
+		details.MarketplaceAddress = raw.NFTTransferMarketplaceAddress
 		if found, marketplaceName := GetMarketplaceName(raw.NFTTransferMarketplaceAddress, raw.Asset); found {
 			details.Marketplace = &marketplaceName
 		}
@@ -554,8 +556,8 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		details.Owner = raw.Source
 		details.ListingAddress = raw.SourceSecondary
 		details.AuctionAddress = raw.Destination
-		details.MarketplaceAddress = raw.DestinationSecondary
-		if found, marketplaceName := GetMarketplaceName(raw.DestinationSecondary, raw.Asset); found {
+		details.MarketplaceAddress = raw.NFTTransferMarketplaceAddress
+		if found, marketplaceName := GetMarketplaceName(raw.NFTTransferMarketplaceAddress, raw.Asset); found {
 			details.Marketplace = &marketplaceName
 		}
 		details.MarketplaceFeeFactor = raw.NFTListingMarketplaceFeeFactor
@@ -667,7 +669,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		}
 	case "evaa_supply":
 		act.Details = models.ActionDetailsEvaaSupply{
-			SenderJettonWallet:    raw.EvaaSupplySenderJettonWallet,
+			SenderJettonWallet:    raw.SourceSecondary,
 			RecipientJettonWallet: raw.EvaaSupplyRecipientJettonWallet,
 			MasterJettonWallet:    raw.EvaaSupplyMasterJettonWallet,
 			Master:                raw.EvaaSupplyMaster,
@@ -712,14 +714,15 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			IsKnownAsset:     knownAsset,
 		}
 	case "jvault_claim":
+		// A claim pair always reports both halves: a member the record omits reports as
+		// an empty string, never null.
 		claimedRewards := make([]models.JettonAmountPair, 0)
-		if len(raw.JvaultClaimClaimedJettons) == len(raw.JvaultClaimClaimedAmounts) {
-			for i := range raw.JvaultClaimClaimedJettons {
-				claimedRewards = append(claimedRewards, models.JettonAmountPair{
-					Jetton: &raw.JvaultClaimClaimedJettons[i],
-					Amount: &raw.JvaultClaimClaimedAmounts[i],
-				})
-			}
+		for i := range raw.JvaultClaimClaimedJettons {
+			reward := &raw.JvaultClaimClaimedJettons[i]
+			claimedRewards = append(claimedRewards, models.JettonAmountPair{
+				Jetton: &reward.Asset,
+				Amount: &reward.Amount,
+			})
 		}
 		act.Details = models.ActionDetailsJvaultClaim{
 			ClaimedRewards: claimedRewards,
@@ -795,7 +798,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		var details models.ActionDetailsDkgLogFallback
 		details.Coordinator = raw.Source
 		details.Pubkey = extraString(raw.Extra, "pubkey")
-		details.Timestamp = raw.Value
+		details.Timestamp = extraString(raw.Extra, "timestamp")
 		act.Details = &details
 	case "tonco_deploy_pool":
 		act.Details = models.ActionDetailsToncoDeployPool{
@@ -827,7 +830,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			Amount1:             raw.CoffeeCreatePoolAmount1,
 			Amount2:             raw.CoffeeCreatePoolAmount2,
 			LpTokensMinted:      raw.CoffeeCreatePoolLpTokensMinted,
-			PoolCreatorContract: raw.CoffeeCreatePoolPoolCreatorContract,
+			PoolCreatorContract: raw.DestinationSecondary,
 		}
 	case "coffee_create_pool_creator":
 		act.Details = models.ActionDetailsCoffeeCreatePoolCreator{
@@ -835,7 +838,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			SourceJettonWallet:  raw.SourceSecondary,
 			DepositRecipient:    raw.Destination,
 			PoolCreatorContract: raw.DestinationSecondary,
-			ProvidedAsset:       raw.CoffeeCreatePoolProvidedAsset,
+			ProvidedAsset:       raw.Asset,
 			Asset1:              raw.Asset,
 			Asset2:              raw.Asset2,
 			Amount:              raw.Amount,
@@ -1127,7 +1130,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 	case "cocoon_client_increase_stake":
 		act.Details = models.ActionDetailsCocoonClientIncreaseStake{
 			QueryId:     raw.CocoonClientIncreaseStakeQueryId,
-			NewStake:    raw.CocoonClientIncreaseStakeNewStake,
+			NewStake:    raw.Amount,
 			Source:      raw.Source,
 			Destination: raw.Destination,
 			Amount:      raw.Amount,
@@ -1135,7 +1138,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 	case "cocoon_client_withdraw":
 		act.Details = models.ActionDetailsCocoonClientWithdraw{
 			QueryId:        raw.CocoonClientWithdrawQueryId,
-			WithdrawAmount: raw.CocoonClientWithdrawWithdrawAmount,
+			WithdrawAmount: raw.Amount,
 			Source:         raw.Source,
 			Destination:    raw.Destination,
 			Amount:         raw.Amount,
@@ -1170,233 +1173,20 @@ func extraString(extra map[string]interface{}, key string) *string {
 
 func ScanRawAction(row pgx.Row) (*models.RawAction, error) {
 	var act models.RawAction
+	var payload []byte
 	err := row.Scan(&act.TraceId, &act.ActionId, &act.StartLt, &act.EndLt, &act.StartUtime, &act.EndUtime,
 		&act.TraceEndLt, &act.TraceEndUtime, &act.TraceMcSeqnoEnd,
-		&act.Source,
-		&act.SourceSecondary,
-		&act.Destination,
-		&act.DestinationSecondary,
-		&act.Asset,
-		&act.AssetSecondary,
-		&act.Asset2,
-		&act.Asset2Secondary,
-		&act.Opcode,
-		&act.TxHashes,
-		&act.Type,
-		&act.TonTransferContent,
-		&act.TonTransferEncrypted,
-		&act.Value, &act.Amount,
-		&act.JettonTransferResponseDestination,
-		&act.JettonTransferForwardAmount,
-		&act.JettonTransferQueryId,
-		&act.JettonTransferCustomPayload,
-		&act.JettonTransferForwardPayload,
-		&act.JettonTransferComment,
-		&act.JettonTransferIsEncryptedComment,
-		&act.NFTTransferIsPurchase,
-		&act.NFTTransferPrice,
-		&act.NFTTransferQueryId,
-		&act.NFTTransferCustomPayload,
-		&act.NFTTransferForwardPayload,
-		&act.NFTTransferForwardAmount,
-		&act.NFTTransferResponseDestination,
-		&act.NFTTransferNFTItemIndex,
-		&act.NFTTransferMarketplace,
-		&act.NFTTransferRealPrevOwner,
-		&act.NFTTransferMarketplaceAddress,
-		&act.NFTTransferPayoutAmount,
-		&act.NFTTransferPayoutCommentEncrypted,
-		&act.NFTTransferPayoutCommentEncoded,
-		&act.NFTTransferPayoutComment,
-		&act.NFTTransferRoyaltyAmount,
-		&act.NFTListingNFTItemIndex,
-		&act.NFTListingFullPrice,
-		&act.NFTListingMarketplaceFee,
-		&act.NFTListingRoyaltyAmount,
-		&act.NFTListingMarketplaceFeeFactor,
-		&act.NFTListingMarketplaceFeeBase,
-		&act.NFTListingRoyaltyFeeBase,
-		&act.NFTListingMaxBid,
-		&act.NFTListingMinBid,
-		&act.NFTListingMarketplaceFeeAddress,
-		&act.NFTListingRoyaltyAddress,
-		&act.NFTListingMarketplace,
-		&act.JettonSwapDex,
-		&act.JettonSwapSender,
-		&act.JettonSwapDexIncomingTransferAmount,
-		&act.JettonSwapDexIncomingTransferAsset,
-		&act.JettonSwapDexIncomingTransferSource,
-		&act.JettonSwapDexIncomingTransferDestination,
-		&act.JettonSwapDexIncomingTransferSourceJettonWallet,
-		&act.JettonSwapDexIncomingTransferDestinationJettonWallet,
-		&act.JettonSwapDexOutgoingTransferAmount,
-		&act.JettonSwapDexOutgoingTransferAsset,
-		&act.JettonSwapDexOutgoingTransferSource,
-		&act.JettonSwapDexOutgoingTransferDestination,
-		&act.JettonSwapDexOutgoingTransferSourceJettonWallet,
-		&act.JettonSwapDexOutgoingTransferDestinationJettonWallet,
-		&act.JettonSwapPeerSwaps,
-		&act.JettonSwapMinOutAmount,
-		&act.ChangeDNSRecordKey,
-		&act.ChangeDNSRecordValueSchema,
-		&act.ChangeDNSRecordValue,
-		&act.ChangeDNSRecordFlags,
-		&act.NFTMintNFTItemIndex,
-		&act.DexWithdrawLiquidityDataDex,
-		&act.DexWithdrawLiquidityDataAmount1,
-		&act.DexWithdrawLiquidityDataAmount2,
-		&act.DexWithdrawLiquidityDataAsset1Out,
-		&act.DexWithdrawLiquidityDataAsset2Out,
-		&act.DexWithdrawLiquidityDataUserJettonWallet1,
-		&act.DexWithdrawLiquidityDataUserJettonWallet2,
-		&act.DexWithdrawLiquidityDataDexJettonWallet1,
-		&act.DexWithdrawLiquidityDataDexJettonWallet2,
-		&act.DexWithdrawLiquidityDataLpTokensBurnt,
-		&act.DexWithdrawLiquidityDataBurnedNFTIndex,
-		&act.DexWithdrawLiquidityDataBurnedNFTAddress,
-		&act.DexWithdrawLiquidityDataTickLower,
-		&act.DexWithdrawLiquidityDataTickUpper,
-		&act.DexDepositLiquidityDataDex,
-		&act.DexDepositLiquidityDataAmount1,
-		&act.DexDepositLiquidityDataAmount2,
-		&act.DexDepositLiquidityDataAsset1,
-		&act.DexDepositLiquidityDataAsset2,
-		&act.DexDepositLiquidityDataUserJettonWallet1,
-		&act.DexDepositLiquidityDataUserJettonWallet2,
-		&act.DexDepositLiquidityDataLpTokensMinted,
-		&act.DexDepositLiquidityDataTargetAsset1,
-		&act.DexDepositLiquidityDataTargetAsset2,
-		&act.DexDepositLiquidityDataTargetAmount1,
-		&act.DexDepositLiquidityDataTargetAmount2,
-		&act.DexDepositLiquidityDataVaultExcesses,
-		&act.DexDepositLiquidityDataTickLower,
-		&act.DexDepositLiquidityDataTickUpper,
-		&act.DexDepositLiquidityDataNFTIndex,
-		&act.DexDepositLiquidityDataNFTAddress,
-		&act.StakingDataProvider,
-		&act.StakingDataTsNft,
-		&act.StakingDataTokensBurnt,
-		&act.StakingDataTokensMinted,
-		&act.Success,
-		&act.Finality,
-		&act.TraceExternalHash,
-		&act.TraceExternalHashNorm,
-		&act.ExtraCurrencies,
-		&act.MultisigCreateOrderQueryId,
-		&act.MultisigCreateOrderOrderSeqno,
-		&act.MultisigCreateOrderIsCreatedBySigner,
-		&act.MultisigCreateOrderIsSignedByCreator,
-		&act.MultisigCreateOrderCreatorIndex,
-		&act.MultisigCreateOrderExpirationDate,
-		&act.MultisigCreateOrderOrderBoc,
-		&act.MultisigApproveSignerIndex,
-		&act.MultisigApproveExitCode,
-		&act.MultisigExecuteQueryId,
-		&act.MultisigExecuteOrderSeqno,
-		&act.MultisigExecuteExpirationDate,
-		&act.MultisigExecuteApprovalsNum,
-		&act.MultisigExecuteSignersHash,
-		&act.MultisigExecuteOrderBoc,
-		&act.VestingSendMessageQueryId,
-		&act.VestingSendMessageMessageBoc,
-		&act.VestingAddWhitelistQueryId,
-		&act.VestingAddWhitelistAccountsAdded,
-		&act.EvaaSupplySenderJettonWallet,
-		&act.EvaaSupplyRecipientJettonWallet,
-		&act.EvaaSupplyMasterJettonWallet,
-		&act.EvaaSupplyMaster,
-		&act.EvaaSupplyAssetId,
-		&act.EvaaSupplyIsTon,
-		&act.EvaaWithdrawRecipientJettonWallet,
-		&act.EvaaWithdrawMasterJettonWallet,
-		&act.EvaaWithdrawMaster,
-		&act.EvaaWithdrawFailReason,
-		&act.EvaaWithdrawAssetId,
-		&act.EvaaLiquidateFailReason,
-		&act.EvaaLiquidateDebtAmount,
-		&act.EvaaLiquidateAssetId,
-		&act.JvaultClaimClaimedJettons,
-		&act.JvaultClaimClaimedAmounts,
-		&act.JvaultStakePeriod,
-		&act.JvaultStakeMintedStakeJettons,
-		&act.JvaultStakeStakeWallet,
-		&act.ToncoDeployPoolJetton0RouterWallet,
-		&act.ToncoDeployPoolJetton1RouterWallet,
-		&act.ToncoDeployPoolJetton0Minter,
-		&act.ToncoDeployPoolJetton1Minter,
-		&act.ToncoDeployPoolTickSpacing,
-		&act.ToncoDeployPoolInitialPriceX96,
-		&act.ToncoDeployPoolProtocolFee,
-		&act.ToncoDeployPoolLpFeeBase,
-		&act.ToncoDeployPoolLpFeeCurrent,
-		&act.ToncoDeployPoolPoolActive,
-		&act.CoffeeCreatePoolAmount1,
-		&act.CoffeeCreatePoolAmount2,
-		&act.CoffeeCreatePoolInitiator1,
-		&act.CoffeeCreatePoolInitiator2,
-		&act.CoffeeCreatePoolProvidedAsset,
-		&act.CoffeeCreatePoolLpTokensMinted,
-		&act.CoffeeCreatePoolPoolCreatorContract,
-		&act.CoffeeStakingDepositMintedItemAddress,
-		&act.CoffeeStakingDepositMintedItemIndex,
-		&act.CoffeeStakingWithdrawNftAddress,
-		&act.CoffeeStakingWithdrawNftIndex,
-		&act.CoffeeStakingWithdrawPoints,
-		&act.LayerzeroSendSendRequestId,
-		&act.LayerzeroSendMsglibManager,
-		&act.LayerzeroSendMsglib,
-		&act.LayerzeroSendUln,
-		&act.LayerzeroSendNativeFee,
-		&act.LayerzeroSendZroFee,
-		&act.LayerzeroSendEndpoint,
-		&act.LayerzeroSendChannel,
-		&act.LayerzeroPacketSrcOapp,
-		&act.LayerzeroPacketDstOapp,
-		&act.LayerzeroPacketSrcEid,
-		&act.LayerzeroPacketDstEid,
-		&act.LayerzeroPacketNonce,
-		&act.LayerzeroPacketGuid,
-		&act.LayerzeroPacketMessage,
-		&act.LayerzeroDvnVerifyNonce,
-		&act.LayerzeroDvnVerifyStatus,
-		&act.LayerzeroDvnVerifyDvn,
-		&act.LayerzeroDvnVerifyProxy,
-		&act.LayerzeroDvnVerifyUln,
-		&act.LayerzeroDvnVerifyUlnConnection,
-		&act.CocoonWorkerPayoutPayoutType,
-		&act.CocoonWorkerPayoutQueryId,
-		&act.CocoonWorkerPayoutNewTokens,
-		&act.CocoonWorkerPayoutWorkerState,
-		&act.CocoonWorkerPayoutWorkerTokens,
-		&act.CocoonProxyPayoutQueryId,
-		&act.CocoonProxyChargeQueryId,
-		&act.CocoonProxyChargeNewTokensUsed,
-		&act.CocoonProxyChargeExpectedAddress,
-		&act.CocoonClientTopUpQueryId,
-		&act.CocoonRegisterProxyQueryId,
-		&act.CocoonUnregisterProxyQueryId,
-		&act.CocoonUnregisterProxySeqno,
-		&act.CocoonClientRegisterQueryId,
-		&act.CocoonClientRegisterNonce,
-		&act.CocoonClientChangeSecretHashQueryId,
-		&act.CocoonClientChangeSecretHashNewSecretHash,
-		&act.CocoonClientRequestRefundQueryId,
-		&act.CocoonClientRequestRefundViaWallet,
-		&act.CocoonGrantRefundQueryId,
-		&act.CocoonGrantRefundNewTokensUsed,
-		&act.CocoonGrantRefundExpectedAddress,
-		&act.CocoonClientIncreaseStakeQueryId,
-		&act.CocoonClientIncreaseStakeNewStake,
-		&act.CocoonClientWithdrawQueryId,
-		&act.CocoonClientWithdrawWithdrawAmount,
-
-		&act.Extra,
-		&act.AncestorType,
-		&act.Accounts,
+		&act.Source, &act.SourceSecondary, &act.Destination, &act.DestinationSecondary,
+		&act.Asset, &act.AssetSecondary, &act.Asset2, &act.Asset2Secondary,
+		&act.Opcode, &act.TxHashes, &act.Type, &payload, &act.Value, &act.Amount,
+		&act.Success, &act.Finality, &act.TraceExternalHash, &act.TraceExternalHashNorm,
+		&act.ExtraCurrencies, &act.AncestorType, &act.Accounts,
 	)
-
 	if err != nil {
 		return nil, err
+	}
+	if err := DecodeActionPayload(payload, &act); err != nil {
+		return nil, fmt.Errorf("trace_id=%v action_id=%v: %w", act.TraceId, act.ActionId, err)
 	}
 	return &act, nil
 }

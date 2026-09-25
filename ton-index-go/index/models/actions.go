@@ -1,7 +1,7 @@
 package models
 
 import (
-	"fmt"
+	"math/big"
 )
 
 type RawAction struct {
@@ -135,7 +135,7 @@ type RawAction struct {
 	MultisigCreateOrderExpirationDate                    *int64
 	MultisigCreateOrderOrderBoc                          *string
 	MultisigApproveSignerIndex                           *int64
-	MultisigApproveExitCode                              *int32
+	MultisigApproveExitCode                              *uint32
 	MultisigExecuteQueryId                               *string
 	MultisigExecuteOrderSeqno                            *string
 	MultisigExecuteExpirationDate                        *int64
@@ -146,7 +146,7 @@ type RawAction struct {
 	VestingSendMessageMessageBoc                         *string
 	VestingAddWhitelistQueryId                           *string
 	VestingAddWhitelistAccountsAdded                     []AccountAddress
-	EvaaSupplySenderJettonWallet                         *AccountAddress
+	EvaaSupplySenderJettonWallet                         *AccountAddress // no payload key; kept for the frozen RawAction JSON
 	EvaaSupplyRecipientJettonWallet                      *AccountAddress
 	EvaaSupplyMasterJettonWallet                         *AccountAddress
 	EvaaSupplyMaster                                     *AccountAddress
@@ -160,8 +160,8 @@ type RawAction struct {
 	EvaaLiquidateFailReason                              *string
 	EvaaLiquidateDebtAmount                              *string
 	EvaaLiquidateAssetId                                 *string
-	JvaultClaimClaimedJettons                            []AccountAddress
-	JvaultClaimClaimedAmounts                            []string
+	JvaultClaimClaimedJettons                            []RawActionJvaultClaimReward // carries claimed_rewards
+	JvaultClaimClaimedAmounts                            []string                     // no payload key; kept for the frozen RawAction JSON
 	JvaultStakePeriod                                    *int64
 	JvaultStakeMintedStakeJettons                        *string
 	JvaultStakeStakeWallet                               *AccountAddress
@@ -181,7 +181,7 @@ type RawAction struct {
 	CoffeeCreatePoolInitiator2                           *AccountAddress
 	CoffeeCreatePoolProvidedAsset                        *AccountAddress
 	CoffeeCreatePoolLpTokensMinted                       *string
-	CoffeeCreatePoolPoolCreatorContract                  *AccountAddress
+	CoffeeCreatePoolPoolCreatorContract                  *AccountAddress // no payload key; kept for the frozen RawAction JSON
 	CoffeeStakingDepositMintedItemAddress                *AccountAddress
 	CoffeeStakingDepositMintedItemIndex                  *string
 	CoffeeStakingWithdrawNftAddress                      *AccountAddress
@@ -191,18 +191,18 @@ type RawAction struct {
 	LayerzeroSendMsglibManager                           *string
 	LayerzeroSendMsglib                                  *string
 	LayerzeroSendUln                                     *AccountAddress
-	LayerzeroSendNativeFee                               *uint64
-	LayerzeroSendZroFee                                  *uint64
+	LayerzeroSendNativeFee                               *big.Int
+	LayerzeroSendZroFee                                  *big.Int
 	LayerzeroSendEndpoint                                *AccountAddress
 	LayerzeroSendChannel                                 *AccountAddress
 	LayerzeroPacketSrcOapp                               *string
 	LayerzeroPacketDstOapp                               *string
-	LayerzeroPacketSrcEid                                *int32
-	LayerzeroPacketDstEid                                *int32
-	LayerzeroPacketNonce                                 *int64
+	LayerzeroPacketSrcEid                                *uint32
+	LayerzeroPacketDstEid                                *uint32
+	LayerzeroPacketNonce                                 *uint64
 	LayerzeroPacketGuid                                  *string
 	LayerzeroPacketMessage                               *string
-	LayerzeroDvnVerifyNonce                              *int64
+	LayerzeroDvnVerifyNonce                              *uint64
 	LayerzeroDvnVerifyStatus                             *string
 	LayerzeroDvnVerifyDvn                                *AccountAddress
 	LayerzeroDvnVerifyProxy                              *AccountAddress
@@ -233,9 +233,9 @@ type RawAction struct {
 	CocoonGrantRefundNewTokensUsed            *string
 	CocoonGrantRefundExpectedAddress          *string
 	CocoonClientIncreaseStakeQueryId          *string
-	CocoonClientIncreaseStakeNewStake         *string
+	CocoonClientIncreaseStakeNewStake         *string // no payload key; kept for the frozen RawAction JSON
 	CocoonClientWithdrawQueryId               *string
-	CocoonClientWithdrawWithdrawAmount        *string
+	CocoonClientWithdrawWithdrawAmount        *string // no payload key; kept for the frozen RawAction JSON
 
 	Extra map[string]interface{}
 
@@ -250,43 +250,16 @@ type RawActionJettonSwapPeerSwap struct {
 	AmountOut *string
 }
 
-func (p *RawActionJettonSwapPeerSwap) ScanNull() error {
-	return fmt.Errorf("cannot scan NULL into RawActionJettonSwapPeerSwap")
-}
-
-func (p *RawActionJettonSwapPeerSwap) ScanIndex(i int) any {
-	switch i {
-	case 0:
-		return &p.AssetIn
-	case 1:
-		return &p.AmountIn
-	case 2:
-		return &p.AssetOut
-	case 3:
-		return &p.AmountOut
-	default:
-		panic("invalid index")
-	}
-}
-
 type RawActionVaultExcessEntry struct {
 	Asset  *AccountAddress
 	Amount *string
 }
 
-func (p *RawActionVaultExcessEntry) ScanNull() error {
-	return fmt.Errorf("cannot scan NULL into RawActionVaultExcessEntry")
-}
-
-func (p *RawActionVaultExcessEntry) ScanIndex(i int) any {
-	switch i {
-	case 0:
-		return &p.Asset
-	case 1:
-		return &p.Amount
-	default:
-		panic("invalid index")
-	}
+// RawActionJvaultClaimReward is one entry of the jvault claim payload's
+// claimed_rewards list; the length-mismatch rule lives in the payload writer.
+type RawActionJvaultClaimReward struct {
+	Asset  AccountAddress
+	Amount string
 }
 
 type ActionDetailsCallContract struct {
@@ -412,8 +385,8 @@ type ActionDetailsLayerZeroSendDetails struct {
 	MsglibManager *string         `json:"msglib_manager"`
 	Msglib        *string         `json:"msglib"`
 	Uln           *AccountAddress `json:"uln"`
-	NativeFee     *uint64         `json:"native_fee"`
-	ZroFee        *uint64         `json:"zro_fee"`
+	NativeFee     *big.Int        `json:"native_fee" swaggertype:"integer"`
+	ZroFee        *big.Int        `json:"zro_fee" swaggertype:"integer"`
 	Endpoint      *AccountAddress `json:"endpoint"`
 	Channel       *AccountAddress `json:"channel"`
 }
@@ -421,9 +394,9 @@ type ActionDetailsLayerZeroSendDetails struct {
 type ActionDetailsLayerZeroPacket struct {
 	SrcOapp *string `json:"src_oapp"`
 	DstOapp *string `json:"dst_oapp"`
-	SrcEid  *int32  `json:"src_eid"`
-	DstEid  *int32  `json:"dst_eid"`
-	Nonce   *int64  `json:"nonce"`
+	SrcEid  *uint32 `json:"src_eid"`
+	DstEid  *uint32 `json:"dst_eid"`
+	Nonce   *uint64 `json:"nonce"`
 	Guid    *string `json:"guid"`
 	Message *string `json:"message"`
 }
@@ -453,7 +426,7 @@ type ActionDetailsLayerZeroCommitPacket struct {
 
 type ActionDetailsLayerZeroDvnVerify struct {
 	Initiator     *AccountAddress `json:"initiator"`
-	Nonce         *int64          `json:"nonce"`
+	Nonce         *uint64         `json:"nonce"`
 	Status        *string         `json:"status"`
 	Dvn           *AccountAddress `json:"dvn"`
 	Proxy         *AccountAddress `json:"proxy"`
@@ -756,7 +729,7 @@ type ActionDetailsMultisigCreateOrder struct {
 
 type ActionDetailsMultisigApprove struct {
 	SignerIndex *int64          `json:"signer_index"`
-	ExitCode    *int32          `json:"exit_code"`
+	ExitCode    *uint32         `json:"exit_code"`
 	Source      *AccountAddress `json:"source"`
 	Destination *AccountAddress `json:"destination"`
 }
