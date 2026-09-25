@@ -93,8 +93,9 @@ std::string render_action(const Action &a, const std::string &matcher, const std
                                         "asset2", "asset2_secondary", "amount", "value"};
   std::map<std::string, const Value *> fields;
 #define MCH_COLLECT_FIELD(name) fields.emplace(#name, &a.name);
-  MCH_ACTION_VALUE_FIELDS(MCH_COLLECT_FIELD)
+  MCH_ACTION_COLUMNS(MCH_COLLECT_FIELD)
 #undef MCH_COLLECT_FIELD
+  fields.emplace("data", &a.data);
   for (const char *k : kAlways) {
     render_yaml_field(k, *fields.at(k), 4, out);
     fields.erase(k);

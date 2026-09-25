@@ -135,8 +135,9 @@ std::size_t scrub_arena_refs(Action &a) {
   std::size_t n = 0;
   for (Value *v : {
 #define MCH_ACTION_REF(name) &a.name,
-           MCH_ACTION_VALUE_FIELDS(MCH_ACTION_REF)
+           MCH_ACTION_COLUMNS(MCH_ACTION_REF)
 #undef MCH_ACTION_REF
+           &a.data,
        }) {
     n += scrub_value(*v);
   }

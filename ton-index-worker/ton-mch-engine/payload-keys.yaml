@@ -1,5 +1,4 @@
 # Reuse an existing key first; a new key needs written justification, then append the next id by hand.
-# Retire by setting retired: true; never delete or reuse an id or name.
 version: 1
 keys:
 - id: 1
@@ -10,52 +9,42 @@ keys:
 - id: 2
   name: amount
   type: uint
-  shape: integer_string
   uses: nested legs
 - id: 3
   name: amount_in
   type: uint
-  shape: integer_string
   uses: jetton swap
 - id: 4
   name: amount_out
   type: uint
-  shape: integer_string
   uses: jetton swap
 - id: 5
   name: approvals_num
   type: uint
-  shape: integer_string
   uses: multisig execute
 - id: 6
   name: asset
   type: address
-  shape: ton_address
   uses: nested transfers and records
 - id: 7
   name: asset_id
   type: hash_0x
-  shape: string
   uses: EVAA
 - id: 8
   name: asset_in
   type: address
-  shape: ton_address
   uses: jetton swap
 - id: 9
   name: asset_out
   type: address
-  shape: ton_address
   uses: jetton swap
 - id: 10
   name: btc_txid
   type: hash_hex
-  shape: string
   uses: tgBTC
 - id: 11
   name: channel
   type: address
-  shape: ton_address
   uses: LayerZero
 - id: 12
   name: claimed_rewards
@@ -65,32 +54,26 @@ keys:
 - id: 13
   name: comment
   type: string
-  shape: string
   uses: transfers, auction outbid
 - id: 14
   name: comment_encrypted
   type: bool
-  shape: boolean
   uses: transfers
 - id: 15
   name: custom_payload
   type: boc
-  shape: bytes_base64
   uses: NFT and jetton transfers
 - id: 16
   name: debt_amount
   type: uint
-  shape: integer_string
   uses: EVAA
 - id: 17
   name: destination
   type: address
-  shape: ton_address
   uses: nested swap transfers
 - id: 18
   name: destination_jetton_wallet
   type: address
-  shape: ton_address
   uses: nested swap transfers
 - id: 19
   name: dex_incoming_transfer
@@ -100,7 +83,6 @@ keys:
 - id: 20
   name: dex_jetton_wallet
   type: address
-  shape: ton_address
   uses: DEX legs
 - id: 21
   name: dex_outgoing_transfer
@@ -110,27 +92,22 @@ keys:
 - id: 22
   name: dex_wallet
   type: address
-  shape: ton_address
   uses: DEX legs
 - id: 23
   name: dst_eid
   type: uint
-  shape: integer_string
   uses: LayerZero
 - id: 24
   name: dst_oapp
   type: string
-  shape: string
   uses: LayerZero
 - id: 25
   name: dvn
   type: address
-  shape: ton_address
   uses: LayerZero
 - id: 26
   name: endpoint
   type: address
-  shape: ton_address
   uses: LayerZero
 - id: 27
   name: exit_code
@@ -140,7 +117,6 @@ keys:
 - id: 28
   name: expected_address
   type: string
-  shape: string
   uses: Cocoon
 - id: 29
   name: expiration_date
@@ -150,22 +126,18 @@ keys:
 - id: 30
   name: fail_reason
   type: string
-  shape: string
   uses: EVAA
 - id: 31
   name: flags
   type: uint
-  shape: integer_string
   uses: DNS
 - id: 32
   name: forward_amount
   type: uint
-  shape: integer_string
   uses: NFT and jetton transfers
 - id: 33
   name: forward_payload
   type: boc
-  shape: bytes_base64
   uses: NFT and jetton transfers
 - id: 34
   name: full_price
@@ -175,47 +147,38 @@ keys:
 - id: 35
   name: guid
   type: string
-  shape: string
   uses: LayerZero
 - id: 36
   name: initial_price_x96
   type: uint
-  shape: integer_string
   uses: Tonco
 - id: 37
   name: initiator
   type: address
-  shape: ton_address
   uses: Coffee legs
 - id: 38
   name: is_created_by_signer
   type: bool
-  shape: boolean
   uses: multisig
 - id: 39
   name: is_purchase
   type: bool
-  shape: boolean
   uses: NFT transfer and purchase actions
 - id: 40
   name: is_refund
   type: bool
-  shape: boolean
   uses: DEX claims and withdrawals
 - id: 41
   name: is_signed_by_creator
   type: bool
-  shape: boolean
   uses: multisig
 - id: 42
   name: is_ton
   type: bool
-  shape: boolean
   uses: EVAA
 - id: 43
   name: key
   type: hash_hex
-  shape: string
   uses: DNS
 - id: 44
   name: legs
@@ -225,17 +188,14 @@ keys:
 - id: 45
   name: lp_fee_base
   type: uint
-  shape: integer_string
   uses: Tonco
 - id: 46
   name: lp_fee_current
   type: uint
-  shape: integer_string
   uses: Tonco
 - id: 47
   name: marketplace_address
   type: address
-  shape: ton_address
   uses: NFT markets
 - id: 48
   name: marketplace_fee
@@ -245,17 +205,14 @@ keys:
 - id: 49
   name: marketplace_fee_address
   type: address
-  shape: ton_address
   uses: NFT markets
 - id: 50
   name: master
   type: address
-  shape: ton_address
   uses: EVAA
 - id: 51
   name: master_jetton_wallet
   type: address
-  shape: ton_address
   uses: EVAA
 - id: 52
   name: max_bid
@@ -265,12 +222,10 @@ keys:
 - id: 53
   name: message
   type: string
-  shape: string
   uses: LayerZero
 - id: 54
   name: message_boc
   type: boc
-  shape: bytes_base64
   uses: vesting
 - id: 55
   name: min_bid
@@ -280,7 +235,6 @@ keys:
 - id: 56
   name: min_out_amount
   type: uint
-  shape: integer_string
   uses: jetton swap
 - id: 57
   name: mp_fee_base
@@ -295,42 +249,34 @@ keys:
 - id: 59
   name: msglib
   type: string
-  shape: string
   uses: LayerZero
 - id: 60
   name: msglib_connection
   type: address
-  shape: ton_address
   uses: LayerZero
 - id: 61
   name: msglib_manager
   type: string
-  shape: string
   uses: LayerZero
 - id: 62
   name: native_fee
   type: uint
-  shape: integer_string
   uses: LayerZero
 - id: 63
   name: new_secret_hash
   type: hash_hex
-  shape: string
   uses: Cocoon
 - id: 64
   name: new_tokens
   type: uint
-  shape: integer_string
   uses: Cocoon
 - id: 65
   name: new_tokens_used
   type: uint
-  shape: integer_string
   uses: Cocoon
 - id: 66
   name: nft_address
   type: address
-  shape: ton_address
   uses: NFT, DEX, staking
 - id: 67
   name: nft_index
@@ -340,47 +286,38 @@ keys:
 - id: 68
   name: nonce
   type: uint
-  shape: integer_string
   uses: LayerZero and Cocoon
 - id: 69
   name: order_boc
   type: boc
-  shape: bytes_base64
   uses: multisig
 - id: 70
   name: order_seqno
   type: uint
-  shape: integer_string
   uses: multisig
 - id: 71
   name: parent_gasless_action
   type: hash
-  shape: hash_base64
   uses: all action types when present
 - id: 72
   name: payout_amount
   type: uint
-  shape: integer_string
   uses: NFT
 - id: 73
   name: payout_comment
   type: string
-  shape: string
   uses: NFT
 - id: 74
   name: payout_comment_encoded
   type: bool
-  shape: boolean
   uses: NFT
 - id: 75
   name: payout_comment_encrypted
   type: bool
-  shape: boolean
   uses: NFT
 - id: 76
   name: payout_type
   type: string
-  shape: string
   uses: Cocoon
 - id: 77
   name: peer_swaps
@@ -390,27 +327,22 @@ keys:
 - id: 78
   name: period
   type: uint
-  shape: integer_string
   uses: JVault
 - id: 79
   name: points
   type: uint
-  shape: integer_string
   uses: Coffee
 - id: 80
   name: pool_active
   type: bool
-  shape: boolean
   uses: Tonco
 - id: 81
   name: pool_first
   type: address
-  shape: ton_address
   uses: Coffee
 - id: 82
   name: pool_second
   type: address
-  shape: ton_address
   uses: Coffee
 - id: 83
   name: price
@@ -420,57 +352,46 @@ keys:
 - id: 84
   name: protocol
   type: string
-  shape: string
   uses: DEX and staking
 - id: 85
   name: protocol_fee
   type: uint
-  shape: integer_string
   uses: Tonco
 - id: 86
   name: provided_asset
   type: address
-  shape: ton_address
   uses: Coffee
 - id: 87
   name: proxy
   type: address
-  shape: ton_address
   uses: LayerZero
 - id: 88
   name: pubkey
   type: hash_hex
-  shape: string
   uses: tgBTC
 - id: 89
   name: query_id
   type: uint
-  shape: integer_string
   uses: protocol actions, DNS release
 - id: 90
   name: real_prev_owner
   type: address
-  shape: ton_address
   uses: NFT
 - id: 91
   name: recipient_jetton_wallet
   type: address
-  shape: ton_address
   uses: EVAA
 - id: 92
   name: record_value
   type: string
-  shape: string
   uses: DNS
 - id: 93
   name: response_destination
   type: address
-  shape: ton_address
   uses: NFT and jetton transfers
 - id: 94
   name: royalty_address
   type: address
-  shape: ton_address
   uses: NFT markets
 - id: 95
   name: royalty_amount
@@ -485,17 +406,14 @@ keys:
 - id: 97
   name: send_request_id
   type: uint
-  shape: integer_string
   uses: LayerZero
 - id: 98
   name: sender
   type: address
-  shape: ton_address
   uses: jetton swap
 - id: 99
   name: seqno
   type: uint
-  shape: integer_string
   uses: Cocoon
 - id: 100
   name: signer_index
@@ -505,47 +423,38 @@ keys:
 - id: 101
   name: signers_hash
   type: hash
-  shape: hash_base64
   uses: multisig
 - id: 102
   name: source
   type: address
-  shape: ton_address
   uses: nested swap transfers
 - id: 103
   name: source_jetton_wallet
   type: address
-  shape: ton_address
   uses: jetton swap
 - id: 104
   name: src_eid
   type: uint
-  shape: integer_string
   uses: LayerZero
 - id: 105
   name: src_oapp
   type: string
-  shape: string
   uses: LayerZero
 - id: 106
   name: stake_wallet
   type: address
-  shape: ton_address
   uses: JVault
 - id: 107
   name: status
   type: string
-  shape: string
   uses: LayerZero
 - id: 108
   name: target_amount
   type: uint
-  shape: integer_string
   uses: DEX legs
 - id: 109
   name: target_asset
   type: address
-  shape: ton_address
   uses: DEX legs
 - id: 110
   name: tick_lower
@@ -570,32 +479,26 @@ keys:
 - id: 114
   name: tokens_burnt
   type: uint
-  shape: integer_string
   uses: DEX and staking
 - id: 115
   name: tokens_minted
   type: uint
-  shape: integer_string
   uses: DEX and staking
 - id: 116
   name: uln
   type: address
-  shape: ton_address
   uses: LayerZero
 - id: 117
   name: uln_connection
   type: address
-  shape: ton_address
   uses: LayerZero
 - id: 118
   name: user_jetton_wallet
   type: address
-  shape: ton_address
   uses: DEX legs
 - id: 119
   name: value_schema
   type: string
-  shape: string
   uses: DNS
 - id: 120
   name: vault_excesses
@@ -605,7 +508,6 @@ keys:
 - id: 121
   name: via_wallet
   type: bool
-  shape: boolean
   uses: Cocoon
 - id: 122
   name: worker_state
@@ -615,10 +517,8 @@ keys:
 - id: 123
   name: worker_tokens
   type: uint
-  shape: integer_string
   uses: Cocoon
 - id: 124
   name: zro_fee
   type: uint
-  shape: integer_string
   uses: LayerZero

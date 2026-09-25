@@ -18,6 +18,10 @@
 
 namespace mch {
 
+bool omitted(const Value &value) {
+  return value.t == VType::Null || (value.t == VType::Amount && value.num.is_null());
+}
+
 namespace {
 
 // Account/Asset/none -> canonical address STRING (Str) or Null.
@@ -89,18 +93,35 @@ std::int64_t node_utime(const EventNode *n) {
   }
   return n->tx != nullptr ? n->tx->now : 0;
 }
-bool payload_omitted(const Value &v) {
-  return v.t == VType::Null || (v.t == VType::Amount && v.num.is_null());
-}
-
 Value mkdict(Value::Fields f) {
-  std::erase_if(f, [](const auto &field) { return payload_omitted(field.second); });
+  std::erase_if(f, [](const auto &field) { return omitted(field.second); });
   return Value::make_dict(std::move(f));
 }
 
 void append_fields(Value::Fields &out, const Value &value) {
   if (!value.fields) return;
   out.insert(out.end(), value.fields->begin(), value.fields->end());
+}
+
+void append_nft_forward_payout(Value::Fields &out, const Value &d) {
+  out.emplace_back("forward_amount", av_amount(dg(d, "forward_amount")));
+  out.emplace_back("custom_payload", dg(d, "custom_payload"));
+  out.emplace_back("forward_payload", dg(d, "forward_payload"));
+  out.emplace_back("response_destination", av_addr(dg(d, "response_destination")));
+  out.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  out.emplace_back("real_prev_owner", av_addr(dg(d, "real_prev_owner")));
+  out.emplace_back("payout_amount", av_amount(dg(d, "payout_amount")));
+  out.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
+  out.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
+  out.emplace_back("payout_comment", dg(d, "payout_comment"));
+}
+
+void fill_extra_currencies(const Value &d, Action &a) {
+  const Value currencies = dg(d, "extra_currencies");
+  if (currencies.t != VType::Dict) return;
+  for (const auto &[id, amount] : *currencies.fields) {
+    a.value_extra_currencies.emplace(static_cast<std::uint32_t>(std::stoul(id)), amount.str);
+  }
 }
 
 void append_leg(std::vector<Value> &legs, Value::Fields fields) {
@@ -231,18 +252,7 @@ void fill_nft_transfer(const Value &d, Action &a) {
   f.emplace_back("is_purchase", dg(d, "is_purchase"));
   f.emplace_back("price", is_purchase ? av_amount(dg(d, "price")) : Value::null());
   f.emplace_back("nft_index", dg(nft, "index"));
-  Value fwd = dg(d, "forward_amount");
-  f.emplace_back("forward_amount", av_amount(fwd));
-  f.emplace_back("custom_payload", dg(d, "custom_payload"));
-  f.emplace_back("forward_payload", dg(d, "forward_payload"));
-  Value resp = dg(d, "response_destination");
-  f.emplace_back("response_destination", av_addr(resp));
-  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
-  f.emplace_back("real_prev_owner", av_addr(dg(d, "real_prev_owner")));
-  f.emplace_back("payout_amount", av_amount(dg(d, "payout_amount")));
-  f.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
-  f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
-  f.emplace_back("payout_comment", dg(d, "payout_comment"));
+  append_nft_forward_payout(f, d);
   f.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
   f.emplace_back("marketplace_fee_address", av_addr(dg(d, "payout_address")));
   f.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
@@ -736,7 +746,10 @@ void fill_vesting_add_whitelist(const Value &d, Action &a) {
   std::vector<Value> added;
   Value acc = dg(d, "accounts_added");
   if (acc.items) {
-    for (const Value &x : *acc.items) added.push_back(av_addr(x));
+    for (const Value &x : *acc.items) {
+      Value address = av_addr(x);
+      if (!address.is_null()) added.push_back(std::move(address));
+    }
   }
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
@@ -1265,16 +1278,7 @@ void fill_nft_purchase(const Value &d, Action &a) {
   if (a.type != "dns_purchase") f.emplace_back("is_purchase", Value::make_bool(true));
   f.emplace_back("price", av_amount(dg(d, "price")));
   f.emplace_back("nft_index", dg(d, "nft_index"));
-  f.emplace_back("forward_amount", av_amount(dg(d, "forward_amount")));
-  f.emplace_back("custom_payload", dg(d, "custom_payload"));
-  f.emplace_back("forward_payload", dg(d, "forward_payload"));
-  f.emplace_back("response_destination", av_addr(dg(d, "response_destination")));
-  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
-  f.emplace_back("real_prev_owner", av_addr(dg(d, "real_prev_owner")));
-  f.emplace_back("payout_amount", av_amount(dg(d, "payout_amount")));
-  f.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
-  f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
-  f.emplace_back("payout_comment", dg(d, "payout_comment"));
+  append_nft_forward_payout(f, d);
   a.data = mkdict(std::move(f));
 }
 
@@ -1400,24 +1404,14 @@ void fill_call_contract(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "value"));
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
-  const Value currencies = dg(d, "extra_currencies");
-  if (currencies.t == VType::Dict) {
-    for (const auto &[id, amount] : *currencies.fields) {
-      a.value_extra_currencies.emplace(static_cast<std::uint32_t>(std::stoul(id)), amount.str);
-    }
-  }
+  fill_extra_currencies(d, a);
 }
 
 void fill_ton_transfer(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "value"));
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
-  const Value currencies = dg(d, "extra_currencies");
-  if (currencies.t == VType::Dict) {
-    for (const auto &[id, amount] : *currencies.fields) {
-      a.value_extra_currencies.emplace(static_cast<std::uint32_t>(std::stoul(id)), amount.str);
-    }
-  }
+  fill_extra_currencies(d, a);
   Value::Fields f;
   f.emplace_back("comment", dg(d, "comment"));  // leaf_comment_info already strips U+0000
   f.emplace_back("comment_encrypted", dg(d, "encrypted"));

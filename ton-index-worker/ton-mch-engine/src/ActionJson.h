@@ -20,8 +20,6 @@ struct ActionRowContext {
 };
 
 ActionRowContext row_context(const schema::Trace &trace);
-bool omitted(const Value &value);
-std::string action_row_json(const Action &a, const ActionRowContext &ctx);
 std::string action_legacy_details_json(const Action &action);
 std::string action_account_rows_json(const Action &a, const ActionRowContext &ctx);
 std::string action_rows_json(const std::vector<Action> &rows, const ActionRowContext &ctx);

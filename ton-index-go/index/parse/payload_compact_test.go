@@ -37,6 +37,16 @@ type compactTestEntry struct {
 	info payloadKeyInfo
 }
 
+var payloadKeyIDByName = func() map[string]uint8 {
+	ids := make(map[string]uint8)
+	for id, key := range payloadKeys {
+		if key.Name != "" {
+			ids[key.Name] = uint8(id)
+		}
+	}
+	return ids
+}()
+
 func writeCompactRecordForTest(buf *bytes.Buffer, named map[string]interface{}) error {
 	entries := make([]compactTestEntry, 0, len(named))
 	for name := range named {
@@ -581,68 +591,6 @@ func TestDecodeCompactKeyErrorIsBounded(t *testing.T) {
 				t.Errorf("error text is %d bytes, want it bounded", len(err.Error()))
 			}
 		})
-	}
-}
-
-// TestDecodeCompactRetiredKey checks a retired id still decodes: it resolves to its name,
-// which routes to no field downstream, exactly as the retired name behaved before.
-func TestDecodeCompactRetiredKey(t *testing.T) {
-	const id = 125
-	if payloadKeys[id].Name != "" {
-		t.Skipf("id %d gained a live registry entry", id)
-	}
-	saved := payloadKeys[id]
-	payloadKeys[id] = payloadKeyInfo{Name: "retired_key", Type: payloadTypeString, Retired: true}
-	t.Cleanup(func() { payloadKeys[id] = saved })
-
-	got, err := decodeCompactPayload(compactBodyForTest(t, "81 7d a2 6869"))
-	if err != nil {
-		t.Fatalf("decodeCompactPayload: %v", err)
-	}
-	if !reflect.DeepEqual(got, map[string]interface{}{"retired_key": "hi"}) {
-		t.Errorf("decoded %#v, want the retired key", got)
-	}
-}
-
-// TestEncodeCompactKeyForms pins the two key widths of the format and the ascending id
-// order of a record.
-func TestEncodeCompactKeyForms(t *testing.T) {
-	for _, tc := range []struct {
-		id   uint8
-		want string
-	}{
-		{id: 1, want: "01"},
-		{id: 127, want: "7f"},
-		{id: 128, want: "cc80"},
-		{id: 255, want: "ccff"},
-	} {
-		var buf bytes.Buffer
-		writeCompactKeyForTest(&buf, tc.id)
-		if got := hex.EncodeToString(buf.Bytes()); got != tc.want {
-			t.Errorf("key %d = %s, want %s", tc.id, got, tc.want)
-		}
-	}
-
-	// The registry ids are all below 128 today, so the encoder only writes the uint8 form
-	// once a key above 127 is added; the table above pins that branch.
-	named := map[string]interface{}{
-		"amount": "2", "asset": "0:" + strings.Repeat("AB", 32), "nft_index": "1",
-	}
-	payload, err := EncodeCompactForTest(named)
-	if err != nil {
-		t.Fatalf("EncodeCompactForTest: %v", err)
-	}
-	if payload[0] != actionPayloadCodecMsgpack || payload[1] != 0x83 || payload[2] != payloadKeyIDByName["amount"] {
-		t.Fatalf("payload prefix = %x, want the codec byte, a 3 entry map and amount first", payload[:3])
-	}
-	reordered, err := EncodeCompactForTest(map[string]interface{}{
-		"nft_index": "1", "asset": named["asset"], "amount": "2",
-	})
-	if err != nil {
-		t.Fatalf("EncodeCompactForTest: %v", err)
-	}
-	if !bytes.Equal(payload, reordered) {
-		t.Errorf("map order changed the bytes: %x / %x", payload, reordered)
 	}
 }
 

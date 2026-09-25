@@ -127,16 +127,17 @@ td::JsonValue parse(std::string &json, const std::string &where) {
 }
 
 void check_action(const Action &action, const ActionRowContext &ctx, const Ddl &ddl) {
-  auto json = action_row_json(action, ctx);
-  auto row = parse(json, action.action_id);
-  require(row.type() == JsonType::Object, action.action_id, "expected actions row");
+  auto rows_json = action_rows_json({action}, ctx);
+  auto rows = parse(rows_json, action.action_id);
+  require(rows.type() == JsonType::Array && rows.get_array().size() == 1,
+          action.action_id, "expected one actions row");
+  const auto &row = rows.get_array().front();
   for (const auto *name : {"trace_id", "action_id", "start_lt", "end_lt", "start_utime", "end_utime",
                            "mc_seqno_end", "trace_end_lt", "trace_external_hash", "trace_external_hash_norm",
                            "trace_end_utime", "trace_mc_seqno_end", "type", "success", "tx_hashes",
-                           "parent_action_id", "ancestor_type", "value_extra_currencies", "data"}) {
+                           "parent_action_id", "ancestor_type", "value_extra_currencies", "payload"}) {
     require(jfield(row, td::Slice(name)) != nullptr, action.action_id + "." + name, "missing row field");
   }
-  require(jfield(row, "data")->type() == JsonType::Object, action.action_id + ".data", "expected object");
   const auto *currencies = jfield(row, "value_extra_currencies");
   require(currencies->type() == JsonType::Object, action.action_id + ".value_extra_currencies", "expected object");
   require(currencies->get_object().field_count() == action.value_extra_currencies.size(),
@@ -238,21 +239,16 @@ int run_actions_json_test() {
     action.accounts = {"0:" + std::string(64, 'a'), "0:" + std::string(64, 'A')};
     check_action(action, context, ddl);
     action.data = Value::make_dict({{"comment", Value::make_str(std::string("a\0b", 3))}});
-    auto comment_json = action_row_json(action, context);
+    auto comment_json = action_legacy_details_json(action);
     require(comment_json.find("\\u0000") == std::string::npos,
             action.action_id + ".data.comment", "JSON contains escaped NUL");
     auto comment_row = parse(comment_json, action.action_id);
-    const auto *data = jfield(comment_row, "data");
-    require(data != nullptr && jstr(*data, "comment") == "ab",
+    require(jstr(comment_row, "comment") == "ab",
             action.action_id + ".data.comment", "NUL must be stripped");
     action.data = Value::make_dict({{"parent_gasless_action", Value::make_str(context.trace_id)}});
-    auto extra_json = action_row_json(action, context);
+    auto extra_json = action_legacy_details_json(action);
     auto extra_row = parse(extra_json, action.action_id);
-    const auto *data_row = jfield(extra_row, "data");
-    const auto &fields = extra_row.get_object().field_values_;
-    require(data_row != nullptr && data_row->type() == JsonType::Object &&
-                jstr(*data_row, "parent_gasless_action") == context.trace_id &&
-                std::count_if(fields.begin(), fields.end(), [](const auto &field) { return field.first == "data"; }) == 1,
+    require(jstr(extra_row, "parent_gasless_action") == context.trace_id,
             action.action_id + ".data", "populated data must round-trip exactly once");
     std::printf("PASS actions_json: %zu fixtures, %zu actions, extra currencies\n",
                 fixtures->get_object().field_count(), row_count);

@@ -494,9 +494,9 @@ The action payload stores protocol-specific data as one flat map.
 It has no per-protocol composite columns or group wrappers. Shared fields such as
 `source`, `destination`, `asset`, `amount` and `opcode` remain ordinary action fields;
 all other non-null action fields live directly under `data`.
-In encoded payloads, null fields and list elements are omitted recursively, except
-`legs` retains null placeholders before filled legs, trims trailing placeholders,
-and omits the key when all legs are empty.
+In encoded payloads, null map fields are omitted recursively and lists retain null
+elements. `legs` trims trailing null placeholders and omits the key when all legs
+are empty.
 
 `fill_nft_transfer` is a worked example. The spec writes names such as:
 

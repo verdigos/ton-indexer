@@ -23,7 +23,7 @@ void pack_binary(Packer &pk, std::string_view s) {
   pk.pack_bin(static_cast<std::uint32_t>(s.size()));
   pk.pack_bin_body(s.data(), static_cast<std::uint32_t>(s.size()));
 }
-bool omitted(const Value &v) {
+bool absent(const Value &v) {
   return v.t == VType::Null || v.t == VType::Block ||
          ((v.t == VType::Int || v.t == VType::Amount) && v.num.is_null()) ||
          (v.t == VType::Account && v.addr_none) ||
@@ -33,8 +33,7 @@ bool omitted(const Value &v) {
 std::string value_text(const Value &v) {
   if (v.t == VType::Int || v.t == VType::Amount) return v.num->to_dec_string();
   if (v.t == VType::Account || v.t == VType::Asset) return canonicalize_or_passthrough(v.str);
-  if (v.t == VType::Str) return v.str;
-  throw std::runtime_error("payload value is not text");
+  return v.str;
 }
 [[noreturn]] void invalid(std::string_view name, std::string_view expected, std::string_view text) {
   std::string sample(text.substr(0, 48));
@@ -42,8 +41,7 @@ std::string value_text(const Value &v) {
   throw std::runtime_error("payload key " + std::string(name) + " expects " + std::string(expected) + ": " + sample);
 }
 std::string typed_text(const Value &v, std::string_view name, std::string_view expected) {
-  if (v.t != VType::Str && v.t != VType::Int && v.t != VType::Amount &&
-      v.t != VType::Account && v.t != VType::Asset)
+  if (v.t != VType::Str && v.t != VType::Int && v.t != VType::Amount)
     invalid(name, expected, "non-text value");
   return value_text(v);
 }
@@ -62,7 +60,7 @@ std::string cell_bytes(const Value &v, std::string_view name) {
 const PayloadKeyInfo &key_info(std::string_view name) {
   auto it = std::lower_bound(payload_keys.begin(), payload_keys.end(), name,
                              [](const PayloadKeyInfo &row, std::string_view n) { return row.name < n; });
-  if (it == payload_keys.end() || it->name != name || it->retired) invalid(name, "registered key", name);
+  if (it == payload_keys.end() || it->name != name) invalid(name, "registered key", name);
   return *it;
 }
 int hex_digit(char c) {
@@ -93,7 +91,7 @@ std::string base64_bytes(std::string_view name, std::string_view text, bool hash
   return decoded.move_as_ok();
 }
 void pack_fields(Packer &pk, const Value::Fields &fields);
-void pack_plain(Packer &pk, const Value &v, bool legs = false, std::string_view context = "other") {
+void pack_plain(Packer &pk, const Value &v, std::string_view context = "other") {
   switch (v.t) {
     case VType::Null: case VType::Block: pk.pack_nil(); return;
     case VType::Bool: pk.pack(v.boolean); return;
@@ -102,11 +100,8 @@ void pack_plain(Packer &pk, const Value &v, bool legs = false, std::string_view 
     case VType::Bytes: pack_binary(pk, v.str); return;
     case VType::Cell: pack_binary(pk, cell_bytes(v, context)); return;
     case VType::List: {
-      std::uint32_t n = 0;
-      for (const auto &item : *v.items) if (!omitted(item) || (legs && item.t == VType::Null)) ++n;
-      pk.pack_array(n);
-      for (const auto &item : *v.items)
-        if (!omitted(item) || (legs && item.t == VType::Null)) pack_plain(pk, item, false, context);
+      pk.pack_array(static_cast<std::uint32_t>(v.items->size()));
+      for (const auto &item : *v.items) pack_plain(pk, item, context);
       return;
     }
     case VType::Dict: case VType::Obj: pack_fields(pk, *v.fields); return;
@@ -115,7 +110,7 @@ void pack_plain(Packer &pk, const Value &v, bool legs = false, std::string_view 
 void pack_typed(Packer &pk, const Value &v, const PayloadKeyInfo &key) {
   const auto name = key.name;
   switch (key.type) {
-    case PayloadKeyType::Other: pack_plain(pk, v, name == "legs", name); return;
+    case PayloadKeyType::Other: pack_plain(pk, v, name); return;
     case PayloadKeyType::String:
       if (v.t != VType::Str && v.t != VType::Int && v.t != VType::Amount) invalid(name, "string", "non-text value");
       pack_string(pk, value_text(v)); return;
@@ -178,7 +173,7 @@ void pack_fields(Packer &pk, const Value::Fields &fields) {
   ordered.reserve(fields.size());
   for (const auto &[name, value] : fields) {
     const auto &key = key_info(name);
-    if (!omitted(value)) ordered.emplace_back(&key, &value);
+    if (!absent(value)) ordered.emplace_back(&key, &value);
   }
   std::sort(ordered.begin(), ordered.end(), [](const auto &a, const auto &b) { return a.first->id < b.first->id; });
   for (std::size_t i = 1; i < ordered.size(); ++i)
@@ -192,7 +187,7 @@ std::string encode_action_payload(const Action &action) {
   msgpack::sbuffer buffer;
   buffer.write("\x01", 1);
   Packer pk(&buffer);
-  if ((action.data.t == VType::Dict || action.data.t == VType::Obj) && action.data.fields)
+  if (action.data.t == VType::Dict && action.data.fields)
     pack_fields(pk, *action.data.fields);
   else pk.pack_map(0);
   return std::string(buffer.data(), buffer.size());

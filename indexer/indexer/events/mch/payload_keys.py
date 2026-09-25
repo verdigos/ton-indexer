@@ -13,6 +13,9 @@ GO_OUTPUT = ROOT / 'ton-index-go/index/parse/payload_keys_gen.go'
 DOC_OUTPUT = ROOT / 'ton-index-worker/ton-mch-engine/docs/KEYS.md'
 TYPES = ('other', 'address', 'boc', 'uint', 'hash', 'hash_hex', 'hash_0x', 'string', 'bool')
 GO_TYPES = ('Other', 'Address', 'Boc', 'Uint', 'Hash', 'HashHex', 'Hash0x', 'String', 'Bool')
+SHAPES = {'address': 'ton_address', 'boc': 'bytes_base64', 'uint': 'integer_string',
+          'hash': 'hash_base64', 'hash_hex': 'string', 'hash_0x': 'string',
+          'string': 'string', 'bool': 'boolean'}
 NAME = re.compile(r'[a-z][a-z0-9_]*\Z')
 
 
@@ -25,7 +28,7 @@ def checked(path=DEFAULT_REGISTRY):
         raise ValueError('keys must be a list')
     names = set()
     for expected, row in enumerate(rows, 1):
-        if not isinstance(row, dict) or not {'id', 'name', 'type'} <= set(row) or set(row) - {'id', 'name', 'type', 'retired', 'shape', 'uses'}:
+        if not isinstance(row, dict) or not {'id', 'name', 'type'} <= set(row) or set(row) - {'id', 'name', 'type', 'shape', 'uses'}:
             raise ValueError(f'key #{expected}: invalid fields')
         ident, name, kind = row['id'], row['name'], row['type']
         if type(ident) is not int or ident != expected or ident > 255:
@@ -34,8 +37,6 @@ def checked(path=DEFAULT_REGISTRY):
             raise ValueError(f'key #{expected}: invalid or reused name {name!r}')
         if kind not in TYPES:
             raise ValueError(f'{name}: invalid type {kind!r}')
-        if 'retired' in row and row['retired'] is not True:
-            raise ValueError(f'{name}: retired must be true')
         if any(key in row and not isinstance(row[key], str) for key in ('shape', 'uses')):
             raise ValueError(f'{name}: shape and uses must be strings')
         names.add(name)
@@ -48,14 +49,10 @@ def go_text(rows):
     const_width = max(len('payloadType' + kind) for kind in GO_TYPES)
     for index, kind in enumerate(GO_TYPES):
         lines.append(f'\t{"payloadType" + kind:{const_width}} payloadKeyType = {index}')
-    lines += [')', '', 'type payloadKeyInfo struct {', '\tName    string', '\tType    payloadKeyType', '\tRetired bool', '}', '', 'var payloadKeys = [256]payloadKeyInfo{']
+    lines += [')', '', 'type payloadKeyInfo struct {', '\tName string', '\tType payloadKeyType', '}', '', 'var payloadKeys = [256]payloadKeyInfo{']
     id_width = len(str(max((row['id'] for row in rows), default=0))) + 1
     for row in rows:
-        lines.append(f'\t{str(row["id"]) + ":":{id_width}} {{Name: "{row["name"]}", Type: payloadType{GO_TYPES[TYPES.index(row["type"])]}, Retired: {str(row.get("retired", False)).lower()}}},')
-    lines += ['}', '', 'var payloadKeyIDByName = map[string]uint8{']
-    name_width = max((len(row['name']) for row in rows), default=0) + 3
-    for row in rows:
-        lines.append(f'\t{chr(34) + row["name"] + chr(34) + ":":{name_width}} {row["id"]},')
+        lines.append(f'\t{str(row["id"]) + ":":{id_width}} {{Name: "{row["name"]}", Type: payloadType{GO_TYPES[TYPES.index(row["type"])]}}},')
     return '\n'.join(lines + ['}', ''])
 
 
@@ -65,8 +62,7 @@ def doc_text(rows):
         'Codec 1 is byte `01` followed by one MessagePack map. Keys are registry ids,',
         'sorted ascending at every map level. Ids 1..127 use positive fixint; ids',
         '128..255 use uint8. The empty payload is `01 80`. Nested records use the',
-        'same ids. Arrays preserve order and positional nil entries in `legs`.',
-        'Null fields are omitted. Names in action goldens are unchanged.', '',
+        'same ids. Arrays preserve order and null elements.', '',
         'Reuse an existing key first; a new key needs written justification, then',
         'a hand edit to `payload-keys.yaml` with the next id.', '',
         '`address` is 33 binary bytes (signed workchain byte plus 32 hash bytes);',
@@ -74,19 +70,15 @@ def doc_text(rows):
         'integer up to uint64, then minimal big-endian binary. `string` and `bool`',
         'keep their MessagePack forms. `other` covers containers and pass-through',
         'scalars; keys inside maps still use ids and their declared types.', '',
-        'For classified actions, `tx_hashes` starts with the initiating transaction,',
-        'or the root-level block\'s earliest transaction by `tx->lt`, followed by the',
-        'remaining hashes sorted ascending.', '',
         '| id | Key | Type | Shape | Uses |', '|---:|---|---|---|---|',
     ]
     for row in rows:
-        name = f'`{row["name"]}`' + (' (retired)' if row.get('retired') else '')
-        lines.append(f'| {row["id"]} | {name} | {row["type"]} | {row.get("shape", "")} | {row.get("uses", "")} |')
-    lines += ['', 'Encoded payloads omit null fields and list elements recursively, except `legs`',
-              'retains null placeholders before filled legs, trims trailing placeholders, and',
-              'omits the key when all legs are empty. `parent_gasless_action` is added by',
-              'the engine when a row is produced from a gasless request.', '',
-              '`dns_release` permits both `query_id` and `nft_index` in its flat data map.', '']
+        shape = row.get('shape', SHAPES.get(row['type'], ''))
+        lines.append(f'| {row["id"]} | `{row["name"]}` | {row["type"]} | {shape} | {row.get("uses", "")} |')
+    lines += ['', 'Encoded payloads omit null map fields recursively. Lists retain null elements.',
+              '`legs` trims trailing null placeholders and omits the key when all legs are',
+              'empty. `parent_gasless_action` is added by the engine when a row is produced',
+              'from a gasless request.', '']
     return '\n'.join(lines)
 
 
@@ -95,10 +87,10 @@ def cpp_text(rows):
              '#pragma once', '#include <array>', '#include <cstdint>', '#include <string_view>', '',
              'namespace mch {', 'enum class PayloadKeyType : std::uint8_t {']
     lines += [f'  {name} = {i},' for i, name in enumerate(GO_TYPES)]
-    lines += ['};', 'struct PayloadKeyInfo { std::string_view name; std::uint8_t id; PayloadKeyType type; bool retired; };',
+    lines += ['};', 'struct PayloadKeyInfo { std::string_view name; std::uint8_t id; PayloadKeyType type; };',
               f'inline constexpr std::array<PayloadKeyInfo, {len(rows)}> payload_keys = {{{{']
     for row in sorted(rows, key=lambda row: row['name']):
-        lines.append(f'  {{"{row["name"]}", {row["id"]}, PayloadKeyType::{GO_TYPES[TYPES.index(row["type"])]}, {str(row.get("retired", False)).lower()}}},')
+        lines.append(f'  {{"{row["name"]}", {row["id"]}, PayloadKeyType::{GO_TYPES[TYPES.index(row["type"])]}}},')
     lines += ['}};', '}  // namespace mch', '']
     return '\n'.join(lines)
 
@@ -113,7 +105,6 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--registry', type=Path, default=DEFAULT_REGISTRY)
     commands = parser.add_subparsers(dest='command', required=True)
-    commands.add_parser('check')
     commands.add_parser('gen')
     cpp = commands.add_parser('cpp')
     cpp.add_argument('--out', required=True, type=Path)

@@ -1,5 +1,4 @@
-// Serializes mch::Action rows for the trace hash's `actions` field. The caller
-// runs it while the view's cell anchor remains alive.
+// Serializes mch::Action rows for the trace hash's `actions` field.
 #pragma once
 
 #include "ActionBuild.h"
@@ -13,8 +12,7 @@ namespace mch {
 
 // Counts unexpected row-column Value shapes serialized with their defined fallback encoding.
 struct RedisActionSerializeStats {
-  std::size_t cell_values{0};   // VType::Cell is base64(BOC); Action fields should be Bytes.
-  std::size_t unrenderable{0};  // null RefInt256 / null cell / BOC failure / out-of-int64 -> nil
+  std::size_t unrenderable{0};  // Unexpected shape or out-of-int64 integer encoded as nil.
 };
 
 // Returns an uncompressed msgpack array of action maps. Each map keeps the row

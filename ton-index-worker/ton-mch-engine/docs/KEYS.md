@@ -3,8 +3,7 @@
 Codec 1 is byte `01` followed by one MessagePack map. Keys are registry ids,
 sorted ascending at every map level. Ids 1..127 use positive fixint; ids
 128..255 use uint8. The empty payload is `01 80`. Nested records use the
-same ids. Arrays preserve order and positional nil entries in `legs`.
-Null fields are omitted. Names in action goldens are unchanged.
+same ids. Arrays preserve order and null elements.
 
 Reuse an existing key first; a new key needs written justification, then
 a hand edit to `payload-keys.yaml` with the next id.
@@ -14,10 +13,6 @@ a hand edit to `payload-keys.yaml` with the next id.
 integer up to uint64, then minimal big-endian binary. `string` and `bool`
 keep their MessagePack forms. `other` covers containers and pass-through
 scalars; keys inside maps still use ids and their declared types.
-
-For classified actions, `tx_hashes` starts with the initiating transaction,
-or the root-level block's earliest transaction by `tx->lt`, followed by the
-remaining hashes sorted ascending.
 
 | id | Key | Type | Shape | Uses |
 |---:|---|---|---|---|
@@ -146,9 +141,7 @@ remaining hashes sorted ascending.
 | 123 | `worker_tokens` | uint | integer_string | Cocoon |
 | 124 | `zro_fee` | uint | integer_string | LayerZero |
 
-Encoded payloads omit null fields and list elements recursively, except `legs`
-retains null placeholders before filled legs, trims trailing placeholders, and
-omits the key when all legs are empty. `parent_gasless_action` is added by
-the engine when a row is produced from a gasless request.
-
-`dns_release` permits both `query_id` and `nft_index` in its flat data map.
+Encoded payloads omit null map fields recursively. Lists retain null elements.
+`legs` trims trailing null placeholders and omits the key when all legs are
+empty. `parent_gasless_action` is added by the engine when a row is produced
+from a gasless request.

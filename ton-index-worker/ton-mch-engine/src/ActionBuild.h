@@ -11,8 +11,8 @@
 
 namespace mch {
 
-// Single source for the struct, serializer table, scrub, and renderer.
-#define MCH_ACTION_VALUE_FIELDS(X) \
+// Row columns shared by the struct and output adapters.
+#define MCH_ACTION_COLUMNS(X) \
   X(source) \
   X(source_secondary) \
   X(destination) \
@@ -23,8 +23,7 @@ namespace mch {
   X(asset2_secondary) \
   X(amount) \
   X(value) \
-  X(opcode) \
-  X(data)
+  X(opcode)
 
 struct Action {
   std::string action_id;
@@ -35,8 +34,9 @@ struct Action {
   std::vector<std::string> accounts;  // role-less action_accounts set
   std::map<std::uint32_t, std::string> value_extra_currencies;
 #define MCH_DECL(name) Value name;
-  MCH_ACTION_VALUE_FIELDS(MCH_DECL)
+  MCH_ACTION_COLUMNS(MCH_DECL)
 #undef MCH_DECL
+  Value data;
   // Empty on a top-level row; on a child row, the action_id of the block that
   // consumed it and the btypes of every ancestor up the consumption chain.
   std::string parent_action_id;
@@ -68,6 +68,8 @@ std::string calc_action_id(const Block *b);
 bool build_action(Block *b, Action &a);
 
 bool build_action(const ActionRow &row, Action &a);
+
+bool omitted(const Value &value);
 
 // Dispatched like the other fills; also driven directly by the serialize test.
 void fill_evaa_liquidate(const Value &data, Action &action);

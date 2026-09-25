@@ -24,7 +24,6 @@ def test_registry_and_generated_files():
     lambda rows: rows[1].update(name=rows[0]['name']),
     lambda rows: rows[0].update(name='Bad'),
     lambda rows: rows[0].update(type='wrong'),
-    lambda rows: rows[0].update(retired=False),
     lambda rows: rows[0].update(shape=123),
     lambda rows: rows[0].update(id=256),
 ])
@@ -37,14 +36,13 @@ def test_invalid_registry(tmp_path, change):
         pk.checked(path)
 
 
-def test_cli_check_and_gen(tmp_path, monkeypatch):
+def test_cli_gen(tmp_path, monkeypatch):
     path = tmp_path / 'payload-keys.yaml'
     path.write_text('version: 1\nkeys:\n- id: 1\n  name: first\n  type: string\n')
     monkeypatch.setattr(pk, 'GO_OUTPUT', tmp_path / 'payload_keys_gen.go')
     monkeypatch.setattr(pk, 'DOC_OUTPUT', tmp_path / 'KEYS.md')
-    pk.main(['--registry', str(path), 'check'])
     pk.main(['--registry', str(path), 'gen'])
-    assert '"first": 1' in pk.GO_OUTPUT.read_text()
+    assert '{Name: "first", Type: payloadTypeString}' in pk.GO_OUTPUT.read_text()
 
 
 def test_id_128_generation(tmp_path):
@@ -53,4 +51,4 @@ def test_id_128_generation(tmp_path):
     path.write_text(yaml.safe_dump({'version': 1, 'keys': rows}))
     assert len(pk.checked(path)['keys']) == 128
     assert '128: {Name: "key_128"' in pk.go_text(rows)
-    assert '{"key_128", 128, PayloadKeyType::Uint, false}' in pk.cpp_text(rows)
+    assert '{"key_128", 128, PayloadKeyType::Uint}' in pk.cpp_text(rows)

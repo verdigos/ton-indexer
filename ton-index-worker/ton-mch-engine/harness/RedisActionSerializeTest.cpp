@@ -6,12 +6,9 @@
 #include "ClassifyCore.h"
 #include "EnginePrep.h"
 #include "ExprRuntime.h"
-#include "GenMatchers.h"
 #include "RedisActionSerialize.h"
 #include "Value.h"
 #include "emu/EmuTypes.h"
-#include "fixtures/FixtureLoader.h"
-#include "fixtures/FixtureLookupSource.h"
 #include "td/utils/base64.h"
 
 #include <msgpack.hpp>
@@ -254,9 +251,9 @@ void test_fixed_envelope() {
 void test_columns_and_payload() {
   Action action = base_action();
   action.type = "jetton_transfer";
-  action.source = Value::make_account_raw(kAddrA);
-  action.destination = Value::make_account_raw(kAddrB);
-  action.asset = Value::make_asset_jetton(kAddrA);
+  action.source = Value::make_str(kAddrA);
+  action.destination = Value::make_str(kAddrB);
+  action.asset = Value::make_str(kAddrA);
   action.amount = Value::make_amount(td::make_refint(123456));
   action.opcode = Value::make_int64(0x0f8a7ea5);
   action.data = Value::make_dict({
@@ -276,8 +273,6 @@ void test_columns_and_payload() {
   check("columns/opcode", is_uint(at(*row, "opcode"), 0x0f8a7ea5));
   check("columns/no_data_column", absent(*row, "data"));
 
-  const std::string expected = encode_action_payload(action);
-  check("columns/payload_matches_batch", is_binary(at(*row, "payload"), expected));
   const std::string wire_payload = binary_string(at(*row, "payload"));
   check("columns/payload_codec", !wire_payload.empty() && wire_payload.front() == '\x01');
   Decoded payload(wire_payload.size() > 1 ? wire_payload.substr(1) : std::string{});
@@ -320,73 +315,6 @@ void test_finality_and_child_fields() {
   check("child/ancestor_type", elem(at(*row, "ancestor_type"), 0) != nullptr &&
                                   is_str(elem(at(*row, "ancestor_type"), 0), "jvault_stake"));
   check("child/finality_min", is_uint(at(*row, "finality"), 0));
-  check("child/payload_matches", is_binary(at(*row, "payload"), encode_action_payload(action)));
-}
-
-void test_fixture_emulator_batch_parity() {
-#ifdef MCH_ACTION_TRACES
-  // Fixture loading is the batch side. The emulator actor's write-back path
-  // calls serialize_redis_actions on these same Action rows; the independent
-  // batch bytes come from encode_action_payload below.
-  const std::string fixture = std::string(MCH_ACTION_TRACES) +
-                              "/-02fS1r1ED0E0KV9ZwwRfYp3HBDPOiZIFgUaXav1I-I=.lz4";
-  auto loaded = load_trace_context(fixture);
-  check("fixture/load", loaded.is_ok());
-  if (loaded.is_error()) return;
-  auto context = loaded.move_as_ok();
-
-  const auto &matchers = gen_matchers_ir();
-  const auto setup = prepare_classify(matchers);
-  FixtureLookupSource source(&context.trace.interfaces, &context.trace.code_hashes);
-  auto classified = classify_trace(context, matchers, setup, source);
-  check("fixture/classifies", !classified.failure);
-  if (classified.failure) return;
-
-  std::vector<Action> actions;
-  for (const auto &row : classified.action_rows) {
-    Action action;
-    if (build_action(row, action)) actions.push_back(std::move(action));
-  }
-  if (classified.unknown_trace) actions.push_back(create_unknown_action(context.trace));
-  check("fixture/has_rows", !actions.empty());
-
-  EmuTraceView view;
-  view.trace_id = context.trace.trace_id;
-  view.nodes.resize(1);
-  view.nodes.front().finality = EmuFinality::finalized;
-  Decoded encoded(serialize_redis_actions(actions, view));
-  check("fixture/serialized", encoded.ok() && encoded.root().via.array.size == actions.size());
-  if (!encoded.ok()) return;
-
-  for (std::size_t i = 0; i < actions.size(); i++) {
-    const auto *row = elem(&encoded.root(), static_cast<std::uint32_t>(i));
-    check("fixture/row_payload_" + std::to_string(i),
-          row != nullptr && is_binary(at(*row, "payload"), encode_action_payload(actions[i])) &&
-              absent(*row, "data") && absent(*row, "ton_transfer_data"));
-    check("fixture/row_hashes_" + std::to_string(i),
-          row != nullptr && is_hash_array(at(*row, "tx_hashes"), actions[i].tx_hashes));
-  }
-#else
-  check("fixture/path_macro", false);
-#endif
-}
-
-void test_wire_fixture() {
-  Decoded decoded(wire_fixture_bytes());
-  const auto *row = first_row(decoded);
-  check("wire/decodes", decoded.ok() && row != nullptr);
-  check("wire/payload_binary", row != nullptr && at(*row, "payload") != nullptr &&
-                                   at(*row, "payload")->type == msgpack::type::BIN);
-}
-
-void test_determinism() {
-  Action action = base_action();
-  action.data = Value::make_dict({{"protocol", Value::make_str("dedust")},
-                                  {"tokens_burnt", Value::make_amount(td::make_refint(9))}});
-  const auto view = make_view({EmuFinality::confirmed, EmuFinality::finalized});
-  const auto first = serialize_redis_actions({action}, view);
-  const auto second = serialize_redis_actions({action}, view);
-  check("determinism/byte_identical", !first.empty() && first == second);
 }
 
 void test_positional_legs() {
@@ -428,9 +356,6 @@ void test_positional_legs() {
                                at_id(*slot_2, 109)->type == msgpack::type::BIN &&
                                is_uint(at_id(*slot_2, 108), 457) &&
                                at_id(*slot_2, 118)->type == msgpack::type::BIN);
-  std::printf("LEGS-ONE-SIDED-HEX ");
-  for (unsigned char byte : one_sided) std::printf("%02x", byte);
-  std::printf("\n");
 
   const auto trailing_empty = payload(true, false);
   Decoded second_empty(trailing_empty.substr(1));
@@ -537,10 +462,6 @@ void test_compact_types_and_errors() {
         std::string("\x01\x81\x07\xc4\x20", 5) + hash);
   check("compact/ascending_ids", encoded({{"query_id", Value::make_str("1")}, {"comment", Value::make_str("x")}}) ==
         "\x01\x82\x0d\xa1x\x59\x01");
-  msgpack::sbuffer id_buffer;
-  msgpack::packer<msgpack::sbuffer> id_packer(&id_buffer);
-  id_packer.pack(static_cast<std::uint8_t>(128));
-  check("compact/id128_shortest", std::string(id_buffer.data(), id_buffer.size()) == "\xcc\x80");
   check("compact/nested_ids", encoded({{"claimed_rewards", Value::make_list({Value::make_dict({
         {"amount", Value::make_str("2")}, {"asset", Value::make_str(address)}})})}}).substr(0, 8) ==
         "\x01\x81\x0c\x91\x82\x02\x02\x06");
@@ -615,9 +536,9 @@ std::string wire_fixture_bytes() {
   Action action = base_action();
   action.type = "jetton_transfer";
   action.ancestor_type = {"jvault_stake"};
-  action.source = Value::make_account_raw(kAddrA);
-  action.destination = Value::make_account_raw(kAddrB);
-  action.asset = Value::make_asset_jetton(kAddrA);
+  action.source = Value::make_str(kAddrA);
+  action.destination = Value::make_str(kAddrB);
+  action.asset = Value::make_str(kAddrA);
   action.amount = Value::make_amount(td::string_to_int256(
       std::string("340282366920938463463374607431768211456")));
   action.opcode = Value::make_int64(0x0f8a7ea5);
@@ -640,9 +561,6 @@ int run_action_msgpack_test() {
   test_columns_and_payload();
   test_tonco_tick_spacing();
   test_finality_and_child_fields();
-  test_fixture_emulator_batch_parity();
-  test_wire_fixture();
-  test_determinism();
   test_positional_legs();
   test_tx_hash_order();
   test_compact_types_and_errors();

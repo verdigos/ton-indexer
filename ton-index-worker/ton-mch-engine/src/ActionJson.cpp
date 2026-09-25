@@ -69,7 +69,7 @@ std::string value_json(const Value &v) {
   return jb.string_builder().as_cslice().str();
 }
 
-std::string action_row_json_impl(const Action &a, const ActionRowContext &ctx, bool legacy) {
+std::string row_json(const Action &a, const ActionRowContext &ctx) {
   td::JsonBuilder jb;
   {
     auto row = jb.enter_object();
@@ -97,32 +97,14 @@ std::string action_row_json_impl(const Action &a, const ActionRowContext &ctx, b
       for (const auto &[id, amount] : a.value_extra_currencies) object(std::to_string(id), amount);
     }));
 #define MCH_JSON_ENVELOPE(name) if (!omitted(a.name)) row(#name, td::JsonRaw(value_json(a.name)));
-    MCH_JSON_ENVELOPE(source)
-    MCH_JSON_ENVELOPE(source_secondary)
-    MCH_JSON_ENVELOPE(destination)
-    MCH_JSON_ENVELOPE(destination_secondary)
-    MCH_JSON_ENVELOPE(asset)
-    MCH_JSON_ENVELOPE(asset_secondary)
-    MCH_JSON_ENVELOPE(asset2)
-    MCH_JSON_ENVELOPE(asset2_secondary)
-    MCH_JSON_ENVELOPE(amount)
-    MCH_JSON_ENVELOPE(value)
-    MCH_JSON_ENVELOPE(opcode)
+    MCH_ACTION_COLUMNS(MCH_JSON_ENVELOPE)
 #undef MCH_JSON_ENVELOPE
-    if (legacy) {
-      row("data", td::JsonRaw(omitted(a.data) ? "{}" : value_json(a.data)));
-    } else {
-      row("payload", "\\x" + td::hex_encode(action_payload_bytes(a)));
-    }
+    row("payload", "\\x" + td::hex_encode(action_payload_bytes(a)));
   }
   return jb.string_builder().as_cslice().str();
 }
 
 }  // namespace
-
-bool omitted(const Value &value) {
-  return value.t == VType::Null || (value.t == VType::Amount && value.num.is_null());
-}
 
 ActionRowContext row_context(const schema::Trace &trace) {
   return {td::base64_encode(trace.trace_id.as_slice()),
@@ -132,10 +114,6 @@ ActionRowContext row_context(const schema::Trace &trace) {
                                    : std::nullopt,
           static_cast<std::int64_t>(trace.end_lt), static_cast<std::int32_t>(trace.end_utime),
           trace.mc_seqno_end};
-}
-
-std::string action_row_json(const Action &a, const ActionRowContext &ctx) {
-  return action_row_json_impl(a, ctx, true);
 }
 
 std::string action_legacy_details_json(const Action &a) {
@@ -166,7 +144,7 @@ std::string action_rows_json(const std::vector<Action> &rows, const ActionRowCon
   td::JsonBuilder jb;
   {
     auto array = jb.enter_array();
-    for (const auto &row : rows) array << td::JsonRaw(action_row_json_impl(row, ctx, false));
+    for (const auto &row : rows) array << td::JsonRaw(row_json(row, ctx));
   }
   return jb.string_builder().as_cslice().str();
 }

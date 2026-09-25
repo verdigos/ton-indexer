@@ -3,8 +3,6 @@
 #include "ActionPayload.h"
 #include "Value.h"
 
-#include "td/utils/base64.h"
-
 #include <msgpack.hpp>
 
 #include <cstdint>
@@ -36,29 +34,6 @@ void pack_binary(Packer &pk, const std::string &s) {
   pk.pack_bin_body(s.data(), n);
 }
 
-// These shapes omit an unfilled row column. Composite fallback values retain
-// their full key set and encode unfilled members as nil.
-bool omitted(const Value &v) {
-  switch (v.t) {
-    case VType::Null:
-      return true;
-    case VType::Amount:
-      return v.num.is_null();  // make_amount_none()
-    case VType::Bool:
-    case VType::Int:
-    case VType::Str:
-    case VType::Account:
-    case VType::Asset:
-    case VType::Bytes:
-    case VType::Cell:
-    case VType::List:
-    case VType::Dict:
-    case VType::Obj:
-    case VType::Block:
-      return false;
-  }
-}
-
 // Row amounts can exceed int64 and stay decimal strings. Bounded row integers
 // use native msgpack types.
 bool decimal_string_key(const std::string &k) {
@@ -76,27 +51,10 @@ void pack_int(Packer &pk, const Value &v, RedisActionSerializeStats &st) {
   pk.pack(static_cast<std::int64_t>(v.num->to_long()));
 }
 
-void pack_value(Packer &pk, const Value &v, bool as_decimal_string, RedisActionSerializeStats &st);
-
-// Encode composite maps in insertion order and retain unfilled keys as nil.
-void pack_fields(Packer &pk, const Value::Fields &fs, RedisActionSerializeStats &st) {
-  pk.pack_map(static_cast<std::uint32_t>(fs.size()));
-  for (const auto &[key, val] : fs) {
-    pack_text(pk, key);
-    pack_value(pk, val, decimal_string_key(key), st);
-  }
-}
-
 void pack_value(Packer &pk, const Value &v, bool as_decimal_string, RedisActionSerializeStats &st) {
   switch (v.t) {
     case VType::Null:
-      // omitted() gates every top-level call site; reachable from a composite
-      // key (present-as-nil) and from a List, where position is significant and
-      // the element cannot be dropped.
       pk.pack_nil();
-      return;
-    case VType::Bool:
-      pk.pack(v.boolean);
       return;
     case VType::Int:
       if (v.num.is_null()) {
@@ -123,54 +81,7 @@ void pack_value(Packer &pk, const Value &v, bool as_decimal_string, RedisActionS
     case VType::Str:
       pack_text(pk, v.str);
       return;
-    case VType::Account:
-      if (v.addr_none) {
-        pk.pack_nil();
-        return;
-      }
-      pack_text(pk, v.str);  // canonical wc:HEXUPPER, == AccountId.as_str()
-      return;
-    case VType::Asset:
-      if (v.is_ton || !v.has_jetton) {
-        pk.pack_nil();
-        return;
-      }
-      pack_text(pk, v.str);
-      return;
-    case VType::Bytes:
-      // Bytes fields are encoded as base64 text.
-      pack_text(pk, td::base64_encode(td::Slice(v.str)));
-      return;
-    case VType::Cell: {
-      // Preserve unexpected cells as base64 BOCs and count the occurrence.
-      st.cell_values++;
-      if (v.cell.is_null()) {
-        st.unrenderable++;
-        pk.pack_nil();
-        return;
-      }
-      auto boc = td_boc_serialize(v.cell);
-      if (boc.is_error()) {
-        st.unrenderable++;
-        pk.pack_nil();
-        return;
-      }
-      pack_text(pk, td::base64_encode(td::Slice(boc.ok())));
-      return;
-    }
-    case VType::List:
-      pk.pack_array(static_cast<std::uint32_t>(v.items->size()));
-      for (const Value &item : *v.items) {
-        pack_value(pk, item, as_decimal_string, st);  // elements inherit the key's decision
-      }
-      return;
-    case VType::Dict:
-    case VType::Obj:
-      pack_fields(pk, *v.fields, st);
-      return;
-    case VType::Block:
-      // Nulled before the rows leave the classifier actor (scrub_arena_refs);
-      // a survivor holds a dead arena pointer, so it is never dereferenced here.
+    default:
       st.unrenderable++;
       pk.pack_nil();
       return;
@@ -184,17 +95,9 @@ struct ActionField {
 
 const std::vector<ActionField> &optional_fields() {
   static const std::vector<ActionField> fields{
-      {"source", &Action::source},
-      {"source_secondary", &Action::source_secondary},
-      {"destination", &Action::destination},
-      {"destination_secondary", &Action::destination_secondary},
-      {"asset", &Action::asset},
-      {"asset_secondary", &Action::asset_secondary},
-      {"asset2", &Action::asset2},
-      {"asset2_secondary", &Action::asset2_secondary},
-      {"amount", &Action::amount},
-      {"value", &Action::value},
-      {"opcode", &Action::opcode},
+#define MCH_ACTION_FIELD(name) {#name, &Action::name},
+      MCH_ACTION_COLUMNS(MCH_ACTION_FIELD)
+#undef MCH_ACTION_FIELD
   };
   return fields;
 }
