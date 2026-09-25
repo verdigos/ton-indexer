@@ -1,0 +1,108 @@
+{
+ "balance": "3081848430",
+ "code_boc": "te6cckEBAQEAIwAIQgKpM47NYkyhXTfkqNm/Z33cm4Tw6Y8F8vuEx6/jMqKBtKTTrh0=",
+ "code_hash": "7GFOpKrqP3doYG8cFjKzN0094Jah58S6Q8gAnEh/7p0=",
+ "data_boc": "te6cckEBBAEA+AABjDASgQe2nKuDKInQzl60sZIDRIlmIrIAqG6OtB/tnkRRBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAMBAsmAElwoI1yo0SXmdlkVE9Ugchsf6Z93IvTIdyPOfuDftzowAki1ifX2O29AOTiO9sMVKdu5eH0ZXOhr0QXhX+j4j6R+AEkQYMDTZ/VmiNvcexCcb43c5kFbdpMw6Xr9dxAln32QQAIDCEICwAg2RA0ITkT7lDFhMqxaIUF+9PQp7gm1VgtWeLM0w+gIQgLJWi7SKrUW93+dSJjcRXjnLxiiRI6PaDIzSwtL9QG8eZi1ooU=",
+ "data_hash": "qwrb36Oyy8CFLGFtpvuwQ7gYTcBJ/yT9HOtCG+O9YRA=",
+ "dex": "stonfi_v2",
+ "mc_seqno": 95040131,
+ "methods": {
+  "get_pool_data": [
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "0"
+    }
+   },
+   {
+    "@type": "tvm.stackEntrySlice",
+    "slice": {
+     "bytes": "te6cckEBAQEAJAAAQ4ASXCgjXKjRJeZ2WRUT1SByGx/pn3ci9Mh3I85+4N+3OjCGupPl"
+    }
+   },
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "55252213640388"
+    }
+   },
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "2543173686165"
+    }
+   },
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "1777994617896297"
+    }
+   },
+   {
+    "@type": "tvm.stackEntrySlice",
+    "slice": {
+     "bytes": "te6cckEBAQEAJAAAQ4ASRaxPr7HbegHJxHe2GKlO3cvD6MrnQ16ILwr/R8R9I/A5Js3G"
+    }
+   },
+   {
+    "@type": "tvm.stackEntrySlice",
+    "slice": {
+     "bytes": "te6cckEBAQEAJAAAQ4ASRBgwNNn9WaI29x7EJxvjdzmQVt2kzDpev13ECWffZBDChq0g"
+    }
+   },
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "7"
+    }
+   },
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "3"
+    }
+   },
+   {
+    "@type": "tvm.stackEntrySlice",
+    "slice": {
+     "bytes": "te6cckEBAQEAJAAAQ4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBK7IKd"
+    }
+   },
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "429518806301"
+    }
+   },
+   {
+    "@type": "tvm.stackEntryNumber",
+    "number": {
+     "@type": "tvm.numberDecimal",
+     "number": "145125666228768"
+    }
+   }
+  ],
+  "get_pool_type": [
+   {
+    "@type": "tvm.stackEntrySlice",
+    "slice": {
+     "bytes": "te6cckEBAQEAEgAAIGNvbnN0YW50X3Byb2R1Y3Svg+BE"
+    }
+   }
+  ]
+ },
+ "pool": "0:8649CAD97B5C5BC96A960EF748EA6CCFF8601C01616FE995EE6893AE4AA7A6C6",
+ "quotes": [],
+ "sync_utime": 1790363070,
+ "wallet_masters": {
+  "0:9220C181A6CFEACD11B7B8F62138DF1BB9CC82B6ED2661D2F5FAEE204B3EFB20": "0:671963027F7F85659AB55B821671688601CDCF1EE674FC7FBBB1A776A18D34A3",
+  "0:922D627D7D8EDBD00E4E23BDB0C54A76EE5E1F46573A1AF4417857FA3E23E91F": "0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE"
+ }
+}
