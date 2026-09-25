@@ -77,9 +77,28 @@ flowchart LR
 
 | Детектор | Code hash gate | Как читать состояние | Как проверять подлинность |
 |---|---|---|---|
-| `StonfiV1PoolDetector` (новый) | хэши кода STON.fi v1 pool | `get_pool_data`: [0] reserve0, [1] reserve1, [2] token0_wallet, [3] token1_wallet, [4] lp_fee, [5] protocol_fee, [6] ref_fee | router из данных пула = официальный v1 router, и `router.get_pool_address(w0, w1) == pool` |
-| `StonfiV2PoolDetector` (новый) | хэши кода STON.fi v2 pool (по типам) | `get_pool_type` плюс `get_pool_data`: [3] reserve0, [4] reserve1, [5] и [6] кошельки токенов, [7] lp_fee, [8] protocol_fee; [12] amp для stableswap или w0 для weighted | code hash роутера в белом списке v2 routers, и `get_pool_address` сходится |
+| `StonfiV1PoolDetector` (новый) | хэш кода STON.fi v1 pool (§4.1.1) | `get_pool_data`: [0] reserve0, [1] reserve1, [2] token0_wallet, [3] token1_wallet, [4] lp_fee, [5] protocol_fee, [6] ref_fee | router из данных пула = официальный v1 router, и `router.get_pool_address(w0, w1) == pool` |
+| `StonfiV2PoolDetector` (новый) | хэши кода STON.fi v2 pool, свой на каждый тип (§4.1.1) | `get_pool_type` плюс `get_pool_data`: [3] reserve0, [4] reserve1, [5] и [6] кошельки токенов, [7] lp_fee, [8] protocol_fee; [12] amp для stableswap или w0 (1e18) для weighted_const_product; для weighted_stableswap [12] amp, [13] rate, [14] w0 (все 1e18) | code hash роутера в белом списке v2 routers, и `get_pool_address` сходится |
 | `DedustPoolDetector` (есть) | V1: `Tokens.cpp:573-577`, V2: `Tokens.cpp:579-582` | V1: `get_reserves`, `get_assets`, `is_stable`, `get_trade_fee`. V2: `get_pool_data` [9] reserveX, [10] reserveY | V1 — проверка по фабрике уже есть (`Tokens.cpp:584`). V2 — доделать аналогичную |
+
+Номера полей `get_pool_data` и `get_reserves` сверены с живыми пулами 2026-09-25 (§12).
+
+#### 4.1.1 Белый список code hash
+
+Собран по 413 пулам с наибольшим TVL или числом сделок на 2026-09-25 (seqno 95039956). Хэши DeDust совпадают с уже зашитыми в `Tokens.cpp:573-582`.
+
+| DEX | Тип | Code hash (hex) | Пулов в выборке |
+|---|---|---|---|
+| STON.fi v1 | constant_product | `82566AD72B6568FE7276437D3B0C911AAB65ED701C13601941B2917305E81C11` | 20 |
+| STON.fi v2 | constant_product | `EC614EA4AAEA3F7768606F1C1632B3374D3DE096A1E7C4BA43C8009C487FEE9D` | 177 |
+| STON.fi v2 | constant_product | `CF5D0B99FA704E7CF2C9D50A8FF8B8BC7CE0B8A74E414B9C279AC544E7AADE05` | 17 |
+| STON.fi v2 | stableswap | `FBC7E8FCCA72C2B9C078B359FFA936F46384491B895B6577B0A6CB3F569040BC` | 1 |
+| STON.fi v2 | weighted_const_product | `F04A14C3231221056C3499965E4604417E324F8E9121D840120D803288715594` | 2 |
+| STON.fi v2 | weighted_stableswap | `DAC47636AE899081EBD4F47DC90EF9DE98456B1000591069773F683C6D601FA9` | 3 |
+| DeDust v1 | volatile / stable | `1275095B…27C1`, `778F0D3F…99D3`, `C0F9D14F…D562` | 120 |
+| DeDust v2 | CPMM v2.0 | `3997A5C1EE8923E93CF3A6A98EA3EF9482C64DD8AEA2BA8365689E14D99C760D` | 73 |
+
+Выборка не полная: при реализации список дополняется хэшами пулов с малым TVL, а новые версии кода STON.fi v2 отслеживаются по алерту «пул роутера с неизвестным code hash».
 
 Доработки существующего кода:
 
@@ -148,11 +167,13 @@ DexPoolState {
 | Solidly `x³y + xy³ = k` | DeDust v1 stable | `y(3x² + y²) / (x(x² + 3y²))` |
 | Curve StableSwap (n=2) | STON.fi v2 `stableswap` | `y(4·amp·x²y + D³) / (x(4·amp·xy² + D³))`; D — итерации Ньютона по `amp(x+y) + D = amp·D + D³/(4xy)` |
 | Weighted CP | STON.fi v2 `weighted_const_product` | `w0·y / ((1−w0)·x)` |
+| Weighted StableSwap (кандидат, §12) | STON.fi v2 `weighted_stableswap` | инвариант `amp(x + r·y) + x^w·(r·y)^(1−w)`; p = `(amp + w·x^(w−1)·(r·y)^(1−w)) / (amp·r + (1−w)·r·x^w·(r·y)^(−w))` (все параметры в 1e18) |
 
 - Точности `long double` достаточно: D³ ~ 1e60 умещается в диапазон, итерации Ньютона сходятся за 5–10 шагов.
 - Хранится `Float64`.
-- В тестах результат сверяется с `estimate_swap_out` / `get_expected_outputs` при малой сумме.
-- **Риск:** для DeDust v1 stable не подтверждено, нормализует ли контракт резервы по decimals. У основных stable-пар decimals совпадают, но это нужно откалибровать по `estimate_swap_out` (§11).
+- В тестах результат сверяется с `estimate_swap_out` / `get_expected_outputs` при малой сумме, а для STON.fi v2 (у пулов нет метода-оценщика) — по сохранению инварианта на реальных свопах.
+- Все формулы таблицы проверены на живых пулах (§12).
+- **Остаточный риск:** для DeDust v1 stable не проверено, нормализует ли контракт резервы по decimals. У обоих ликвидных stable-пулов decimals одинаковые (9/9), поэтому на них это не влияет (§11).
 
 ## 6. ClickHouse
 
@@ -301,7 +322,7 @@ ORDER BY (jetton, minute);
 
 ## 9. Тестирование без ноды
 
-1. **Разбор состояния пулов (юнит-тесты C++).** Нужны реальные `code` / `data` пулов каждого типа и результаты `get_pool_data`. Для этого новая версия `indexer/tests/utils/api_fixture.py`, условно `pool_fixture.py`, будет выгружать через toncenter состояние пула на момент транзакции. Запускает её пользователь: из облачной сессии toncenter.com заблокирован сетевой политикой. В репо уже есть ~96 DEX-трейсов (`indexer/tests/traces/*.lz4`), для части аккаунтов в них сохранён `data_boc`.
+1. **Разбор состояния пулов (юнит-тесты C++).** Скрипт `indexer/tests/utils/pool_fixture.py` уже есть: он берёт `ApiClient` из `api_fixture.py` и сохраняет в `indexer/tests/pools/*.json` состояние пула на заданный seqno (`code_boc`, `data_boc`), сырые стеки get-методов, сопоставление кошелёк → мастер и эталонные котировки на малую сумму. Ключ берётся из переменной `API_KEY` или из `.env`. Фикстуры собраны для всех типов пулов из скоупа, кроме DeDust v1 stable с разными decimals: таких пулов в выборке нет. В репо также есть ~96 DEX-трейсов (`indexer/tests/traces/*.lz4`).
 2. **PoolMath.**
    - Эталонные значения из `estimate_swap_out` / `get_expected_outputs` на тех же состояниях.
    - Для DeDust v1 и v2 — сверка с резервами из событий swap (0x9c610de3, `nextState`) в существующих фикстурах: их семантику агент проверил на всех фикстурных свопах.
@@ -317,25 +338,54 @@ ORDER BY (jetton, minute);
 
 | Этап | Содержание | Дни |
 |---|---|---|
-| M0 | Скрипт фикстур пулов, сбор состояний по всем типам | 2 |
+| M0 | ~~Скрипт фикстур пулов~~ (готов); довести набор фикстур: пулы с малым TVL, исторические seqno | 1 |
 | M1 | Детекторы STON.fi v1/v2, доработка DeDust, проверка подлинности, кошелёк → мастер | 6 |
-| M2 | PoolMath и юнит-тесты, калибровка DeDust stable | 3 |
+| M2 | PoolMath и юнит-тесты (эталоны уже собраны) | 3 |
 | M3 | DDL, DexSnapshotBuilder и Sink, флаги в обоих бинарниках | 4 |
 | M4 | MV, задача агрегации, свечи, конфиг якорей | 4 |
 | M5 | API: два эндпоинта, клиент ClickHouse, decimals, тесты | 3 |
 | M6 | Бэкфилл 30 дней, сверка с ton-etl, исправления | 3 |
 | M7 | Деплой (ansible), метрики и алерты отставания | 2 |
-| | **Итого** | **~27 (≈ 5–6 недель)** |
+| | **Итого** | **~26 (≈ 5–6 недель)** |
 
 ## 11. Риски и открытые вопросы
 
 | Риск | Как снимаем |
 |---|---|
 | Версия ClickHouse в проде неизвестна; refreshable MV требуют ≥ 24.10 | Проверить на этапе M3; запасной вариант — cron-задача |
-| DeDust v1 stable: не подтверждена нормализация по decimals | Калибровка по `estimate_swap_out` в M2 |
-| Расположение данных STON.fi v2 stableswap/weighted проверено только по исходникам | Читаем через `get_pool_data` (не data cell); фикстуры в M0 |
-| Мастер pTON `EQBwGRAM…` из `DexPton.cpp:13` не идентифицирован | Проверить в M1; если это pTON — тоже TON |
+| DeDust v1 stable: не проверена нормализация по decimals | Оба ликвидных stable-пула — 9/9, на них формула совпала; при появлении пары с разными decimals проверить по `estimate_swap_out` |
+| ~~Расположение данных STON.fi v2 stableswap/weighted~~ | Снято: номера полей и формулы проверены на живых пулах (§12) |
+| ~~Мастер `0:7019…3979` из `DexPton.cpp:13`~~ | Снято: это wGRAM, прокси-контракт Tonco для TON; Tonco вне MVP |
+| STON.fi v2 `weighted_stableswap` вне MVP, хотя у 3 пулов ~$406k TVL | Решение за пользователем (§12) |
 | Манипуляция ценой тонкого пула | Порог ликвидности плюс вес по TVL; фильтр выбросов — фаза 2 |
 | High/low свечи jetton'а — приближение при нескольких пулах | Задокументировано; точный вариант — пересчёт цены на каждый снапшот (фаза 2) |
 | USDT отвязался от доллара | Котировка по определению в USDT, не в USD (ADR-0002) |
 | Ликвидность уходит из якорей | Список якорей в конфиге; метрика «доля якорей, прошедших отбор» с алертом |
+
+## 12. Проверка на живых данных (2026-09-25)
+
+Выборка: 413 пулов с наибольшим TVL по ton-etl (для DeDust v2 — по числу сделок), состояние на seqno 95039956. Скрипты — `indexer/tests/utils/pool_fixture.py` и одноразовые проверочные скрипты сессии.
+
+**Распределение по типам.** TVL — оценка ton-etl.
+
+| DEX | Тип | Пулов | TVL |
+|---|---|---|---|
+| STON.fi v1 | constant_product | 20 (топ) | ~$8,6M |
+| STON.fi v2 | constant_product | 194 | ~$12,1M |
+| STON.fi v2 | weighted_stableswap | 3 | ~$406k |
+| STON.fi v2 | stableswap | 1 | ~$205k |
+| STON.fi v2 | weighted_const_product | 2 | ~$107k |
+| STON.fi v2 | constant_sum | 0 | — |
+| DeDust v1 | volatile | 118 | ~$4,07M |
+| DeDust v1 | stable | 2 | ~$132k |
+| DeDust v2 | CPMM | 73 | мало: у самого активного пула ~8 TON |
+
+**Проверка формул.**
+
+- **Constant product (STON.fi v1, DeDust v1 volatile).** Котировка пула на 1e-6 резерва (`get_expected_outputs`, `estimate_swap_out`) совпадает со spot × (1 − комиссия) с точностью ~1e-6, то есть до влияния самой пробной суммы.
+- **Solidly (DeDust v1 stable).** Совпадает с той же точностью на обоих stable-пулах.
+- **STON.fi v2: constant_product, stableswap, weighted_const_product, weighted_stableswap.** У пулов нет метода-оценщика, поэтому проверено по 3 реальным свопам на каждый тип: инвариант кривой по резервам до и после сделки меняется не больше чем на ~7e-8 при размере сделки 1e-6–1e-3 резерва. Неверная кривая дала бы изменение порядка размера сделки.
+- **Якоря.** Все три дают ~1,43 USDT за TON с расхождением около 0,2%.
+- **Параметры кривых.** `amp` у stableswap = 100. У weighted_const_product w0 = 0,25. У weighted_stableswap amp = 50, rate = 1,304, w0 = 0,25 — похоже на пару liquid staking token / TON.
+
+**Открытый вопрос.** У `weighted_stableswap` TVL (~$406k в 3 пулах) больше, чем у stableswap и weighted_const_product вместе. Формула проверена, поэтому его можно включить в MVP почти без доплаты (~0,5 дня в M2).
