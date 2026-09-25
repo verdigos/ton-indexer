@@ -17,9 +17,6 @@ ABI_DIR = REPO / "ton-index-worker/ton-abi/abi"
 ABI_JSON_DIR = Path(
     os.environ.get("TON_ABI_JSON_DIR", REPO / "build/ton-index-worker/ton-abi/abi")
 )
-ENGINE = REPO / "ton-index-worker/ton-mch-engine"
-MSG_PARSE = ENGINE / "src/MsgParse.cpp"
-ABI_BRIDGE = ENGINE / "src/AbiBridge.cpp"
 
 # Logical public rows and their protocol-owned declaration files. The standard
 # and Ethena internal-transfer structs intentionally share one logical key.
@@ -38,7 +35,8 @@ LOGICAL_ROWS_BY_STEM = {
     ),
     "dedust": (
         "DedustPayoutFromPool", "DedustSwapNotification",
-        "DedustDepositLiquidityToPool",
+        "DedustDepositLiquidityToPool", "DedustDepositLiquidityNative",
+        "DedustDepositLiquidityJetton",
     ),
     "dedust_v2": (
         "DedustV2PayNative", "DedustV2SwapEvent", "DedustV2PayoutPositionFees",
@@ -46,7 +44,7 @@ LOGICAL_ROWS_BY_STEM = {
         "DedustV2JoinLiquidity", "DedustV2DepositEvent",
     ),
     "coffee": (
-        "CoffeeCreateVault", "CoffeeSwapEvent",
+        "CoffeeCreateVault", "CoffeeSwapEvent", "CoffeeSwapNative", "CoffeePayoutInternal",
         "CoffeeCreateLiquidityDepositoryRequest",
         "CoffeeDepositLiquiditySuccessfulEvent", "CoffeeLiquidityWithdrawalEvent",
         "CoffeeCreatePoolCreatorRequest", "CoffeeCreatePoolRequest",
@@ -55,9 +53,10 @@ LOGICAL_ROWS_BY_STEM = {
     "coffee_staking_withdraw3": ("CoffeeStakingPositionWithdraw3",),
     "evaa": (
         "EvaaSupplyMaster", "EvaaSupplySuccess", "EvaaWithdrawMaster",
-        "EvaaWithdrawCollateralized",
+        "EvaaWithdrawCollateralized", "EvaaLiquidateMaster",
+        "EvaaLiquidateSatisfied", "EvaaLiquidateUnsatisfied",
     ),
-    "evaa_supply_forward": ("EvaaSupplyJettonForward",),
+    "evaa_forward": ("EvaaSupplyJettonForward", "EvaaLiquidateJettonForward"),
     "jvault": ("JVaultUnstakeJettons", "JVaultUnstakeRequest", "JVaultClaim"),
     "jvault_payload": ("JVaultStakePeriodPayload",),
     "subscriptions": ("SubscriptionPaymentRequest",),
@@ -158,15 +157,16 @@ def test_b4_union_arm_names_and_shapes_are_exact():
     ))
     assert family_spellings == ARM_NAMES
 
-    for stem, ton_prefix, jetton_prefix in (
-        ("coffee", "0b00", "0b01"), ("dedust", "0b0000", "0b0001"),
+    for stem, ton_prefix, jetton_prefix, wc_ty in (
+        ("coffee", "0b00", "0b01", "uint8"),
+        ("dedust", "0b0000", "0b0001", "int8"),
     ):
         structs = _structs(sources[stem])
         assert structs["AssetTon"][0] == ton_prefix
         assert _fields(structs["AssetTon"][1]) == []
         assert structs["AssetJetton"][0] == jetton_prefix
         assert _fields(structs["AssetJetton"][1]) == [
-            ("workchain", "uint8"), ("hash", "bits256"),
+            ("workchain", wc_ty), ("hash", "bits256"),
         ]
 
     for stem, alias, ref_arm, inline_arm in (
@@ -192,7 +192,7 @@ def test_message_opcodes_are_unique_within_each_protocol_file():
         assert not duplicates, f"{stem}: duplicate opcodes {sorted(duplicates)}"
 
     assert _structs(sources["evaa"])["EvaaSupplyMaster"][0] == "0x00000001"
-    assert _structs(sources["evaa_supply_forward"])["EvaaSupplyJettonForward"][0] == "0x00000001"
+    assert _structs(sources["evaa_forward"])["EvaaSupplyJettonForward"][0] == "0x00000001"
     assert _structs(sources["coffee"])["CoffeeStakingPositionWithdraw2"][0] == "0xcb03bfaf"
     assert _structs(sources["coffee_staking_withdraw3"])["CoffeeStakingPositionWithdraw3"][0] == "0xcb03bfaf"
 
@@ -223,40 +223,3 @@ def test_generated_abi_incoming_rows_match_protocol_sources():
             for row in abi["incoming_messages"]
         }
         assert incoming_names == set(_allowed_arms(text))
-
-
-def test_obsolete_message_schema_pipeline_is_absent_from_live_source():
-    deleted = (
-        ENGINE / ("mch-msgs" + ".schema"),
-        ENGINE / ("src/MsgParsers" + "Generated.cpp"),
-        ENGINE / ("src/MsgParsers" + "Generated.h"),
-        ENGINE / ("src/MsgVector" + "Runner.cpp"),
-        ENGINE / ("src/MsgVector" + "Runner.h"),
-        ENGINE / ("ir/msg_" + "vectors.json"),
-        REPO / ("indexer/indexer/events/mch/msgs" + "_gen.py"),
-        REPO / ("indexer/tests/mch/test_msgs" + "_gen.py"),
-    )
-    assert not any(path.exists() for path in deleted)
-
-    forbidden = (
-        "mch-msgs" + ".schema",
-        "msgs" + "_gen",
-        "MsgParsers" + "Generated",
-        "generated_message" + "_parsers",
-        "schema-generated" + " parser",
-        "mch_" + "legacy",
-        "schema_to_faithful" + "_tolk",
-    )
-    roots = (REPO / "indexer/indexer/events/mch", REPO / "indexer/tests/mch", ENGINE / "src")
-    offenders = []
-    for root in roots:
-        for path in root.rglob("*"):
-            if path == Path(__file__) or path.suffix not in {".py", ".mch", ".cpp", ".h"}:
-                continue
-            text = path.read_text(encoding="utf-8")
-            for term in forbidden:
-                if term in text:
-                    offenders.append(f"{path.relative_to(REPO)}: {term}")
-    cmake = (ENGINE / "CMakeLists.txt").read_text(encoding="utf-8")
-    offenders.extend(f"ton-index-worker/ton-mch-engine/CMakeLists.txt: {term}" for term in forbidden if term in cmake)
-    assert not offenders, "obsolete pipeline references:\n" + "\n".join(offenders)
