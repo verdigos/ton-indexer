@@ -6,20 +6,8 @@ x-index-pg-access: &index-pg-access
   POSTGRES_DB: ${POSTGRES_DB:-ton_index}
 
 services:
-  event-cache:
-    image: redis:8-alpine
-    networks:
-      - internal
-    command: redis-server --maxclients 40000
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   index-api:
-    image: toncenter/ton-indexer-api:v1.3.0
+    image: toncenter/ton-indexer-api:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -49,7 +37,7 @@ services:
       internal:
 
   run-migrations:
-    image: toncenter/ton-indexer-worker:v1.3.0
+    image: toncenter/ton-indexer-worker:v1.4.0
     ulimits:
       nofile:
         soft: 1000000
@@ -72,7 +60,7 @@ services:
     restart: on-failure
 
   index-worker:
-    image: toncenter/ton-indexer-worker:v1.3.0
+    image: toncenter/ton-indexer-worker:v1.4.0
     ulimits:
       nofile:
         soft: 1000000
@@ -103,7 +91,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: toncenter/ton-indexer-postgres:v1.3.0
+    image: toncenter/ton-indexer-postgres:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -163,7 +151,7 @@ services:
 # additional: offchain metadata indexer
   metadata-fetcher:
     profiles: [metadata]
-    image: toncenter/ton-indexer-metadata-fetcher:v1.3.0
+    image: toncenter/ton-indexer-metadata-fetcher:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -201,7 +189,7 @@ services:
 # additional: API Emulate
   emulate-task-emulator:
     profiles: [emulate]
-    image: toncenter/ton-indexer-worker:v1.3.0
+    image: toncenter/ton-indexer-worker:v1.4.0
     ulimits:
       nofile:
         soft: 1000000
@@ -245,7 +233,7 @@ services:
 
   emulate-api:
     profiles: [emulate]
-    image: toncenter/ton-indexer-emulate-api:v1.3.0
+    image: toncenter/ton-indexer-emulate-api:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -273,7 +261,7 @@ services:
 
   metadata-cache:
     profiles: [ metadata ]
-    image: toncenter/ton-metadata-cache:v1.3.0
+    image: toncenter/ton-metadata-cache:v1.4.0
     build:
       context: .
       dockerfile: Dockerfile

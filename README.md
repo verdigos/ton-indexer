@@ -86,7 +86,7 @@ Once the stack is running, the REST API and interactive Swagger are available at
 4. Start relevant services: 
 
    ```bash
-   docker compose up -d run-migrations index-worker index-api event-cache
+   docker compose up -d run-migrations index-worker index-api
    ```
 
 ## How to run TON Index worker independently
