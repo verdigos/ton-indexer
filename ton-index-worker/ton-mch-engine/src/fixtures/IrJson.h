@@ -42,11 +42,14 @@ inline bool jbool(const td::JsonValue &e, td::Slice name, bool dflt = false) {
 }
 
 // Expression builtins (rt_call_builtin arity table). Other `call` names are host fns.
+inline const std::unordered_set<std::string> kBuiltins = {
+    "account", "amount", "asset", "ton_asset", "addr_none", "b64",
+    "asset_of", "tail_unwrap", "bytes_of", "first", "last", "at", "len",
+    "zip", "map", "concat", "contains", "get", "tx_aborted", "exit_code",
+    "uint_hex", "ext_addr_str", "txid_le_hex", "addr_hash_hex", "out_messages",
+    "state_init"};
+
 inline bool is_builtin_name(const std::string &name) {
-  static const std::unordered_set<std::string> kBuiltins = {
-      "account", "amount", "asset", "ton_asset", "addr_none", "b64",
-      "asset_of", "tail_unwrap", "bytes_of", "first", "last", "len", "sum",
-      "zip", "map", "concat", "contains"};
   return kBuiltins.count(name) != 0;
 }
 

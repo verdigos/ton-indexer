@@ -36,8 +36,6 @@ std::string render_parse_value(const Value &v);
 // `is_boc_field` gates BOC-as-cellhash render by field name (comment /
 // bitcoin_txid / pubkey are raw non-BOC bytes and stay as-is).
 bool is_boc_field(const std::string &key);
-// The BOC-field name set backing is_boc_field (surfaced by --surface).
-const std::set<std::string> &boc_field_names();
 
 // Structural equality for the conformance-vector comparator: type-checked
 // and deep. Not the `==` operator. Intentional.

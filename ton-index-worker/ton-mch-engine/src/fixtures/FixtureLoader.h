@@ -4,7 +4,7 @@
 #pragma once
 
 #include "BlockTree.h"  // TraceContext
-#include "TraceLoader.h"
+#include "TraceModel.h"
 
 #include "td/utils/Status.h"
 

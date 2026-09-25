@@ -1,6 +1,6 @@
 #include "FixtureLookupSource.h"
 
-#include "parse/PSlice.h"  // load_address_py
+#include "parse/PSlice.h"  // load_address_value
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -40,8 +40,14 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
   const bool addr_arg = args.size() == 1 &&
                         (args[0].t == VType::Str ||
                          (args[0].t == VType::Account && !args[0].addr_none));
-  if (interfaces_ == nullptr || !addr_arg) {
-    return Value::null();  // non-address keys miss
+  if (!addr_arg) return Value::null();
+  if (kind == "code_hash") {
+    if (code_hashes_ == nullptr) return Value::null();
+    auto it = code_hashes_->find(canonicalize_or_passthrough(args[0].str));
+    return it == code_hashes_->end() ? Value::null() : it->second;
+  }
+  if (interfaces_ == nullptr) {
+    return Value::null();
   }
   enum class Handler {
     JettonWallet,
@@ -52,6 +58,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     NominatorPool,
     DedustPool,
     JvaultAssets,
+    TelemintItem,
   };
   static const std::map<std::string, Handler> handlers = {
       {"jetton_wallet", Handler::JettonWallet},
@@ -62,6 +69,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       {"nominator_pool", Handler::NominatorPool},
       {"dedust_pool", Handler::DedustPool},
       {"jvault_assets", Handler::JvaultAssets},
+      {"telemint_item", Handler::TelemintItem},
   };
   auto handler = handlers.find(kind);
   if (handler == handlers.end()) {
@@ -180,12 +188,12 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     } catch (...) {
       return Value::null();
     }
-    auto r_pool = load_address_py(cs);
+    auto r_pool = load_address_value(cs);
     if (r_pool.is_error()) {
       return Value::null();
     }
     Value pool = r_pool.move_as_ok();
-    auto r_minter = load_address_py(cs);
+    auto r_minter = load_address_value(cs);
     if (r_minter.is_error()) {
       return Value::null();
     }
@@ -227,6 +235,13 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return make_record(Value::make_asset_jetton(jetton->str));
   }
+    case Handler::TelemintItem: {
+      auto it = interfaces_->find(addr);
+      if (it == interfaces_->end() || it->second.field("Telemint") == nullptr) {
+        return Value::null();
+      }
+      return it->second;
+    }
   }
   return Value::null();
 }
