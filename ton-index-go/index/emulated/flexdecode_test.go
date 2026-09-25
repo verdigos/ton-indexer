@@ -132,42 +132,42 @@ func decodeAction(t *testing.T, m map[string]interface{}) Action {
 
 // TestStringNumbersAndNativeDecodeIdentically checks both numeric wire representations.
 func TestStringNumbersAndNativeDecodeIdentically(t *testing.T) {
-	old := decodeAction(t, stringNumbersAction(t))
-	new_ := decodeAction(t, naturalAction(t))
+	stringForm := decodeAction(t, stringNumbersAction(t))
+	nativeForm := decodeAction(t, naturalAction(t))
 
-	if !reflect.DeepEqual(old, new_) {
-		t.Fatalf("string-number and native-style decode differ:\nold = %+v\nnew = %+v", old, new_)
+	if !reflect.DeepEqual(stringForm, nativeForm) {
+		t.Fatalf("string-number and native-style decode differ:\nstring-form = %+v\nnative-form = %+v", stringForm, nativeForm)
 	}
 
 	// String-number scalar values decode without changing their values.
-	if old.ActionId != "9C7SqQ==" || old.Type != "jetton_transfer" || !old.Success {
-		t.Errorf("scalars: %+v", old)
+	if stringForm.ActionId != "9C7SqQ==" || stringForm.Type != "jetton_transfer" || !stringForm.Success {
+		t.Errorf("scalars: %+v", stringForm)
 	}
-	if got := old.StartLt; got == nil || *got != 58913247000001 {
+	if got := stringForm.StartLt; got == nil || *got != 58913247000001 {
 		t.Errorf("start_lt = %v", got)
 	}
-	if got := old.Opcode; got == nil || *got != 0x0f8a7ea5 {
+	if got := stringForm.Opcode; got == nil || *got != 0x0f8a7ea5 {
 		t.Errorf("opcode = %v", got)
 	}
-	if old.Finality != 1 {
-		t.Errorf("finality = %v", old.Finality)
+	if stringForm.Finality != 1 {
+		t.Errorf("finality = %v", stringForm.Finality)
 	}
-	if got := old.Value; got == nil || *got != "1500000000" {
+	if got := stringForm.Value; got == nil || *got != "1500000000" {
 		t.Errorf("value = %v", got)
 	}
-	if got := old.Amount; got == nil || *got != "115792089237316195423570985008687907853269984665640564039457584007913129639935" {
+	if got := stringForm.Amount; got == nil || *got != "115792089237316195423570985008687907853269984665640564039457584007913129639935" {
 		t.Errorf("amount = %v", got)
 	}
-	if !reflect.DeepEqual(old.TxHashes, []string{"aGFzaDE=", "aGFzaDI="}) {
-		t.Errorf("tx_hashes = %v", old.TxHashes)
+	if !reflect.DeepEqual(stringForm.TxHashes, []string{"aGFzaDE=", "aGFzaDI="}) {
+		t.Errorf("tx_hashes = %v", stringForm.TxHashes)
 	}
 
 	// The payload travels as bytes and decodes through the shared reader.
-	if !reflect.DeepEqual(old.Payload, new_.Payload) {
-		t.Errorf("payload bytes differ: %x / %x", old.Payload, new_.Payload)
+	if !reflect.DeepEqual(stringForm.Payload, nativeForm.Payload) {
+		t.Errorf("payload bytes differ: %x / %x", stringForm.Payload, nativeForm.Payload)
 	}
 	// The wire ancestry list is copied onto the RawAction the API embeds as raw_action.
-	raw, err := old.ToRawAction()
+	raw, err := stringForm.ToRawAction()
 	if err != nil {
 		t.Fatalf("ToRawAction: %v", err)
 	}

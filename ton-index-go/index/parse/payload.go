@@ -1,7 +1,7 @@
 package parse
 
 import (
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -152,6 +152,10 @@ var actionPayloadFieldNames = map[string]string{
 	"TonTransfer.comment_encrypted":         "Encrypted",
 }
 
+// ErrPayloadDecode marks a payload this reader cannot decode, so a caller skips that one
+// action instead of failing the request.
+var ErrPayloadDecode = errors.New("failed to decode action payload")
+
 // DecodeActionPayload applies the compact payload's details to an action whose Type is set.
 // Every error carries ErrPayloadDecode so a caller can skip one undecodable action.
 func DecodeActionPayload(payload []byte, action *models.RawAction) error {
@@ -165,32 +169,23 @@ func DecodeActionPayload(payload []byte, action *models.RawAction) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPayloadDecode, err)
 	}
-	if err := applyActionPayload(action, values); err != nil {
+	if err := fillActionPayload(action, actionDataPrefixes[action.Type], "", values); err != nil {
 		return fmt.Errorf("%w: %v", ErrPayloadDecode, err)
 	}
 	return nil
 }
 
-// applyActionPayload routes a decoded payload map (names -> text values, one entry per
+// fillActionPayload routes a decoded payload map (names -> text values, one entry per
 // key of the payload) into the action's typed fields.
-func applyActionPayload(action *models.RawAction, values map[string]interface{}) error {
+func fillActionPayload(action *models.RawAction, prefixes []string, parent string, values map[string]interface{}) error {
 	target := reflect.ValueOf(action).Elem()
-	return fillActionPayload(target, action, actionDataPrefixes[action.Type], "", values)
-}
-
-func fillActionPayload(target reflect.Value, action *models.RawAction, prefixes []string, parent string, values map[string]interface{}) error {
 	for key, value := range values {
 		path := key
 		if parent != "" {
 			path = parent + "." + key
 		}
-		// A null value is an absent key: the payload drops null placeholders and the
-		// destination field stays at its zero value either way.
-		if value == nil {
-			continue
-		}
 		if nested, ok := value.(map[string]interface{}); ok {
-			if err := fillActionPayload(target, action, prefixes, path, nested); err != nil {
+			if err := fillActionPayload(action, prefixes, path, nested); err != nil {
 				return err
 			}
 			continue
@@ -224,8 +219,8 @@ func fillActionPayload(target reflect.Value, action *models.RawAction, prefixes 
 func resolvePayloadField(target reflect.Value, prefixes []string, path string) reflect.Value {
 	for _, prefix := range prefixes {
 		name := actionPayloadFieldName(prefix, path)
-		// A leading dot names a RawAction field directly: the moved row columns decode
-		// into the envelope fields the frozen API already reads.
+		// A leading dot names a RawAction envelope field directly, without the stored
+		// type's prefix.
 		if strings.HasPrefix(name, ".") {
 			name = name[1:]
 		} else {
@@ -256,9 +251,6 @@ func fillActionPayloadLegs(target reflect.Value, prefixes []string, value interf
 			return fmt.Errorf("field legs: expected map, got %T", item)
 		}
 		for member, memberValue := range record {
-			if memberValue == nil {
-				continue
-			}
 			field := resolvePayloadLegField(target, prefixes, index, member)
 			if !field.IsValid() {
 				continue
@@ -333,14 +325,11 @@ func setPayloadValue(target reflect.Value, value interface{}) error {
 
 	switch target.Kind() {
 	case reflect.String:
-		switch value := value.(type) {
-		case string:
-			target.SetString(value)
-		case []byte:
-			target.SetString(base64.StdEncoding.EncodeToString(value))
-		default:
+		value, ok := value.(string)
+		if !ok {
 			return fmt.Errorf("expected string, got %T", value)
 		}
+		target.SetString(value)
 	case reflect.Bool:
 		value, ok := value.(bool)
 		if !ok {

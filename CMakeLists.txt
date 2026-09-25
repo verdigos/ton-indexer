@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.16)
 
 project(ton-indexer LANGUAGES CXX Go)
 
+# One root call: a subdirectory-only enable_testing() registers tests just for that
+# subdirectory, where `ctest --test-dir build` does not look.
+enable_testing()
+
 include(cmake/golang.cmake)
 
 set(CMAKE_CXX_STANDARD 20)

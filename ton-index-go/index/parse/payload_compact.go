@@ -91,6 +91,11 @@ func (d *compactDecoder) record() (map[string]interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("payload key %s (id %d): %w", info.Name, id, err)
 		}
+		// A null is an absent key at every level, so it never enters the map; only array
+		// elements keep a nil (the positional `legs` placeholders).
+		if value == nil {
+			continue
+		}
 		values[info.Name] = value
 	}
 	return values, nil
@@ -126,35 +131,14 @@ func compactKeyID(key interface{}) (uint8, bool) {
 	return uint8(number), true
 }
 
-// msgpackUint reads a non-negative integer of any msgpack width (a positive fixint
-// decodes to int8, so a non-negative int is a valid uint too).
+// msgpackUint reads a non-negative integer of any msgpack width: the loose interface
+// decode yields int64 for every signed code and uint64 for every unsigned one.
 func msgpackUint(value interface{}) (uint64, bool) {
 	switch value := value.(type) {
-	case int8:
-		if value < 0 {
-			return 0, false
-		}
-		return uint64(value), true
-	case int16:
-		if value < 0 {
-			return 0, false
-		}
-		return uint64(value), true
-	case int32:
-		if value < 0 {
-			return 0, false
-		}
-		return uint64(value), true
 	case int64:
 		if value < 0 {
 			return 0, false
 		}
-		return uint64(value), true
-	case uint8:
-		return uint64(value), true
-	case uint16:
-		return uint64(value), true
-	case uint32:
 		return uint64(value), true
 	case uint64:
 		return value, true
@@ -229,6 +213,9 @@ func compactTypedText(value interface{}, info payloadKeyInfo) (interface{}, erro
 func compactBin(value interface{}, size int, what string) ([]byte, error) {
 	raw, ok := value.([]byte)
 	if !ok {
+		if size == 0 {
+			return nil, fmt.Errorf("expected a bin %s, got %T", what, value)
+		}
 		return nil, fmt.Errorf("expected a %d byte bin %s, got %T", size, what, value)
 	}
 	if size != 0 && len(raw) != size {
@@ -264,7 +251,7 @@ func (d *compactDecoder) scalar() (interface{}, error) {
 		code == msgpcode.True || code == msgpcode.False ||
 		code == msgpcode.Uint8 || code == msgpcode.Uint16 || code == msgpcode.Uint32 || code == msgpcode.Uint64 ||
 		code == msgpcode.Int8 || code == msgpcode.Int16 || code == msgpcode.Int32 || code == msgpcode.Int64:
-		return d.dec.DecodeInterface()
+		return d.dec.DecodeInterfaceLoose()
 	case isStrCode(code):
 		raw, err := d.lengthPrefixed()
 		if err != nil {

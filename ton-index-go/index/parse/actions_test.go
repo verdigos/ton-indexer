@@ -16,10 +16,10 @@ const (
 
 func addrPtr(a models.AccountAddress) *models.AccountAddress { return &a }
 
-// TestApiRepairReadsRowColumn pins the five repaired details fields: the payload has
-// no key for them, so each reads the envelope column the engine wrote on the same row.
+// TestDetailsReadRowColumn pins the five details fields with no payload key: each reads
+// the envelope column the engine wrote on the same row.
 // Every case also fills the column that must not be read, with a different address.
-func TestApiRepairReadsRowColumn(t *testing.T) {
+func TestDetailsReadRowColumn(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		raw  models.RawAction

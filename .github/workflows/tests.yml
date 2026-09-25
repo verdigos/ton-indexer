@@ -77,26 +77,17 @@ jobs:
       run: cmake -B ${{github.workspace}}/build -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
 
     - name: Build C++ libraries
-      run: touch suppression_mappings.txt && cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ton-index-postgres ton-index-postgres-migrate ton-index-clickhouse ton-trace-emulator ton-trace-task-emulator ton-index-go ton-streaming-go ton-mch-engine classifier-failure-test task-emulator-with-actions-test --parallel $(nproc)
+      run: touch suppression_mappings.txt && cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ton-index-postgres ton-index-postgres-migrate ton-index-clickhouse ton-trace-emulator ton-trace-task-emulator ton-index-go ton-streaming-go ton-mch-engine classifier-failure-test task-emulator-with-actions-test test-ton-trace-processor ton-abi-test --parallel $(nproc)
 
-    # The hermetic mch gates. CMake emits the production IR from the tracked
-    # manifest/specs and compiles its tables into the engine. mch_ir_equivalence
-    # byte-compares two independent build-tree emissions for determinism.
-    - name: Test mch engine
-      working-directory: ${{github.workspace}}/build/ton-index-worker/ton-mch-engine
-      run: ctest -R 'mch_' --output-on-failure
+    # The hermetic C++ gates, selected by name. CMake emits the production IR from
+    # the tracked manifest/specs and compiles its tables into the engine;
+    # mch_ir_equivalence byte-compares two independent build-tree emissions for
+    # determinism. One step over the whole tree: the root CMakeLists.txt enables
+    # testing, so every add_test() below is reachable here by name.
+    - name: Test C++ gates
+      run: ctest --test-dir ${{github.workspace}}/build -R 'mch_|classifier_failure|task_emulator_with_actions|ton_trace_processor|ton_abi_' --output-on-failure
 
-    # enable_testing() and add_test live in the subdirectories, so these two ctests
-    # are registered in their own build directories, not in ton-mch-engine.
-    - name: Test classifier failure policy
-      working-directory: ${{github.workspace}}/build/ton-index-worker/ton-index-postgres
-      run: ctest -R 'classifier_failure' --output-on-failure
-
-    - name: Test task emulator with actions
-      working-directory: ${{github.workspace}}/build/ton-index-worker/ton-trace-task-emulator
-      run: ctest -R 'task_emulator_with_actions' --output-on-failure
-
-    # G2: the write-back wire contract, run through ton-index-go's REAL decoder
+    # The write-back wire contract, run through ton-index-go's REAL decoder
     # over the committed engine-produced payload_contract rows, which CI reads
     # but does not regenerate.
     - name: Test ton-index-go

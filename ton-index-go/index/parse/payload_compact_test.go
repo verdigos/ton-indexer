@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"runtime"
@@ -333,10 +335,13 @@ func TestDecodeCompactTypes(t *testing.T) {
 		{name: "hash 0x", body: "81 07 c4 20 " + hashHex, want: map[string]interface{}{"asset_id": "0x" + hashHex}},
 		{name: "string", body: "81 0d a5 68656c6c6f", want: map[string]interface{}{"comment": "hello"}},
 		{name: "bool", body: "81 0e c3", want: map[string]interface{}{"comment_encrypted": true}},
-		{name: "null typed value", body: "81 0d c0", want: map[string]interface{}{"comment": nil}},
-		{name: "uint key in the uint8 form", body: "81 cc 7b c0", want: map[string]interface{}{"worker_tokens": nil}},
+		{name: "null typed value", body: "81 0d c0", want: map[string]interface{}{}},
+		{name: "uint key in the uint8 form", body: "81 cc 7b c0", want: map[string]interface{}{}},
 		{name: "nested record", body: "81 13 82 02 05 06 c4 21 " + addressHex, want: map[string]interface{}{
 			"dex_incoming_transfer": map[string]interface{}{"amount": "5", "asset": addressText},
+		}},
+		{name: "null in a nested record", body: "81 13 82 02 05 0d c0", want: map[string]interface{}{
+			"dex_incoming_transfer": map[string]interface{}{"amount": "5"},
 		}},
 		{name: "claimed rewards records", body: "81 0c 91 81 02 07", want: map[string]interface{}{
 			"claimed_rewards": []interface{}{map[string]interface{}{"amount": "7"}},
@@ -377,8 +382,8 @@ func TestDecodeCompactErrors(t *testing.T) {
 		{name: "short hash", body: "81 47 c4 1f " + hash31, want: "expected a 32 byte hash, got 31 bytes"},
 		{name: "hash as text", body: "81 47 a4 666f6f64", want: "expected a 32 byte bin hash, got string"},
 		{name: "uint from text", body: "81 02 a1 35", want: "expected a msgpack uint or a bin, got string"},
-		{name: "uint from a negative integer", body: "81 02 ff", want: "expected a msgpack uint or a bin, got int8"},
-		{name: "string from an integer", body: "81 0d 05", want: "expected a msgpack string, got int8"},
+		{name: "uint from a negative integer", body: "81 02 ff", want: "expected a msgpack uint or a bin, got int64"},
+		{name: "string from an integer", body: "81 0d 05", want: "expected a msgpack string, got int64"},
 		{name: "bool from text", body: "81 0e a4 74727565", want: "expected a msgpack bool, got string"},
 		{name: "body is an array", body: "90", want: "expected a map"},
 		{name: "body is nil", body: "c0", want: "expected a map, got nil"},
@@ -567,27 +572,6 @@ func TestDecodeCompactHostileLengths(t *testing.T) {
 	}
 }
 
-// TestDecodeCompactPayloadThroughReader checks the decode layer reaches the typed
-// RawAction fields through the unchanged routing, for a string and a bool key.
-func TestDecodeCompactPayloadThroughReader(t *testing.T) {
-	payload, err := EncodeCompactForTest(map[string]interface{}{
-		"comment": "hello", "comment_encrypted": true,
-	})
-	if err != nil {
-		t.Fatalf("EncodeCompactForTest: %v", err)
-	}
-	raw := &models.RawAction{Type: "ton_transfer"}
-	if err := DecodeActionPayload(payload, raw); err != nil {
-		t.Fatalf("DecodeActionPayload: %v", err)
-	}
-	if raw.TonTransferContent == nil || *raw.TonTransferContent != "hello" {
-		t.Errorf("comment = %v", raw.TonTransferContent)
-	}
-	if raw.TonTransferEncrypted == nil || !*raw.TonTransferEncrypted {
-		t.Errorf("comment_encrypted = %v", raw.TonTransferEncrypted)
-	}
-}
-
 // TestEncodeCompactRoundTrip checks the test encoder and the decoder agree on every type:
 // the encoder output of a named map decodes back to that same map.
 func TestEncodeCompactRoundTrip(t *testing.T) {
@@ -607,7 +591,7 @@ func TestEncodeCompactRoundTrip(t *testing.T) {
 		"comment_encrypted":     true,
 		"claimed_rewards":       []interface{}{map[string]interface{}{"asset": "0:" + strings.ToUpper(hashHex), "amount": "7"}},
 		"legs":                  []interface{}{nil, map[string]interface{}{"amount": "8", "asset": "0:" + strings.ToUpper(hashHex)}},
-		"dex_incoming_transfer": map[string]interface{}{"amount": "9", "comment": nil},
+		"dex_incoming_transfer": map[string]interface{}{"amount": "9"},
 		"accounts_added":        []interface{}{"0:" + strings.ToUpper(hashHex)},
 		"peer_swaps":            []interface{}{map[string]interface{}{"amount_in": "10"}},
 		"timestamp":             "1753800000",
@@ -625,5 +609,103 @@ func TestEncodeCompactRoundTrip(t *testing.T) {
 	// encoder writes uint 0, so the map round trips unchanged.
 	if !reflect.DeepEqual(got, named) {
 		t.Errorf("round trip = %#v\nwant %#v", got, named)
+	}
+}
+
+// TestPayloadFieldTablesResolve checks the decoder tables against RawAction: every
+// mapped key and every legs template must name a real field of its prefix.
+func TestPayloadFieldTablesResolve(t *testing.T) {
+	rawType := reflect.TypeOf(models.RawAction{})
+	for key, name := range actionPayloadFieldNames {
+		prefix := key[:strings.LastIndex(key, ".")]
+		if strings.HasPrefix(name, ".") {
+			// absolute target: the dotted name reuses a RawAction envelope field
+			if !hasNamedField(rawType, name[1:]) {
+				t.Errorf("actionPayloadFieldNames[%q] = %q does not resolve to a RawAction field", key, name[1:])
+			}
+			continue
+		}
+		if !hasNamedField(rawType, prefix+name) {
+			t.Errorf("actionPayloadFieldNames[%q] = %q does not resolve to a RawAction field", key, prefix+name)
+		}
+	}
+	for prefix, members := range actionPayloadLegFieldNames {
+		for member, template := range members {
+			field := prefix + fmt.Sprintf(template, 1)
+			if !hasNamedField(rawType, field) {
+				t.Errorf("actionPayloadLegFieldNames[%q][%q] = %q does not resolve", prefix, member, field)
+			}
+		}
+	}
+	for stored, prefixes := range actionDataPrefixes {
+		for _, prefix := range prefixes {
+			if !hasFieldPrefix(rawType, prefix) {
+				t.Errorf("actionDataPrefixes[%q] prefix %q owns no RawAction field", stored, prefix)
+			}
+		}
+	}
+}
+
+func hasFieldPrefix(typ reflect.Type, prefix string) bool {
+	for i := range typ.NumField() {
+		if strings.HasPrefix(typ.Field(i).Name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNamedField(typ reflect.Type, name string) bool {
+	for typ.Kind() == reflect.Ptr || typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return false
+	}
+	for i := range typ.NumField() {
+		field := typ.Field(i)
+		if field.Name == name || hasNamedField(field.Type, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPayloadDecodesAndMarshalsMaxLayerZeroWidths(t *testing.T) {
+	const maxUint128 = "340282366920938463463374607431768211455"
+	payload, err := EncodeCompactForTest(map[string]interface{}{
+		"dst_eid":    "4294967295",
+		"nonce":      "18446744073709551615",
+		"native_fee": maxUint128,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := &models.RawAction{Type: "layerzero_send"}
+	if err := DecodeActionPayload(payload, raw); err != nil {
+		t.Fatalf("DecodeActionPayload: %v", err)
+	}
+	if raw.LayerzeroPacketDstEid == nil || *raw.LayerzeroPacketDstEid != math.MaxUint32 {
+		t.Fatalf("dst_eid = %v", raw.LayerzeroPacketDstEid)
+	}
+	if raw.LayerzeroPacketNonce == nil || *raw.LayerzeroPacketNonce != math.MaxUint64 {
+		t.Fatalf("nonce = %v", raw.LayerzeroPacketNonce)
+	}
+	if raw.LayerzeroSendNativeFee == nil || raw.LayerzeroSendNativeFee.String() != maxUint128 {
+		t.Fatalf("native_fee = %v", raw.LayerzeroSendNativeFee)
+	}
+
+	action, err := ParseRawAction(raw)
+	if err != nil {
+		t.Fatalf("ParseRawAction: %v", err)
+	}
+	encodedJSON, err := json.Marshal(action)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	for _, number := range []string{"\"dst_eid\":4294967295", "\"nonce\":18446744073709551615", "\"native_fee\":" + maxUint128} {
+		if !strings.Contains(string(encodedJSON), number) {
+			t.Errorf("JSON missing numeric token %s: %s", number, encodedJSON)
+		}
 	}
 }
