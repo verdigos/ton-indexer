@@ -43,11 +43,11 @@ actions:
     amount: 1346898335834463
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
-      - ezruN+Gzhi1ZZSQ/UCeDf3Kz7TPekGxrRDJCvkVXydg=
       - z7L9BXr84WUtSLQRKMI7XfkPNcJbC1qqRkHgto4KK8A=
+      - ezruN+Gzhi1ZZSQ/UCeDf3Kz7TPekGxrRDJCvkVXydg=
     accounts:
       - "-1:B7683E13C8833407E7E116E38CFF1C5543E43190A0BB2CA6F52E1ACA3C32AC8A"
       - 0:0CDE9962F7230FE1B6F5024984439B5092C9BFCA643C2B6DDF0B72BB765673AB
@@ -71,9 +71,8 @@ actions:
     amount: null
     value: 1346898345834463
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - SfMA6Ze8RSaefqBM2rrdiGoPUwe+TchHjpgnVkCILfc=
       - z7L9BXr84WUtSLQRKMI7XfkPNcJbC1qqRkHgto4KK8A=

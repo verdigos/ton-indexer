@@ -1,0 +1,36 @@
+# dns / change dns bounce
+# note: synthetic: A bounced DNS record change classifies as a successful DNS change
+# trace: OzGzjLNR3FBEZx3-_xl4V5W1MMea5dnOcyrJCs9iicc=
+actions:
+  - type: change_dns
+    matcher: change_dns
+    anchor: change_dns@200
+    id: G6G686PpALleJFlJBB/+2fSu1uRbzp1b2AA82Cs6/Xo=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: 0:C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      key: 0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+      record_value: 0:D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4
+      value_schema: DNSNextResolver
+    tx_hashes:
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - A3cqAdmMk/EQWj6EutCLsNckUqeLGju+r27ND2McwTY=
+      - zschLenripMM09j8QPwj4JSRqSOSiAPztimDu2x9j7o=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 200
+    end_lt: 300
+    start_utime: 1200
+    end_utime: 1300
+    mc_seqno_end: 0

@@ -75,8 +75,8 @@ actions:
     value: 999985640
     opcode: 0xc59a7cd3
     tx_hashes:
-      - AKBa6rWIVZHFZIKEAJ51MUpVGV2sXu/EMAfT1l4scT4=
       - bWC1oqdul0RWQPgOgrEClBvZcXni64euGgR8P/+K0mU=
+      - AKBa6rWIVZHFZIKEAJ51MUpVGV2sXu/EMAfT1l4scT4=
     accounts:
       - 0:54BBB810AB6BA5D74F78B71F0815291EA9B84C3AC85D87F11BE5079B6AEB267E
       - 0:F88EACAE633FAAFBBAF40F843BA54977C77D573E8582337244A5F745B84F8F2B
@@ -133,12 +133,11 @@ actions:
     amount: 999985640
     value: null
     opcode: null
-    cocoon_client_withdraw_data:
+    data:
       query_id: 374934315680212459
-      withdraw_amount: 999985640
     tx_hashes:
-      - AKBa6rWIVZHFZIKEAJ51MUpVGV2sXu/EMAfT1l4scT4=
       - K+nxIQ9D2cc51j/BfU2nurITZia3POGyoZkiSeP9qqI=
+      - AKBa6rWIVZHFZIKEAJ51MUpVGV2sXu/EMAfT1l4scT4=
       - TAdPv0ZhsedBLo0ujNAwj7ZD8efj2COzmnyCgbvoC5A=
       - bWC1oqdul0RWQPgOgrEClBvZcXni64euGgR8P/+K0mU=
       - jtIZTmh64YnhJlWXicBmRPR4ajVIdSFc2MLS5qnRKdc=

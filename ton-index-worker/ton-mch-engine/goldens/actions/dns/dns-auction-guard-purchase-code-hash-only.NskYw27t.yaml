@@ -1,0 +1,91 @@
+# dns / dns auction guard purchase code-hash-only
+# note: synthetic: A code hash match buys the auction and classifies as a DNS purchase
+# trace: NskYw27t_ci97_r01GsZMNAiHfvxRyD9WRI-1m2GCFo=
+actions:
+  - type: call_contract
+    anchor: call_contract#12345678@400
+    id: PPV2Ys+ccdWrw4bU4Bi0WiHu97CGU5XrK7O3ckjvnRk=
+    success: true
+    source: 0:E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5
+    source_secondary: null
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 456
+    opcode: 0x12345678
+    tx_hashes:
+      - +ScxH0/j5SKwXXfZ+c/CIb24HJEPXZUcu2sEMRbmOVU=
+    accounts:
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+      - 0:E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5
+    start_lt: 400
+    end_lt: 400
+    start_utime: 1400
+    end_utime: 1400
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#370fec51@500
+    id: UzR6GghSh85Wq2/f6+NnZFU7e41D+EFt4GMmcOstAYA=
+    success: true
+    source: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    source_secondary: null
+    destination: 0:F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 123
+    opcode: 0x370fec51
+    tx_hashes:
+      - +ScxH0/j5SKwXXfZ+c/CIb24HJEPXZUcu2sEMRbmOVU=
+      - MJaRrQ0d/7Rz+aLEWUV2G1ZAh2IEre2gVXW4SppBV5k=
+    accounts:
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+      - 0:F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6
+    start_lt: 500
+    end_lt: 500
+    start_utime: 1500
+    end_utime: 1500
+    mc_seqno_end: 0
+    parent_action_id: EI4gjZRbX1CkV9viW+Y1NPMtAF+w9UI2hnUB8H8yGeo=
+    ancestor_type:
+      - dns_purchase
+  - type: dns_purchase
+    matcher: dns_purchase
+    anchor: dns_purchase@500
+    id: EI4gjZRbX1CkV9viW+Y1NPMtAF+w9UI2hnUB8H8yGeo=
+    success: true
+    source: null
+    source_secondary: null
+    destination: 0:E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5
+    destination_secondary: null
+    asset: 0:C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3
+    asset_secondary: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      nft_index: 42
+      payout_amount: 123
+      price: 123
+      query_id: 7
+    tx_hashes:
+      - +ScxH0/j5SKwXXfZ+c/CIb24HJEPXZUcu2sEMRbmOVU=
+      - MJaRrQ0d/7Rz+aLEWUV2G1ZAh2IEre2gVXW4SppBV5k=
+    accounts:
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+      - 0:E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5
+      - 0:F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6F6
+    start_lt: 500
+    end_lt: 500
+    start_utime: 1500
+    end_utime: 1500
+    mc_seqno_end: 0

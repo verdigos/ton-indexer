@@ -1,0 +1,41 @@
+# nft / Fragment auction close by external message, lone fill-up
+# note: The auction closes with one payout leg and classifies as a Telegram NFT transfer
+# trace: NkBUeoyBHQRqKV1iVuVPFqhAhh3PUJCJB0BJcvYxPko=
+actions:
+  - type: nft_transfer
+    matcher: telegram_nft_purchase
+    anchor: nft_transfer@104277894000001
+    id: wjIDwRuHCNU6Z+eDXAJ5BY6zLsvQmkKHPVDjGSZJ6x0=
+    success: true
+    source: null
+    source_secondary: null
+    destination: 0:B5616213CA83D535D241DF84F04E95846053C1BCCD53D140CE25075BC286F7CE
+    destination_secondary: null
+    asset: 0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2
+    asset_secondary: 0:42EC19B70AAF71752AD7DAB8FEBA718B6EEBD2240ACF18296965369E9A128ACB
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      forward_payload: cellhash:E7B2237ADAE88D56BE374B5CFA1B9FC3FC44ED0AF5059760D4D88EBB4B412D9D
+      is_purchase: true
+      marketplace_fee_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
+      nft_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
+      payout_amount: 118996522006
+      price: 120000000000
+      query_id: 104277894000001
+    tx_hashes:
+      - NkBUeoyBHQRqKV1iVuVPFqhAhh3PUJCJB0BJcvYxPko=
+      - /FYwI51RMoyFQ1msQ1hNOSKZNFp6slvKkJpt6IIok5I=
+      - oQvtmA+QwtxaaQdIzem8ODy0HeKXVZoVJTnzW2rrfmo=
+    accounts:
+      - 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
+      - 0:42EC19B70AAF71752AD7DAB8FEBA718B6EEBD2240ACF18296965369E9A128ACB
+      - 0:B5616213CA83D535D241DF84F04E95846053C1BCCD53D140CE25075BC286F7CE
+    start_lt: 104277894000001
+    end_lt: 104277894000004
+    start_utime: 1789729020
+    end_utime: 1789729020
+    mc_seqno_end: 93495313

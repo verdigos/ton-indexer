@@ -46,8 +46,8 @@ actions:
     value: 292961584
     opcode: 0x000021e6
     tx_hashes:
-      - fNtiDoeIhFTa/n7ULoAUGuug4IGKyjjYu0fvy7VtCpc=
       - jfOgz9GGIMyoFij2yicGLB7WnUlwQ/YKg40lTPyjDMk=
+      - fNtiDoeIhFTa/n7ULoAUGuug4IGKyjjYu0fvy7VtCpc=
     accounts:
       - 0:310330DD0E813C6FA4E400610EEEC96F48A5B537230AA546C2382D452F8EA332
       - 0:4FC332474B5E3FB5A09CB37A010DC6C3AE2BD2B25A6AC6756F4CD08114D962D7
@@ -104,13 +104,11 @@ actions:
     amount: 3736185
     value: null
     opcode: null
-    evaa_withdraw_data:
+    data:
       asset_id: "0xca9006bd3fb03d355daeeff93b24be90afaa6e3ca0073ff5720f8a852c933278"
       fail_reason: withdraw_locked_excess
       is_ton: false
       master: 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
-      master_jetton_wallet: null
-      recipient_jetton_wallet: null
     tx_hashes:
       - 02KO+3RSDiakxzyMbk2MxKMsVsAgtGM78n1aWdxqFm4=
       - JQTMyx14KmbkMtqMMG0PyBLMuO9lB0JeiM18RMTM9IU=

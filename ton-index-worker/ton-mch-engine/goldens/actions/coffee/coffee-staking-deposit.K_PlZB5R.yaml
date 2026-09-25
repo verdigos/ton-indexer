@@ -46,12 +46,12 @@ actions:
     amount: 54999439792
     value: null
     opcode: null
-    coffee_staking_deposit_data:
-      minted_item_address: 0:BC36AD7C77A596ABF16AB8BCE9D8B682D40B6EE1873D74114E9C151E63E435AC
-      minted_item_index: 1317
+    data:
+      nft_address: 0:BC36AD7C77A596ABF16AB8BCE9D8B682D40B6EE1873D74114E9C151E63E435AC
+      nft_index: 1317
     tx_hashes:
-      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - K/PlZB5RlxrIdSTiEdvKqazSqLUWzQ8PB4NzDTxAHk8=
+      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - W+DDyV7mEHP4gHOzPF8KuJavLsL/voR6/Lx5d2l1NGA=
       - ZoLRgarnN4Sepj6ZzNK/dnC1cxT/b9VO4WzxMzkykas=
       - oXqXwthII141mgeQXnubkvXh4tuTHG1H6w6Pg+x3Uc4=
@@ -111,17 +111,15 @@ actions:
     amount: 54999439792
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 300000000
       forward_payload: cellhash:D95D460A71634E22E259E84FEF3FC684EE1F0E316A99F6C232AD6CD6809A3298
-      is_encrypted_comment: false
       query_id: 1697643576172154
       response_destination: 0:626861460C096445C421A86448786B5D6A8339DFAE38406EFE4886ED9B4BC90B
     tx_hashes:
-      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - K/PlZB5RlxrIdSTiEdvKqazSqLUWzQ8PB4NzDTxAHk8=
+      - 2s3fJGfRC6+hMOI2oXdyzWFf5T6A4/lMoT1k+s9Dnk4=
       - W+DDyV7mEHP4gHOzPF8KuJavLsL/voR6/Lx5d2l1NGA=
       - ZoLRgarnN4Sepj6ZzNK/dnC1cxT/b9VO4WzxMzkykas=
       - t5TlcBe3sGJ/IQSO52Fmk3cDqytHpD3Ld0QmeW2pgOg=
@@ -154,8 +152,8 @@ actions:
     amount: null
     value: null
     opcode: 0xbe5a7595
-    nft_mint_data:
-      nft_item_index: 1317
+    data:
+      nft_index: 1317
     tx_hashes:
       - oXqXwthII141mgeQXnubkvXh4tuTHG1H6w6Pg+x3Uc4=
       - qunlGzskcNON1Oo4upb7CaBQJC21BdXemsJJNP00Dtk=

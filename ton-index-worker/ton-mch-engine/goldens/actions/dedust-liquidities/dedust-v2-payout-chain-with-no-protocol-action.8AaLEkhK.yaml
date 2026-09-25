@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 payout chain with no protocol action
-# note: opcodes 0x3db5f13a, 0x0d299e12 and DeDust payout 0x3216ca09 are present but no matcher fires
+# note: The payout chain includes three DeDust opcodes and classifies only as contract calls
 # trace: 8AaLEkhKD60VBcYev2St_S8O0n3E6pIJDFzA14GfDPE=
 actions:
   - type: call_contract
@@ -70,8 +70,8 @@ actions:
     value: 150000000
     opcode: 0x3db5f13a
     tx_hashes:
-      - 4zq2HGxjNHwIj9cAp885vHx3KFAHb58aX/SMPQRunds=
       - 8AaLEkhKD60VBcYev2St/S8O0n3E6pIJDFzA14GfDPE=
+      - 4zq2HGxjNHwIj9cAp885vHx3KFAHb58aX/SMPQRunds=
     accounts:
       - 0:41769587290F3D61FFBACDFD5522758ADAAA9D8049406D009E079A7CC66C48CB
       - 0:42760416177B9891FDA93252B20658C389AB78EBF832B6C7A7834B05B64F6CD4

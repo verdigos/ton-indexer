@@ -43,15 +43,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi
+    data:
       dex_incoming_transfer:
         amount: 30000000000
         asset: 0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C
         destination: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
         destination_jetton_wallet: 0:1150B518B2626AD51899F98887F8824B70065456455F7FE2813F012699A4061F
         source: 0:F7B6853BA0CA185B85D0E6205A2C7B357F62999E8C5D640693CAE30284C768CD
-        source_jetton_wallet: null
       dex_outgoing_transfer:
         amount: 1713997851233
         asset: 0:F9B72E48C55DC7102118D5B6DB75DEEB34D63E65C03EA40206417CB24594440F
@@ -59,13 +57,13 @@ actions:
         destination_jetton_wallet: 0:3B568E5BA0C3B2BD846136FE615434385BCB51E190826CF07B4671E6F24C286C
         source: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
         source_jetton_wallet: 0:E500D09250509408DFFE46390A0AB89C6FF16DD7519B2FB0B946FCF881376564
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi
       sender: 0:F7B6853BA0CA185B85D0E6205A2C7B357F62999E8C5D640693CAE30284C768CD
     tx_hashes:
+      - 2xripwtdxwKPdHABREASj6enBvKBTwsOVJx6YEZfI64=
       - /XAfRJq3zmVMvwe7TqYgxsFnma6H6CQpsjnyEz1U98I=
       - 11NToM3ejXQZsffj9wA8XWuykdRjG65ZqcC0CAf+8rI=
-      - 2xripwtdxwKPdHABREASj6enBvKBTwsOVJx6YEZfI64=
       - I7Xt5n8C3WkF9kUCxKRLGEpUyl7R74X5n5UPwxRbKjU=
       - Li4TSpVG1PMIT1ZwecG65PlAeULkXDgPAPl7O18RwTc=
       - SnCA71yv7GPHTsqsm7Qg4jWD2QMHdqMSV5EOZTT247E=
@@ -99,19 +97,17 @@ actions:
     amount: 1717432717
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
       forward_payload: cellhash:C550249D53913BF0AA136679C340978BE9CC5B49F044F67FE55C189B4DC0E928
-      is_encrypted_comment: false
       query_id: 14624681218796287512
       response_destination: 0:224073DC87D1100361226D9A1CCEAA89D1B8249BD9B9B22C6013B35D2170FB4B
     tx_hashes:
+      - uqu1XONQrl9GlHbd7tXKhmTxfzMe68EiVqqRsC3BAss=
       - 5c8BVncrxWOcod0OgddlHCJ9LkF/ceMAqfMkN89qMWU=
       - 7aamV0HElPe3k8C6FQjgrdri4GIFXYjngks+/tMUs1w=
       - uG6DoXN4iZOg3mtMfFjwJn0t/6O4gV5CLu+B1szRpDo=
-      - uqu1XONQrl9GlHbd7tXKhmTxfzMe68EiVqqRsC3BAss=
     accounts:
       - 0:224073DC87D1100361226D9A1CCEAA89D1B8249BD9B9B22C6013B35D2170FB4B
       - 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E

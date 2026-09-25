@@ -79,18 +79,15 @@ actions:
     amount: 3998849373083
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 21721
       response_destination: 0:712CB2B613EDEAFCAC9E7B79B188E3D387EA21C415D6E4E4C0CFBFFA6AB7031D
     tx_hashes:
+      - s0baLhSJmpksN858LtB50sfAAnaEEgb06WPbKy6QH4k=
       - OZ1xiTKTH7tm63Gv0lejQ1kUSV/qBGl6IxTnaXlRnH4=
       - gaPa/TambbKHCEfekr7ZojlQt1OQGnr5PGPaivfY9MI=
-      - s0baLhSJmpksN858LtB50sfAAnaEEgb06WPbKy6QH4k=
       - wC4djeb4IXT5zPFDGiYf7aPi5HDgQz0S4+nqEBEJMko=
     accounts:
       - 0:0E1F5140AAA6F35F147432FA2AAB8C0FFB66572FDC3B2249A824BD5EEBA8ED7A

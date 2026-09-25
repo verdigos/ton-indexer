@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 partial deposit, one side only
-# note: dedust_v2_deposit_partial matcher; only amount1 present, deposit contract stays open
+# note: The one sided deposit stays open and classifies as a partial liquidity deposit
 # trace: a4iGagV3jl5etlZ77Zxj8krjyQn7Z3Uqzb7YRYIOY_U=
 actions:
   - type: call_contract
@@ -44,8 +44,8 @@ actions:
     value: 200000000
     opcode: 0x178d4519
     tx_hashes:
-      - H5U7BUtLYy0E8G2VJiDdDhT3g8z5n69XxqGyUJScXCo=
       - uCjj7Fgo8vbF2GBdHU+hcEZiS1RQeJhlOQieAJAp1H4=
+      - H5U7BUtLYy0E8G2VJiDdDhT3g8z5n69XxqGyUJScXCo=
     accounts:
       - 0:3A3B006AAACE98F796F6078BE5F945AE8E6A41D881AAA2B72D45357B4BC6DB5F
       - 0:5BF0CDD394489CEE3C423D239A0EF97EF69A5089D22D3245118696AB2B2F9708
@@ -96,8 +96,8 @@ actions:
     value: 12591002
     opcode: 0x2c76b973
     tx_hashes:
-      - NKAPIlUxDlotsP/CCMnFitYKSHGe5IKXBGc/lnk4tnI=
       - bcmKncutcBzpvZd8TAIcgEmZDt0mIQprqdnhZrtfT2I=
+      - NKAPIlUxDlotsP/CCMnFitYKSHGe5IKXBGc/lnk4tnI=
     accounts:
       - 0:3A3B006AAACE98F796F6078BE5F945AE8E6A41D881AAA2B72D45357B4BC6DB5F
       - 0:5BED1D1F1DC8ECC7F0F04EF74A42651FB23CBC20EA32A3DD09AF0C49DB7DC415
@@ -122,8 +122,8 @@ actions:
     value: 150000000
     opcode: 0x7362d09c
     tx_hashes:
-      - 9tCNnVXKY2z8efoKUNcqWQ+DWKufle1E+EPP3UW/I2Q=
       - H5U7BUtLYy0E8G2VJiDdDhT3g8z5n69XxqGyUJScXCo=
+      - 9tCNnVXKY2z8efoKUNcqWQ+DWKufle1E+EPP3UW/I2Q=
     accounts:
       - 0:5BED1D1F1DC8ECC7F0F04EF74A42651FB23CBC20EA32A3DD09AF0C49DB7DC415
       - 0:5BF0CDD394489CEE3C423D239A0EF97EF69A5089D22D3245118696AB2B2F9708
@@ -174,8 +174,8 @@ actions:
     value: 25080000000
     opcode: 0x94826557
     tx_hashes:
-      - COhsCJpfCa3ZXAfDEnStjTJu2pRXi9kPPIhnuOxDAvc=
       - a4iGagV3jl5etlZ77Zxj8krjyQn7Z3Uqzb7YRYIOY/U=
+      - COhsCJpfCa3ZXAfDEnStjTJu2pRXi9kPPIhnuOxDAvc=
     accounts:
       - 0:3A3B006AAACE98F796F6078BE5F945AE8E6A41D881AAA2B72D45357B4BC6DB5F
       - 0:F3ABC27E45CA445F341DB6A2643AE462C8197194DA833E1529EE7701D4DDF47B
@@ -278,8 +278,8 @@ actions:
     value: 3208284555
     opcode: 0xd53276db
     tx_hashes:
-      - U8XmJEAe9zQjlh44acwdupio6lyJYLszo+MvteGNCXA=
       - pmIa9GvEkk8I0C2De2oielVvqythvfxddBDZ15BcKQU=
+      - U8XmJEAe9zQjlh44acwdupio6lyJYLszo+MvteGNCXA=
     accounts:
       - 0:F345953C406E15FCA7C9C8CD872A1A76472E5CC98066C644E248788237821069
       - 0:F3ABC27E45CA445F341DB6A2643AE462C8197194DA833E1529EE7701D4DDF47B
@@ -330,8 +330,8 @@ actions:
     value: 145448925
     opcode: 0xd53276db
     tx_hashes:
-      - 0YhlRUQbsruETGTi0WuYtDOM0HyWs7iTvCWElR7NVm4=
       - ZD4GxetGE+9urB+Bdfvd/ZhZraSmfLjyZaIFNn0+DZg=
+      - 0YhlRUQbsruETGTi0WuYtDOM0HyWs7iTvCWElR7NVm4=
     accounts:
       - 0:5B2FDDBFE9DE685B49C11BE1C7853BDEA7D9262724F9CCC77B019065056B96C9
       - 0:66FE82C21F86D1A9531DBB06592FAA16ED1519C2E15873F00B4D1F637E2C230C
@@ -356,8 +356,8 @@ actions:
     value: 148521798
     opcode: 0xdc5ddba1
     tx_hashes:
-      - 5ufZkcdl05NVTHHrFveLtUlvECQiYWJw8Zhvs60dnew=
       - 9tCNnVXKY2z8efoKUNcqWQ+DWKufle1E+EPP3UW/I2Q=
+      - 5ufZkcdl05NVTHHrFveLtUlvECQiYWJw8Zhvs60dnew=
     accounts:
       - 0:5B4CD50697F6A56472D56C6A0751038797A8C7FD87C14982514B7C8693BE6795
       - 0:5BED1D1F1DC8ECC7F0F04EF74A42651FB23CBC20EA32A3DD09AF0C49DB7DC415
@@ -434,8 +434,8 @@ actions:
     value: 200000000
     opcode: 0x178d4519
     tx_hashes:
-      - H5U7BUtLYy0E8G2VJiDdDhT3g8z5n69XxqGyUJScXCo=
       - uCjj7Fgo8vbF2GBdHU+hcEZiS1RQeJhlOQieAJAp1H4=
+      - H5U7BUtLYy0E8G2VJiDdDhT3g8z5n69XxqGyUJScXCo=
     accounts:
       - 0:3A3B006AAACE98F796F6078BE5F945AE8E6A41D881AAA2B72D45357B4BC6DB5F
       - 0:5BF0CDD394489CEE3C423D239A0EF97EF69A5089D22D3245118696AB2B2F9708
@@ -486,8 +486,8 @@ actions:
     value: 148640798
     opcode: 0xdc5ddba1
     tx_hashes:
-      - NZ2s063uQwxWBUhj9CczePQzD4JMKLV3AYVuOaciBQc=
       - iEjip+mdd5kQVrO+Qgcifl5cKs1MsZ9IGr1rpaTXUD0=
+      - NZ2s063uQwxWBUhj9CczePQzD4JMKLV3AYVuOaciBQc=
     accounts:
       - 0:5B4CD50697F6A56472D56C6A0751038797A8C7FD87C14982514B7C8693BE6795
       - 0:5BED1D1F1DC8ECC7F0F04EF74A42651FB23CBC20EA32A3DD09AF0C49DB7DC415
@@ -538,20 +538,15 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 1500000000000
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: dedust_v2
-      lp_tokens_minted: null
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 1500000000000
+      protocol: dedust_v2
     tx_hashes:
+      - uCjj7Fgo8vbF2GBdHU+hcEZiS1RQeJhlOQieAJAp1H4=
       - NZ2s063uQwxWBUhj9CczePQzD4JMKLV3AYVuOaciBQc=
       - TMcWen4jpJlK9QwCF9AD6e3L5lzQPDMZfHTb1RBW8fg=
       - iEjip+mdd5kQVrO+Qgcifl5cKs1MsZ9IGr1rpaTXUD0=
-      - uCjj7Fgo8vbF2GBdHU+hcEZiS1RQeJhlOQieAJAp1H4=
     accounts:
       - 0:3A3B006AAACE98F796F6078BE5F945AE8E6A41D881AAA2B72D45357B4BC6DB5F
       - 0:5B4CD50697F6A56472D56C6A0751038797A8C7FD87C14982514B7C8693BE6795
@@ -576,9 +571,9 @@ actions:
     amount: null
     value: 250000000
     opcode: null
-    ton_transfer_data:
-      content: DTrade fee / Uranus
-      encrypted: false
+    data:
+      comment: DTrade fee / Uranus
+      comment_encrypted: false
     tx_hashes:
       - a4iGagV3jl5etlZ77Zxj8krjyQn7Z3Uqzb7YRYIOY/U=
       - puhFo0oox9wzoyjbT/i+YcsHhQFtknPqojAdT7z9+RU=

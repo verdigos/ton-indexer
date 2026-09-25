@@ -17,8 +17,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi_v2
+    data:
       dex_incoming_transfer:
         amount: 208086436190
         asset: 0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF
@@ -33,14 +32,14 @@ actions:
         destination_jetton_wallet: 0:27DC8F74439515FB5A7C27651E53BBE3F1EBE2900504CC38845E2065A5F5DB83
         source: 0:1061B9DBD4418AD166FC9A4DEF116E2F6C74F2BFB70E71F2653D643CEFFEBFA9
         source_jetton_wallet: 0:1061D1CCE2AB39295EEAC3585CC8C4BA3AFE96CDC2F7F8C063F3558E4FA1D9C1
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi_v2
       sender: 0:F03785B1D4978B1A00133F66A97DDDED84B28C1311C47915167AD63CA9187E56
     tx_hashes:
+      - CD5IIyWGj3nbuAyIEgmeMGJ28UdC4lMHqRRYcxdLraE=
       - +p4y70lr32NABsRLQxcCvNI+vbpMe0IPzULHN22vxnE=
       - 3zInmaI7ViGDZi9m6I04wKJek7r3VEyc1QqVegaemBw=
       - 6jYVpY/YBs8DIMPdJXLoTkveQDGlSK51UNFnAuvbhqw=
-      - CD5IIyWGj3nbuAyIEgmeMGJ28UdC4lMHqRRYcxdLraE=
       - FFfj4RJDrnS9xktbQs9DpE2qv27vbtDwFE6t2fHBHTo=
       - KGf2L/6BIMWtDxOpzcxeJkRpQcg5GDfwSeWgnC3TDWM=
       - L9T5EBw4x+nY8XjUsTBD18CO4tM8WmNDFSvmF6mhMpc=
@@ -78,8 +77,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: coffee
+    data:
       dex_incoming_transfer:
         amount: 18984362
         asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
@@ -89,17 +87,14 @@ actions:
         source_jetton_wallet: 0:27DC8F74439515FB5A7C27651E53BBE3F1EBE2900504CC38845E2065A5F5DB83
       dex_outgoing_transfer:
         amount: 6020752322
-        asset: null
         destination: 0:F03785B1D4978B1A00133F66A97DDDED84B28C1311C47915167AD63CA9187E56
-        destination_jetton_wallet: null
         source: 0:C44CF0B64EB9DEDFB010C7B24A508140D86F6E07789F9383BB9B2141EA9C08EA
-        source_jetton_wallet: null
-      min_out_amount: null
       peer_swaps: []
+      protocol: coffee
       sender: 0:3D264E3CB401B01DC7D1CFC232470D185A3EBA63D933E738617F9942B9294C4E
     tx_hashes:
-      - HiSiS0GxQwXqu+hJ3+0i4CXofesgZGZa7IT/3oQvfxg=
       - L9T5EBw4x+nY8XjUsTBD18CO4tM8WmNDFSvmF6mhMpc=
+      - HiSiS0GxQwXqu+hJ3+0i4CXofesgZGZa7IT/3oQvfxg=
       - VkpKahxFHVl675Sl/Xiz8gFn+5hCftM6W4WgYDWRkfw=
       - g9h0XST1XssjI4R6fNoADAyOLTYOw1Oifqe6SeAuLHg=
       - gdcJZBWBAhQ5+iiGriprAYvChM6rqJDFLdLR1+Sa1uw=

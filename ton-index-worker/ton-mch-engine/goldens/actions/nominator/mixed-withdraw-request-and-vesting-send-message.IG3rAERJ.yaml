@@ -75,9 +75,10 @@ actions:
     amount: null
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
+      - mnDlbgOSyeo1vKPnm1cZiFcooxRDLgkriK425p+1wPQ=
       - Qoi/anYdaO9ksxCoZ7IQ3V8gtySPuvnGR5yx/NsxWAE=
       - dF+QsiLaJ4/OeqpTJSNUY4kNi3FmrEXTbi3JuOa31Bo=
     accounts:
@@ -104,7 +105,7 @@ actions:
     amount: 1000000000
     value: null
     opcode: null
-    vesting_send_message_data:
+    data:
       message_boc: cellhash:CEB5BD0850B644C8E4115BE9EF8FF3E9AB54BD20B3478AA67E73FE150D9FFF3A
       query_id: 0
     tx_hashes:

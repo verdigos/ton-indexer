@@ -1,0 +1,60 @@
+# nominator / nominator non pool
+# note: synthetic: A non pool withdrawal attempt classifies only as two TON transfers
+# trace: hAEvldgk1ghxDfzmVB_8Isoqp2I0zvZ8piAQFkAsYMY=
+actions:
+  - type: ton_transfer
+    anchor: ton_transfer@200
+    id: 0nt9QROc+OQBcfBNK/fE539HRdlgpCwGi9J3qcm4gNg=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 5000000000
+    opcode: null
+    data:
+      comment_encrypted: false
+    tx_hashes:
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - hIZf2Ow5dr+oQQO1003QWvysZkVW8rJNGMp/PQhf5F0=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0
+  - type: ton_transfer
+    anchor: ton_transfer@300
+    id: TY+wiOTrZPXPIqztgKNsiAj0pPUVOcIK4JRZYFg6VpA=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 7000000000
+    opcode: null
+    data:
+      comment_encrypted: false
+    tx_hashes:
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - 4IPtEj6m2M0JetHSFP55c7FpiRtcpU6TSvjlckIKAT8=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3
+    start_lt: 300
+    end_lt: 300
+    start_utime: 1300
+    end_utime: 1300
+    mc_seqno_end: 0

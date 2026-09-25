@@ -1,5 +1,5 @@
 # gasless / Gasless send by a Telegram wallet
-# note: named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden
+# note: The Telegram wallet sends TON and classifies as a gasless request plus a TON transfer
 # trace: jFObmtSqr6Fzn6QnPonxGlzgTWjWvRcoi0BF_wSCjcM=
 actions:
   - type: call_contract
@@ -18,8 +18,8 @@ actions:
     value: 5000000
     opcode: 0x73896e74
     tx_hashes:
-      - 0H5D3xdC6NdacUiYr8+UxD8GXdXeo5VTWS7fnhO5PrY=
       - jFObmtSqr6Fzn6QnPonxGlzgTWjWvRcoi0BF/wSCjcM=
+      - 0H5D3xdC6NdacUiYr8+UxD8GXdXeo5VTWS7fnhO5PrY=
     accounts:
       - 0:E15488B65F7E904F1D14C84AC6F603CCC4A404B03BEFB568D5F5CC8ED6866887
       - 0:E55E63B850B71B8FF5AD44E1B8271237AFAF31900B2B6D41233707BB585B8091
@@ -44,8 +44,8 @@ actions:
     value: 5000000
     opcode: null
     tx_hashes:
-      - 0H5D3xdC6NdacUiYr8+UxD8GXdXeo5VTWS7fnhO5PrY=
       - jFObmtSqr6Fzn6QnPonxGlzgTWjWvRcoi0BF/wSCjcM=
+      - 0H5D3xdC6NdacUiYr8+UxD8GXdXeo5VTWS7fnhO5PrY=
     accounts:
       - 0:E15488B65F7E904F1D14C84AC6F603CCC4A404B03BEFB568D5F5CC8ED6866887
       - 0:E55E63B850B71B8FF5AD44E1B8271237AFAF31900B2B6D41233707BB585B8091
@@ -69,11 +69,9 @@ actions:
     amount: null
     value: 1000000
     opcode: null
-    extra:
+    data:
+      comment_encrypted: false
       parent_gasless_action: Gqy5wkGo7Egv/9ZPtNgjUGzVYlMk534Ujm1n+0j7rVg=
-    ton_transfer_data:
-      content: null
-      encrypted: false
     tx_hashes:
       - 0H5D3xdC6NdacUiYr8+UxD8GXdXeo5VTWS7fnhO5PrY=
       - tQvSphmhu3pUWwOv2bpSxjDZVZFX6Q+UIe9SetnQNDA=

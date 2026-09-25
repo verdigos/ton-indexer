@@ -41,10 +41,11 @@ actions:
     asset2: null
     asset2_secondary: null
     amount: null
-    value: 1744132682
+    value: null
     opcode: null
-    extra:
+    data:
       pubkey: bb3a21df270dd0e6dc1169f4afb93be5eb2945df81c011f2b29f648daf64d150
+      timestamp: 1744132682
     tx_hashes:
       - /6GHAnnp8ZMqUy6G6ZbAjcwO4WD2xp/yms84bK9wsmE=
     accounts:

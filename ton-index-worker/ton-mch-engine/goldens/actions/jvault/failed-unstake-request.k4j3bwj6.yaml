@@ -17,8 +17,8 @@ actions:
     value: 340000000
     opcode: 0x0168d4b7
     tx_hashes:
-      - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
       - k4j3bwj6FjSeLcdN8t4usf2Dq4qWpHkNDm2WH8/qeq4=
+      - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
     accounts:
       - 0:1BEC198536F26D764F5B26CF305F44EFF1DE28204F09581E51FF938E435CD220
       - 0:3EEAEF410E152045D1888349A6D59DBFA1D854950C255FD83E35D95E411BC347
@@ -56,6 +56,9 @@ actions:
     start_utime: 1746523714
     end_utime: 1746523714
     mc_seqno_end: 47519767
+    parent_action_id: PdBvafUvyNlpMxX044KDtZENQ1yKNARnw8Q2fMLFgQ4=
+    ancestor_type:
+      - jvault_unstake_request
   - type: jvault_unstake_request
     matcher: jvault_unstake_request
     anchor: jvault_unstake_request@56850346000002
@@ -71,16 +74,19 @@ actions:
     asset2_secondary: null
     amount: 52940708489332
     value: null
-    opcode: 0x0000002e
+    opcode: null
+    data:
+      exit_code: 46
     tx_hashes:
-      - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
       - k4j3bwj6FjSeLcdN8t4usf2Dq4qWpHkNDm2WH8/qeq4=
+      - /Ghcpbhc+RclAhGy9VgNPjeS/NOvySGjN/NDwCW/Vt4=
+      - 2O1uY3l4qOwa4F0R+umaoeU/bns8MMRq3JTa3ouHSi4=
     accounts:
       - 0:1BEC198536F26D764F5B26CF305F44EFF1DE28204F09581E51FF938E435CD220
       - 0:3EEAEF410E152045D1888349A6D59DBFA1D854950C255FD83E35D95E411BC347
       - 0:DA0BEB83E10D069139C6F655EA3DBE472A0C94865CDC41524E1C90E70F254D51
     start_lt: 56850346000002
-    end_lt: 56850346000003
+    end_lt: 56850346000005
     start_utime: 1746523714
     end_utime: 1746523714
     mc_seqno_end: 47519767

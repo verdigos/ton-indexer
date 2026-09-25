@@ -1,0 +1,61 @@
+# tgbtc / tgbtc mint log only
+# note: synthetic: A mint log classifies as a tgBTC mint fallback
+# trace: Ug2__JyJgoH0xBJBkjfjhjdJAHf6gIY-4PW1kPbqsZo=
+actions:
+  - type: call_contract
+    anchor: call_contract#11111111@200
+    id: zYvQGxRnZL5sHFwznaYP92gqhRcDcMX1kpKqDrfJGrw=
+    success: true
+    source: 0:D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4
+    source_secondary: null
+    destination: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x11111111
+    tx_hashes:
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - vr2hCjND7/K23ZNSEbIjJ2CtkT62RwLBdeRVF773bb8=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4
+      - 0:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1
+      - 0:d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0
+  - type: tgbtc_mint_fallback
+    matcher: tgbtc_mint_log_only
+    anchor: tgbtc_mint@200
+    id: p9acB2vjeqIRZQwxr4XHobpecf1kfv/78o4km2L3+l0=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 9850
+    value: null
+    opcode: null
+    data:
+      btc_txid: 1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100
+    tx_hashes:
+      - vr2hCjND7/K23ZNSEbIjJ2CtkT62RwLBdeRVF773bb8=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+      - 0:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0

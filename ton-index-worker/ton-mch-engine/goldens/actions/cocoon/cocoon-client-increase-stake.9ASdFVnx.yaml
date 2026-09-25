@@ -17,8 +17,8 @@ actions:
     value: 94067599
     opcode: 0x2565934c
     tx_hashes:
-      - 9Zg3LUQvui7kwPRO8J6j5bn9sNgRyFkIpWMQF4mTAj4=
       - um7gMmogBIQa6sCz8cTU75teBC6y0wifRaOFU6QV+QY=
+      - 9Zg3LUQvui7kwPRO8J6j5bn9sNgRyFkIpWMQF4mTAj4=
     accounts:
       - 0:29DE6F2E63A467C5C32C2D35C6D4BE5E0F192A6464AE288686EEBA6A0F5C2340
       - 0:92F4468997A5839A274A00F452DA447608C5A7EF7DDE19083041620598B390E1
@@ -46,8 +46,8 @@ actions:
     value: 1
     opcode: 0x65448ff4
     tx_hashes:
-      - +dmj92BFx4glM6ieoOhbzjKfW5jT5k15aAiBnBZmCYM=
       - um7gMmogBIQa6sCz8cTU75teBC6y0wifRaOFU6QV+QY=
+      - +dmj92BFx4glM6ieoOhbzjKfW5jT5k15aAiBnBZmCYM=
     accounts:
       - 0:92F4468997A5839A274A00F452DA447608C5A7EF7DDE19083041620598B390E1
       - 0:F2CE0160EA9E7028155C58705E0E828B457C46465FCB75B029E9CC6370408074
@@ -104,12 +104,11 @@ actions:
     amount: 18000000000
     value: null
     opcode: null
-    cocoon_client_increase_stake_data:
-      new_stake: 18000000000
+    data:
       query_id: 0
     tx_hashes:
-      - +dmj92BFx4glM6ieoOhbzjKfW5jT5k15aAiBnBZmCYM=
       - 9ASdFVnxka3wXQIY+czQvwSDLxTxHxbloVgZUhWAH+4=
+      - +dmj92BFx4glM6ieoOhbzjKfW5jT5k15aAiBnBZmCYM=
       - 9Zg3LUQvui7kwPRO8J6j5bn9sNgRyFkIpWMQF4mTAj4=
       - um7gMmogBIQa6sCz8cTU75teBC6y0wifRaOFU6QV+QY=
     accounts:

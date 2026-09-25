@@ -46,8 +46,8 @@ actions:
     value: 1694902000
     opcode: 0x65448ff4
     tx_hashes:
-      - DODdZhf5B2NkY5HF/PEcbVIfuaKmJlq151KYYbxun7A=
       - VjMt8Oy85JaTWZeqEYcNLEHWfzjA/Bn591xFUAl7XsA=
+      - DODdZhf5B2NkY5HF/PEcbVIfuaKmJlq151KYYbxun7A=
     accounts:
       - 0:2AA8DBE7AADAF51EF0A74FD69DF48A5C440711E4048061976F8DD211C6C92671
       - 0:E4B2FA549D8BDE017318D66A496AE5CD4ABE6DC887D5336A93F3445AC306C62F
@@ -104,7 +104,7 @@ actions:
     amount: 1000000000
     value: null
     opcode: null
-    cocoon_client_top_up_data:
+    data:
       query_id: 11691960163567649532
     tx_hashes:
       - 02ZsangSM2tiw/+vYumdC8Kde09o3+7qnJHLIgWrv4s=

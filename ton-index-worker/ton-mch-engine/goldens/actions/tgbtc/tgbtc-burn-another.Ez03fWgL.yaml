@@ -17,8 +17,8 @@ actions:
     value: 10000000
     opcode: 0x1a84c0e0
     tx_hashes:
-      - +wB4nypBpLeG+9gkOjkaci5CPJSG4U3EnajI/eIOvuQ=
       - dQzo5CfEfl6wNy2UPaMmV/rXXHyMRq+aUsCftlJeHvg=
+      - +wB4nypBpLeG+9gkOjkaci5CPJSG4U3EnajI/eIOvuQ=
     accounts:
       - 0:6CC7F43A68A9FE1909C196C0A163DB65987640EBAE6DD338ED638A5EA0D287E3
       - 0:F8DD1B5D010FD8F2797CE92AB3C6394BFFEAC0BDD66204393FB3B39317EA11C6
@@ -46,8 +46,8 @@ actions:
     value: 593276000
     opcode: 0x7bdd97de
     tx_hashes:
-      - HxIZTkqPMrRrTM3k1eYgvHRnt89pSbiEPM0+kcgGOx0=
       - rVuM774hwOS1Moy9IFflbumZJ0ifKTMEPYuyQIIKtTk=
+      - HxIZTkqPMrRrTM3k1eYgvHRnt89pSbiEPM0+kcgGOx0=
     accounts:
       - 0:AD9E0A84E13EFB6D37634044F7B49820FD121E900057BF6E71DED212378D7C05
       - 0:E1177970B722A9422D8EF674B85CDCB2C88295EE397D7150A4A382F91921409C
@@ -163,9 +163,9 @@ actions:
     value: null
     opcode: null
     tx_hashes:
+      - Ez03fWgLT3VrlFzKfKQ+N+c2/rNBSZtPwrTz/1kB/yw=
       - +wB4nypBpLeG+9gkOjkaci5CPJSG4U3EnajI/eIOvuQ=
       - 5UoyzKBEvM47VQLYI9BPMeC0LivCcpOkQGYuXGrTTGY=
-      - Ez03fWgLT3VrlFzKfKQ+N+c2/rNBSZtPwrTz/1kB/yw=
       - HxIZTkqPMrRrTM3k1eYgvHRnt89pSbiEPM0+kcgGOx0=
       - JIdKEgTBhGNWa5eUmA5Te5JxTjQPvLMIsl64lKDdfXo=
       - dQzo5CfEfl6wNy2UPaMmV/rXXHyMRq+aUsCftlJeHvg=
@@ -197,12 +197,11 @@ actions:
     amount: null
     value: 540306959
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
-      - 5UoyzKBEvM47VQLYI9BPMeC0LivCcpOkQGYuXGrTTGY=
       - dQzo5CfEfl6wNy2UPaMmV/rXXHyMRq+aUsCftlJeHvg=
+      - 5UoyzKBEvM47VQLYI9BPMeC0LivCcpOkQGYuXGrTTGY=
     accounts:
       - 0:6CC7F43A68A9FE1909C196C0A163DB65987640EBAE6DD338ED638A5EA0D287E3
       - 0:E19288C47188B9C9E11224CEFF74BA390C6B85CE07F69575BC3C4636DA57EE2E

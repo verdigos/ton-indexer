@@ -1,0 +1,33 @@
+# dns / delete dns
+# note: synthetic: A DNS record is deleted and classifies as a DNS deletion
+# trace: HA1SeG6FGWGXK8I1MqU89Mhy57D6u-2TmElBS5h1KVA=
+actions:
+  - type: delete_dns
+    matcher: change_dns
+    anchor: delete_dns@200
+    id: nU3e8Y+duOcTVzb5mzWugyyLzJ1h9Qs7I4TJfRR6B9I=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: 0:C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      key: 0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+    tx_hashes:
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - zschLenripMM09j8QPwj4JSRqSOSiAPztimDu2x9j7o=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0

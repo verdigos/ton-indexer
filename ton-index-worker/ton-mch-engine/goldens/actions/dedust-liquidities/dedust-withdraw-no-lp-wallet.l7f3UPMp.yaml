@@ -1,0 +1,169 @@
+# dedust-liquidities / dedust withdraw no lp wallet
+# note: synthetic: A DeDust withdrawal without an LP wallet classifies only as a jetton transfer
+# trace: l7f3UPMpJtHhSSuCmMkZonKuYHBUu5c_bXqTAbJ31I8=
+actions:
+  - type: call_contract
+    anchor: call_contract#474f86cf@550
+    id: yRij4tzIOm/QViJTc991OAUS/Vd3vU8fbZyvYDEFzJE=
+    success: true
+    source: 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    source_secondary: null
+    destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x474f86cf
+    tx_hashes:
+      - GINW5dP1IEHiWXgairD33YmkxXJwKgFfFn3NFiHF6zs=
+      - PKbzB+Bm2mWq1nZM3K7X3/DnUIiCAytdLm3gWgoKPqk=
+    accounts:
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      - 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    start_lt: 550
+    end_lt: 550
+    start_utime: 1550
+    end_utime: 1550
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#595f07bc@200
+    id: 4s49LXO7wjdQayzvGc3ZPF+HMLDCK71+3YEqpYwm3ww=
+    success: true
+    source: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    source_secondary: null
+    destination: 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x595f07bc
+    tx_hashes:
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - pb8ElKZn0wQvBAPfVDlAcuqUP+K1YHxbxWMaIi6cT3s=
+    accounts:
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      - 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#7bdd97de@300
+    id: 6Hzeib9aUy8/v5KmpVS+roOkRGeDm2sDmtFnrMNvaR0=
+    success: true
+    source: 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+    source_secondary: null
+    destination: 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x7bdd97de
+    tx_hashes:
+      - pb8ElKZn0wQvBAPfVDlAcuqUP+K1YHxbxWMaIi6cT3s=
+      - tNxVc9qiHLQLkh2+vJGbVpNhpI12QHV3u9eUstSKYKo=
+    accounts:
+      - 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+      - 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    start_lt: 300
+    end_lt: 300
+    start_utime: 1300
+    end_utime: 1300
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#ad4eb6f5@400
+    id: w78d/Fxtd6gONc7XGZDipORI7LzdjeOr1K8rC3cGees=
+    success: true
+    source: 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    source_secondary: null
+    destination: 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0xad4eb6f5
+    tx_hashes:
+      - tNxVc9qiHLQLkh2+vJGbVpNhpI12QHV3u9eUstSKYKo=
+      - wN64fdxxnTWpBe8Whd/iI90RzKAhckx+Lcu7FbshRx4=
+    accounts:
+      - 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+      - 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    start_lt: 400
+    end_lt: 400
+    start_utime: 1400
+    end_utime: 1400
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#ad4eb6f5@450
+    id: f8V17WOZghZMxV6eBP4/1RVg8BgHJ5JZ8cTDzR8qtX8=
+    success: true
+    source: 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    source_secondary: null
+    destination: 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0xad4eb6f5
+    tx_hashes:
+      - tNxVc9qiHLQLkh2+vJGbVpNhpI12QHV3u9eUstSKYKo=
+      - GINW5dP1IEHiWXgairD33YmkxXJwKgFfFn3NFiHF6zs=
+    accounts:
+      - 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+      - 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    start_lt: 450
+    end_lt: 450
+    start_utime: 1450
+    end_utime: 1450
+    mc_seqno_end: 0
+  - type: jetton_transfer
+    matcher: jetton_transfer
+    anchor: jetton_transfer@500
+    id: 6pLyUdsaMl3Bnhz7BZZR9ylxJsL+Ne29NGQVthHN9Ho=
+    success: true
+    source: 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    source_secondary: 0:1111111111111111111111111111111111111111111111111111111111111111
+    destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    destination_secondary: 0:2222222222222222222222222222222222222222222222222222222222222222
+    asset: 0:3333333333333333333333333333333333333333333333333333333333333333
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 900000
+    value: null
+    opcode: null
+    data:
+      comment_encrypted: false
+      forward_amount: 0
+      query_id: 7
+      response_destination: 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    tx_hashes:
+      - wN64fdxxnTWpBe8Whd/iI90RzKAhckx+Lcu7FbshRx4=
+      - PjUj3tUoWVh7pD8meR6JbGVh3LXxjwp4+ubsYbzPuCg=
+      - YuuhGpfd7gTR7hVZlZgWT/TVCyaSneP3GHlt3jZ32+8=
+    accounts:
+      - 0:1111111111111111111111111111111111111111111111111111111111111111
+      - 0:2222222222222222222222222222222222222222222222222222222222222222
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      - 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    start_lt: 500
+    end_lt: 600
+    start_utime: 1500
+    end_utime: 1600
+    mc_seqno_end: 0

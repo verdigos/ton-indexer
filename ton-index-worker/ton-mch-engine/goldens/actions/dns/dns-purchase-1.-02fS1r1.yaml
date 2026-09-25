@@ -46,23 +46,11 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
-      forward_payload: null
-      is_purchase: true
-      marketplace: null
-      marketplace_address: null
-      nft_item_index: 44539844875053679214736801996276540153801342669507034858554041330399478546432
+    data:
+      nft_index: 44539844875053679214736801996276540153801342669507034858554041330399478546432
       payout_amount: 51478118866
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
       price: 51478118866
       query_id: 1773269958
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
     tx_hashes:
       - 7VGc/3Q1uJpYBhkNZb4LjkAC1B6h+5C3iDyTGvJ3/RA=
       - TLlzG2VTWy3guAutAnrmyHUp4krGG7WIxCpdMINsJaU=
@@ -91,26 +79,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
+    data:
       forward_amount: 1
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace: null
-      marketplace_address: null
-      nft_item_index: 44539844875053679214736801996276540153801342669507034858554041330399478546432
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: 44539844875053679214736801996276540153801342669507034858554041330399478546432
       query_id: 1773269958
-      real_prev_owner: null
       response_destination: 0:2681FA1135CDB32B5B96981E60BB7E453960F33541237DD7167CB6AEBA21F69F
-      royalty_amount: null
     tx_hashes:
       - +02fS1r1ED0E0KV9ZwwRfYp3HBDPOiZIFgUaXav1I+I=
       - 2hmVHAj6vSwIuUIXcnttNttyhzI3aI4Gm2XKCnIjZpA=

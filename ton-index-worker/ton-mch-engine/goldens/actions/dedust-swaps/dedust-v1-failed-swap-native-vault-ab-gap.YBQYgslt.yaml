@@ -17,28 +17,21 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: dedust
+    data:
       dex_incoming_transfer:
         amount: 382506052459
-        asset: null
         destination: 0:DAE153A74D894BBC32748198CD626E4F5DF4A69AD2FA56CE80FC2644B5708D20
-        destination_jetton_wallet: null
         source: 0:CEE275C941F48642C51C72CA25B8CC458A927D22201D1C9F7908947A0D46171D
-        source_jetton_wallet: null
       dex_outgoing_transfer:
         amount: 382506052459
-        asset: null
         destination: 0:CEE275C941F48642C51C72CA25B8CC458A927D22201D1C9F7908947A0D46171D
-        destination_jetton_wallet: null
         source: 0:DAE153A74D894BBC32748198CD626E4F5DF4A69AD2FA56CE80FC2644B5708D20
-        source_jetton_wallet: null
-      min_out_amount: null
       peer_swaps: []
+      protocol: dedust
       sender: 0:CEE275C941F48642C51C72CA25B8CC458A927D22201D1C9F7908947A0D46171D
     tx_hashes:
-      - 7SCrANMaOYf02c15gM+4MTuEMgmJg9C9q9QMpH+wO0U=
       - YBQYgsltVHCigC9q03KhXnBgho2bsxFuvOD8u6UC/J4=
+      - 7SCrANMaOYf02c15gM+4MTuEMgmJg9C9q9QMpH+wO0U=
       - glMtfIxnW/00y7QBrEFWBycxXjJg58FdoEDKcJwL1Gw=
       - sfGiigYlWkHQaogb9jXEER5nUZWO52U0l1pXN/Vbn08=
       - yWgdNeKy9Oqe784xeNdEENyyvF2EOl+XIRYWjPFdgvM=

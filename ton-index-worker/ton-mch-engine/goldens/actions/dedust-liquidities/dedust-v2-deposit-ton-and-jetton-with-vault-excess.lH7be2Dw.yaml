@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 deposit TON and jetton with vault excess
-# note: target amounts exceed the credited amounts, excess returned
+# note: The deposit returns its excess and classifies as a liquidity deposit
 # trace: lH7be2DwnwVSo6D3ZZL0xAI7F-vNk4bZ7KXCDpO4Zfo=
 actions:
   - type: contract_deploy
@@ -44,25 +44,23 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 4867482854
-      amount2: 311334565016609
-      asset1: null
-      asset2: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
-      dex: dedust_v2
-      lp_tokens_minted: 1231022199765
-      target_amount_1: 4867482855
-      target_amount_2: 311334565044060
-      target_asset_1: null
-      target_asset_2: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:1F96163ADB8E8CB22481F7B67843AD5C32139E1E04A780627EE862821515D5C6
+    data:
+      legs:
+        - amount: 4867482854
+          target_amount: 4867482855
+        - amount: 311334565016609
+          asset: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
+          target_amount: 311334565044060
+          target_asset: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
+          user_jetton_wallet: 0:1F96163ADB8E8CB22481F7B67843AD5C32139E1E04A780627EE862821515D5C6
+      protocol: dedust_v2
+      tokens_minted: 1231022199765
       vault_excesses:
         - amount: 27451
           asset: 0:0EFED6292DB3EAF863977A061362D15A434B4C9312C1C73605F1C5021865808F
         - amount: 1
-          asset: null
     tx_hashes:
+      - lH7be2DwnwVSo6D3ZZL0xAI7F+vNk4bZ7KXCDpO4Zfo=
       - BHJsFslupF9LNPzXEkS564jvNA1U+KBnTv9k0WpA/Zk=
       - CxI9H7M6qGyUFewfJv7ZUS9Clgn9RqLbz98czXfpfHs=
       - LT6eJrdlJNG3wc2jGhrMbJiDCpWJ4/+nMay0f70XpOE=
@@ -76,7 +74,6 @@ actions:
       - Y544GkuIedNmUlu78Y6KoJ/kDcKA15V+PScQFn3aPLM=
       - cTdIrlc//6IFIUx5CYrZCY/r/KQAUhT9OJrAtKF51Mk=
       - gpiDg252UnkstsWxYubxTekTcTJRJkUNlUMiNLnikXc=
-      - lH7be2DwnwVSo6D3ZZL0xAI7F+vNk4bZ7KXCDpO4Zfo=
       - njDAO2AwO/pQOHdY/ptUtebEM1q26WWKBm8ImkTXwjw=
       - r0xDHKpSxn2wAkh+6w9rIIvhC5+FbhZ27Y9ad1b0eqg=
     accounts:

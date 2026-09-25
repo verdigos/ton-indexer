@@ -17,8 +17,8 @@ actions:
     value: 16114400
     opcode: 0x383411ea
     tx_hashes:
-      - 4gzTsqpkBMQnDJFjT34i8J46vNQkdGdCV/Ysq6rknb4=
       - vR9TnymFAUY0jpOTjXP93+sn2xJcDp9Gjn4iQiUvEHY=
+      - 4gzTsqpkBMQnDJFjT34i8J46vNQkdGdCV/Ysq6rknb4=
     accounts:
       - 0:61AB79E0B562BF9163124CF979263528BAFFDAA6380DC5A6113AC385E27EBDE5
       - 0:DA0BEB83E10D069139C6F655EA3DBE472A0C94865CDC41524E1C90E70F254D51
@@ -46,8 +46,8 @@ actions:
     value: 294314643
     opcode: 0x9eada1d9
     tx_hashes:
-      - COD/MW1vcTJWre1Wus10EUmHX0WI06+K1EWBoXJmEog=
       - uFRGkaqrLMDR2ZwuRs0VEIEn+KOXFA1v9+W1fWkitRc=
+      - COD/MW1vcTJWre1Wus10EUmHX0WI06+K1EWBoXJmEog=
     accounts:
       - 0:84DE3BCB1566A2700345DE26DF54CCEA0963D5CC2CDA9C2E52B2AAC8489096AE
       - 0:DA0BEB83E10D069139C6F655EA3DBE472A0C94865CDC41524E1C90E70F254D51
@@ -104,8 +104,8 @@ actions:
     value: 297753452
     opcode: 0xd68a4ac1
     tx_hashes:
-      - uFRGkaqrLMDR2ZwuRs0VEIEn+KOXFA1v9+W1fWkitRc=
       - vR9TnymFAUY0jpOTjXP93+sn2xJcDp9Gjn4iQiUvEHY=
+      - uFRGkaqrLMDR2ZwuRs0VEIEn+KOXFA1v9+W1fWkitRc=
     accounts:
       - 0:84DE3BCB1566A2700345DE26DF54CCEA0963D5CC2CDA9C2E52B2AAC8489096AE
       - 0:DA0BEB83E10D069139C6F655EA3DBE472A0C94865CDC41524E1C90E70F254D51
@@ -133,12 +133,10 @@ actions:
     amount: 1638000000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 340000000
       forward_payload: cellhash:257E0DAE7C3F99807F9CE92EC6E3454216C071E12FC139C9826763899FBE98D4
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:BF6A2B365AF62AC72AD9100C28ECAFD761EB2822E1264E0FB48AE135BF77DACE
     tx_hashes:
@@ -176,17 +174,16 @@ actions:
     amount: 1638000000000
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: Stake was unsuccessful
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:8ADACF78AB09B67687D09F921BD310CE52680F962011218B0AEC1843DB8277F3
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:BF6A2B365AF62AC72AD9100C28ECAFD761EB2822E1264E0FB48AE135BF77DACE
     tx_hashes:
-      - 7YreA/Wc3aIVrlHwLZsknwXwl60ImT4yUHFGv+CZuDY=
       - COD/MW1vcTJWre1Wus10EUmHX0WI06+K1EWBoXJmEog=
+      - 7YreA/Wc3aIVrlHwLZsknwXwl60ImT4yUHFGv+CZuDY=
       - DujChBi3v0c1m2lxkaPNIb5IHUEGKbaBIsr826j99pI=
       - E8KJe3ANAc8vPJ3Nb+f6cdtnwp0Rwh2z62NQZTSPhtc=
       - cDbvM3YWnMrwf+0+VUcsHsfUOGX60tmfGHhWhmAThnI=
@@ -219,7 +216,7 @@ actions:
     amount: 1638000000000
     value: null
     opcode: null
-    jvault_stake_data:
+    data:
       period: 2592000
       stake_wallet: 0:84DE3BCB1566A2700345DE26DF54CCEA0963D5CC2CDA9C2E52B2AAC8489096AE
     tx_hashes:

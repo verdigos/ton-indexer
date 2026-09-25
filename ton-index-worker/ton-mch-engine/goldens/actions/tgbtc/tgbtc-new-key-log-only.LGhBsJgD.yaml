@@ -1,0 +1,61 @@
+# tgbtc / tgbtc new key log only
+# note: synthetic: A new key log classifies as a tgBTC new key fallback
+# trace: LGhBsJgDLw3J7zVKiruow-EAuj2fxAYQFEfudpCcJ6k=
+actions:
+  - type: call_contract
+    anchor: call_contract#11111111@200
+    id: zYvQGxRnZL5sHFwznaYP92gqhRcDcMX1kpKqDrfJGrw=
+    success: true
+    source: 0:D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4
+    source_secondary: null
+    destination: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x11111111
+    tx_hashes:
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+      - vr2hCjND7/K23ZNSEbIjJ2CtkT62RwLBdeRVF773bb8=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4
+      - 0:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1
+      - 0:d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0
+  - type: tgbtc_new_key_fallback
+    matcher: tgbtc_new_key_log_only
+    anchor: tgbtc_new_key@200
+    id: EHCPjK+KoDXb3SzHFJx0hKx3bv+bx6K1IpUG4qHdsm8=
+    success: true
+    source: null
+    source_secondary: null
+    destination: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination_secondary: 0:C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 425489053588
+    value: null
+    opcode: null
+    data:
+      pubkey: 382e9d762046f4bb5cde2ce1b7780cb499b5394972163930cf88bc55463acb70
+    tx_hashes:
+      - vr2hCjND7/K23ZNSEbIjJ2CtkT62RwLBdeRVF773bb8=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3
+      - 0:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0

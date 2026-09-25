@@ -17,8 +17,8 @@ actions:
     value: 152146962
     opcode: 0x0c7b8418
     tx_hashes:
-      - M9/H1ar1gnldHv3wKHrDIfhej2aa2KYefCmJttLS+GE=
       - QpOp5R3Lp2p8juD13zsXVXwd1IPsnFfaBIRGIZ6J0C0=
+      - M9/H1ar1gnldHv3wKHrDIfhej2aa2KYefCmJttLS+GE=
     accounts:
       - 0:170725394AA56136FBD27D0CE31D8A98E0F8AE72A4D2379B5DDE83E211A2D5FA
       - 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309
@@ -75,8 +75,8 @@ actions:
     value: 180598400
     opcode: 0x97df404c
     tx_hashes:
-      - 6tBlYj6JhoJp4SHZtN0EKLLptq526RyGha3jEqRQbTE=
       - a1J9i1yIhsH+ymLVzAKfB1lHLHyLHwVnf64ixv88ubw=
+      - 6tBlYj6JhoJp4SHZtN0EKLLptq526RyGha3jEqRQbTE=
     accounts:
       - 0:170725394AA56136FBD27D0CE31D8A98E0F8AE72A4D2379B5DDE83E211A2D5FA
       - 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309
@@ -190,8 +190,8 @@ actions:
     value: 0
     opcode: 0xe33b9873
     tx_hashes:
-      - ao3dENlmDHfj61O80FtHRg2C7zfDPWv7VM1MFd+c9KY=
       - babV5WnjqOGi8xjnbBdNjwLPFe1jUyikNMuTBqA/1PQ=
+      - ao3dENlmDHfj61O80FtHRg2C7zfDPWv7VM1MFd+c9KY=
     accounts:
       - 0:1EB2BBEA3D8C0D42FF7FD60F0264C866C934BBFF727526CA759E7374CAE0C166
       - 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309
@@ -219,12 +219,9 @@ actions:
     amount: 80949282885
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 78518479963
       response_destination: 0:075009536B6A712C628045D87118652CB7C0E6E355B0E298927A653EBC90617F
     tx_hashes:
@@ -259,7 +256,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    layerzero_packet_data:
+    data:
       dst_eid: 30343
       dst_oapp: "0x170725394aa56136fbd27d0ce31d8a98e0f8ae72a4d2379b5dde83e211a2d5fa"
       guid: "0x9dc8c0fd5c765d02cf9b213b0f1e39b8617dd76cda4e7497bed59f0e31557cd"
@@ -303,9 +300,8 @@ actions:
     amount: null
     value: 6336977
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
       - a1J9i1yIhsH+ymLVzAKfB1lHLHyLHwVnf64ixv88ubw=
       - fHAR0RvwhYdgYVCC47SkFmvkI4iTNfhcoZXTPU9c6/U=
@@ -335,12 +331,11 @@ actions:
     amount: null
     value: 31909600
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
-      - GOFAOq6V8ozb+JLbHVDo3N4Mwfso69fAYUNrGccRI/4=
       - babV5WnjqOGi8xjnbBdNjwLPFe1jUyikNMuTBqA/1PQ=
+      - GOFAOq6V8ozb+JLbHVDo3N4Mwfso69fAYUNrGccRI/4=
     accounts:
       - 0:075009536B6A712C628045D87118652CB7C0E6E355B0E298927A653EBC90617F
       - 0:25EC9F03589F3DDD170A9AD8B8C85213F7D12489A9B260C537499AAFA8A0E309

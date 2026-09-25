@@ -46,9 +46,9 @@ actions:
     amount: 200000000000000
     value: null
     opcode: null
-    coffee_staking_deposit_data:
-      minted_item_address: 0:65D741B3B8FED84CBE2BCBF2C1A74BE0D989AE36F92F9F8B656E7D1AEC373BBB
-      minted_item_index: 1258
+    data:
+      nft_address: 0:65D741B3B8FED84CBE2BCBF2C1A74BE0D989AE36F92F9F8B656E7D1AEC373BBB
+      nft_index: 1258
     tx_hashes:
       - 00wjHu7i1KD7Rhcr4Rsg7RSJhKtygBOfoJ2eo6B2Rt4=
       - 6osi9oNbT1P4w3auqFsoTrCXSI1lDsm8Yq6fkD0J6WE=
@@ -85,8 +85,8 @@ actions:
     value: 280428586
     opcode: 0xbe5a7595
     tx_hashes:
-      - 6osi9oNbT1P4w3auqFsoTrCXSI1lDsm8Yq6fkD0J6WE=
       - n/UfyqyCpDVZ17XdcOZpKnh5Q6CmpDC05okhym0p1ug=
+      - 6osi9oNbT1P4w3auqFsoTrCXSI1lDsm8Yq6fkD0J6WE=
     accounts:
       - 0:65D741B3B8FED84CBE2BCBF2C1A74BE0D989AE36F92F9F8B656E7D1AEC373BBB
       - 0:B6725D7A23D406ED2008A537236E5F607D084EA9EFEEBFCA53BF3156B491C8CC
@@ -111,12 +111,10 @@ actions:
     amount: 200000000000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 300000000
       forward_payload: cellhash:606420B168D61ACB84EEEA592ED6AD06A664116DCAE997AE037E5D306E06C665
-      is_encrypted_comment: false
       query_id: 1697643576174204
       response_destination: 0:CE16553450D8D246D587CB771D494A0FB95FF5EFE6EC1FC34A83B9B3651692BC
     tx_hashes:
@@ -154,11 +152,11 @@ actions:
     amount: null
     value: null
     opcode: 0xbe5a7595
-    nft_mint_data:
-      nft_item_index: 1258
+    data:
+      nft_index: 1258
     tx_hashes:
-      - 6osi9oNbT1P4w3auqFsoTrCXSI1lDsm8Yq6fkD0J6WE=
       - n/UfyqyCpDVZ17XdcOZpKnh5Q6CmpDC05okhym0p1ug=
+      - 6osi9oNbT1P4w3auqFsoTrCXSI1lDsm8Yq6fkD0J6WE=
     accounts:
       - 0:65D741B3B8FED84CBE2BCBF2C1A74BE0D989AE36F92F9F8B656E7D1AEC373BBB
       - 0:B6725D7A23D406ED2008A537236E5F607D084EA9EFEEBFCA53BF3156B491C8CC

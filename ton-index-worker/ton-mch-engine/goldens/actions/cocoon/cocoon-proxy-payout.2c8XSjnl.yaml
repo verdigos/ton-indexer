@@ -75,8 +75,8 @@ actions:
     value: 10125756041
     opcode: 0xc59a7cd3
     tx_hashes:
-      - +XieAoUd1LYjV+4sjZO2O6XNwUnnmztyqWjgGVEKK0A=
       - by8mKI17j9RWFhX2ERiLip/UYpopfkbgvOam6c2x+bY=
+      - +XieAoUd1LYjV+4sjZO2O6XNwUnnmztyqWjgGVEKK0A=
     accounts:
       - 0:B94C23C25E82509C6834B6C513FA7B4F5B8A924694C579ADED8CD0079E646A50
       - 0:E796C95723646D2355A12E6B5E9646F8095406C6BF04FF14888E5D0783BF6336
@@ -104,11 +104,11 @@ actions:
     amount: null
     value: null
     opcode: null
-    cocoon_proxy_payout_data:
+    data:
       query_id: 12731543016903973642
     tx_hashes:
-      - +XieAoUd1LYjV+4sjZO2O6XNwUnnmztyqWjgGVEKK0A=
       - 2c8XSjnlpuxjOu3ixrdO0m/W1fiikVWZQB6h5sJe7U4=
+      - +XieAoUd1LYjV+4sjZO2O6XNwUnnmztyqWjgGVEKK0A=
       - by8mKI17j9RWFhX2ERiLip/UYpopfkbgvOam6c2x+bY=
       - pLXKxKAgCyyQ63jheDhKYE2f6NVH3nvcx72U4hLO7Qk=
     accounts:

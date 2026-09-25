@@ -24,7 +24,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 withdraw refunded to the owner",
    "slug": "dedust-v2-withdraw-refunded-to-the-owner",
-   "note": "is_refund=true, LP tokens returned; identical withdraw payload to the second refund sample"
+   "note": "The refund returns LP tokens to the owner and classifies as a failed liquidity withdrawal"
   },
   "0--IKFmIbKevaBKSEvai2YCm47_coyO30KO1VyYaXvI=": {
    "group": "tonco",
@@ -311,11 +311,6 @@
    "name": "Coffee create pool (full + notification at the end)",
    "slug": "coffee-create-pool-full-plus-notification-at-the-end"
   },
-  "4AAiT_8jTvxhujXOywe0zZv1sylSlAwnZV9stEG3gnM=": {
-   "group": "nft",
-   "name": "teleitem start auction (ab-gap)",
-   "slug": "teleitem-start-auction-ab-gap"
-  },
   "4PNVGQkZJUWAiiPq3rIekA9O5-HLaXmYmP30iixAefA=": {
    "group": "stonfi-swaps",
    "name": "Stonfi Jetton -> Ton (receiver == sender)",
@@ -385,13 +380,13 @@
    "group": "dedust-swaps",
    "name": "DeDust hybrid swap jetton to TON with extra payout legs",
    "slug": "dedust-hybrid-swap-jetton-to-ton-with-extra-payout-legs",
-   "note": "hybrid DeDust spec fixture; three standalone jetton transfers accompany the single swap"
+   "note": "The hybrid route classifies as one DeDust v2 swap and three DeDust swaps"
   },
   "7rGTg9ycXwQQ7130kmtsTtVLC1pOewRPotGNjkuXkms=": {
    "group": "dedust-liquidities",
    "name": "DeDust v2 withdraw request with no protocol action",
    "slug": "dedust-v2-withdraw-request-with-no-protocol-action",
-   "note": "Withdraw 0x20b5ef89 and WithdrawLiquidity 0xbc1531a9 present, nothing matches"
+   "note": "The withdrawal request contains both withdrawal opcodes and classifies only as contract calls"
   },
   "846TnKmLxd4Otdbr4cMnvoqFJmzDT09IFTrGC9bpmes=": {
    "group": "dedust-liquidities",
@@ -402,7 +397,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 payout chain with no protocol action",
    "slug": "dedust-v2-payout-chain-with-no-protocol-action",
-   "note": "opcodes 0x3db5f13a, 0x0d299e12 and DeDust payout 0x3216ca09 are present but no matcher fires"
+   "note": "The payout chain includes three DeDust opcodes and classifies only as contract calls"
   },
   "8ioobbcdHm4jq4mKPqgCBQAiXz-DfiRKz8u6D48Tm2M=": {
    "group": "dedust-liquidities",
@@ -448,7 +443,7 @@
    "group": "dedust-swaps",
    "name": "DeDust v2 two-hop swap jetton to TON to USDT",
    "slug": "dedust-v2-two-hop-swap-jetton-to-ton-to-usdt",
-   "note": "two peer_swaps steps, no intermediate jetton transfer actions"
+   "note": "The two hop route crosses TON and classifies as one DeDust v2 swap"
   },
   "APpTI_e4-tKeBPZgtCDXmZhharEE-tvVh0tBPoCK6i0=": {
    "group": "nominator",
@@ -470,6 +465,12 @@
    "name": "Immediate withdrawal, two payouts (BGhr)",
    "slug": "immediate-withdrawal-two-payouts-bghr"
   },
+  "BO8nQf-fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=": {
+   "group": "nft",
+   "name": "Fragment self-outbid (standing bidder raises)",
+   "slug": "fragment-self-outbid",
+   "note": "The standing bidder raises their own bid and classifies as a bid plus an outbid"
+  },
   "C7bHOfSrBJPLHXMZkVnIQladzgYZHIlKOiJRvbxRRuI=": {
    "group": "coffee",
    "name": "Complicated Swap (Dedust, Coffee + Stonfi)",
@@ -489,7 +490,7 @@
    "group": "tg-wallet",
    "name": "Change wallet key requested by internal message",
    "slug": "change-wallet-key-requested-by-internal-message",
-   "note": "named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden"
+   "note": "An internal request changes the wallet key and classifies as a key change and gasless request"
   },
   "CjtIXjqazbSFrtPqqMMFBgMG6-huwp5CfNtXpQAf8xY=": {
    "group": "tonco",
@@ -616,6 +617,12 @@
    "name": "nft put on auction (ab-gap)",
    "slug": "nft-put-on-auction-ab-gap"
   },
+  "M7jZ4RsZzzwtKgEWo6H_UEVu35iQARusm99XESHx6l0=": {
+   "group": "nft",
+   "name": "teleitem cancel auction (gift)",
+   "slug": "teleitem-cancel-auction-gift",
+   "note": "The gift auction is cancelled and classifies as a teleitem auction cancellation"
+  },
   "MZQz_qHLV8OiohUw3-mjpA7TihnbDKFGE0i7LUUsuVk=": {
    "group": "dedust-liquidities",
    "name": "DeDust V2 multi-hop swap (3 hops, SwapStep chain)",
@@ -646,6 +653,12 @@
    "name": "Multisig approve opcode arm accepted",
    "slug": "multisig-approve-opcode-arm-accepted"
   },
+  "NkBUeoyBHQRqKV1iVuVPFqhAhh3PUJCJB0BJcvYxPko=": {
+   "group": "nft",
+   "name": "Fragment auction close by external message, lone fill-up",
+   "slug": "fragment-close-lone-fillup",
+   "note": "The auction closes with one payout leg and classifies as a Telegram NFT transfer"
+  },
   "OShVZJVqIFxR94PEc48lwzt71eue2H7RgrzMi5zs7Hc=": {
    "group": "dedust-liquidities",
    "name": "DeDust V2 withdraw TON/jetton",
@@ -655,13 +668,13 @@
    "group": "dedust-swaps",
    "name": "DeDust hybrid swap TON to jetton with extra payout legs",
    "slug": "dedust-hybrid-swap-ton-to-jetton-with-extra-payout-legs",
-   "note": "TON-in via PayNative 0xa5a7cbf8; two standalone jetton transfers accompany the swap"
+   "note": "The TON route uses PayNative and classifies as one v2 swap and two DeDust swaps"
   },
   "OVUczRKE1uzsXPhTEAJQhJWb0yAPrnMLZZocBRwMJd0=": {
    "group": "dedust-liquidities",
    "name": "DeDust v2 payout landing as a plain jetton transfer",
    "slug": "dedust-v2-payout-landing-as-a-plain-jetton-transfer",
-   "note": "only the jetton_transfer matcher fires; the surrounding DeDust payout chain stays unclassified"
+   "note": "The payout chain lands as one jetton transfer while the other calls stay unclassified"
   },
   "OcT5DRJbqONuQtvqFmASdvE2GTh6lYwdhfegRrWUvac=": {
    "group": "dedust-liquidities",
@@ -672,7 +685,7 @@
    "group": "dedust-swaps",
    "name": "DeDust v2 failed swap with TON refund",
    "slug": "dedust-v2-failed-swap-with-ton-refund",
-   "note": "dedust_v2_failed_swap matcher; refund leg is an unsuccessful ton_transfer, outgoing amount 0"
+   "note": "DeDust v2 failed swap restored after adding its known pool interface."
   },
   "OyAQgEdEKZcuU2-3dAkKpk_RFjTYJXXQYxCKoZSB7uA=": {
    "group": "evaa",
@@ -688,7 +701,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 payout landing as a plain jetton transfer, second sample",
    "slug": "dedust-v2-payout-landing-as-a-plain-jetton-transfer-second",
-   "note": "same shape as the first sample, no DeDust payout 0x3216ca09 leg"
+   "note": "The second payout chain omits the DeDust payout leg and classifies as one jetton transfer"
   },
   "PdxEcev5rXzXI-fHb1VPfFA1eLcm3n4Mx6NbsuATc3A=": {
    "group": "tonco",
@@ -704,7 +717,7 @@
    "group": "tg-wallet",
    "name": "Change wallet key requested by external message",
    "slug": "change-wallet-key-requested-by-external-message",
-   "note": "named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden"
+   "note": "An external request changes the wallet key and classifies as a key change"
   },
   "S4XM4TRqBSWvsrGUQY_NLEbIRM7q7iS6hx-uWg4Hv14=": {
    "group": "jetton-transfer",
@@ -746,6 +759,11 @@
    "name": "tgBTC burn (with strange burn notification)",
    "slug": "tgbtc-burn-with-strange-burn-notification"
   },
+  "TQk6tatMXJvV5zUGazvyt3YxJ4Ir7RvQM_6zk9PGjwY=": {
+   "group": "evaa",
+   "name": "EVAA jetton liquidation prices missing",
+   "slug": "jetton-liquidation-prices-missing"
+  },
   "TXFkYzpo-8IZvMcy8lhsrKG9QJH73JaYAwsAitgNqdM=": {
    "group": "ton-transfers",
    "name": "four call_contract legs (ab-gap drill)",
@@ -755,7 +773,7 @@
    "group": "gasless",
    "name": "Fan-out and recursive gasless requests",
    "slug": "fan-out-and-recursive-gasless-requests",
-   "note": "named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden"
+   "note": "The requests fan out recursively and classify as three gasless requests and two TON transfers"
   },
   "Ugmymow0mpGDSuNUKC1YHkd28o7qceVvYtokZ--D-3E=": {
    "group": "ton-transfers",
@@ -776,7 +794,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 withdraw with a dust TON leg",
    "slug": "dedust-v2-withdraw-with-a-dust-ton-leg",
-   "note": "amount1 is 29268 nanoton against a large jetton leg"
+   "note": "The withdrawal includes a dust TON leg and classifies as a liquidity withdrawal"
   },
   "XrJ4BgG2rSQyr3vItrDD4kFQZMU0v17UGRD3LQPvuOA=": {
    "group": "nominator",
@@ -797,7 +815,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 deposit TON and jetton with pool deploy",
    "slug": "dedust-v2-deposit-ton-and-jetton-with-pool-deploy",
-   "note": "three contract_deploy rows alongside the deposit"
+   "note": "The deposit deploys three contracts and classifies as a liquidity deposit"
   },
   "_4VnZDY_vkS57MyeF3M43QAyEpWriYSveSPIP4Ygtog=": {
    "group": "nft",
@@ -828,7 +846,7 @@
    "group": "multisig",
    "name": "Multisig order executing a STON.fi v2 swap",
    "slug": "multisig-order-executing-a-ston-fi-v2-swap",
-   "note": "approve call 0xa762230f is unsuccessful, execution still proceeds"
+   "note": "The order executes despite a failed approval call and classifies as a STON.fi v2 swap"
   },
   "a0rjbO1XsPBt-2LXRQZT4piiD8x_OrfG82dU0in-WUc=": {
    "group": "tonstakers",
@@ -844,7 +862,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 partial deposit, one side only",
    "slug": "dedust-v2-partial-deposit-one-side-only",
-   "note": "dedust_v2_deposit_partial matcher; only amount1 present, deposit contract stays open"
+   "note": "The one sided deposit stays open and classifies as a partial liquidity deposit"
   },
   "a792Fwrpfic6hRQknLGJHE2G5Wvt3jSW6vvsql1XYb0=": {
    "group": "dedust-liquidities",
@@ -876,6 +894,12 @@
    "name": "Less complicated Swap (Dedust + Coffee)",
    "slug": "less-complicated-swap-dedust-plus-coffee"
   },
+  "cXLjN0iPaW5tGQ2BnWpheqSCTZCpT9CWIpE2-HhCdno=": {
+   "group": "nft",
+   "name": "teleitem start auction (gift)",
+   "slug": "teleitem-start-auction-gift",
+   "note": "The gift item starts an auction and classifies as a teleitem auction start"
+  },
   "cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=": {
    "group": "coffee",
    "name": "Terrifying Swap (Stonfi, Coffee + Stonfi V2, Dedust, Stonfi V2)",
@@ -885,13 +909,13 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 claim position fees with jetton payout",
    "slug": "dedust-v2-claim-position-fees-with-jetton-payout",
-   "note": "fee claim followed by a jetton_transfer carrying the jetton leg"
+   "note": "The fee claim pays a jetton and classifies as a fee claim plus a jetton transfer"
   },
   "d6F6BJ2OX-urMZBlYLrKmTFtnY6Pn8FbCQZVEP8LULI=": {
    "group": "multisig",
    "name": "Multisig order executing a pTON transfer leg",
    "slug": "multisig-order-executing-a-pton-transfer-leg",
-   "note": "STON.fi pTON and jetton legs classify individually, no jetton_swap action is produced"
+   "note": "The multisig order executes pTON and jetton legs as separate transfers with no swap action"
   },
   "dp1xdxzIC7tCyZfy80VTW5be7SimpOOTnuf3_8BZjb0=": {
    "group": "coffee",
@@ -902,7 +926,7 @@
    "group": "dedust-swaps",
    "name": "DeDust v2 multi-hop swap ending in USDT",
    "slug": "dedust-v2-multi-hop-swap-ending-in-usdt",
-   "note": "three peer_swaps steps chained through TON and an intermediate jetton"
+   "note": "The three step route crosses TON and another jetton and classifies as one DeDust v2 swap"
   },
   "f-PQvtcLmt4lrRMFr9OlMrkLoFLt6hXatdfQHMI3GZM=": {
    "group": "dedust-liquidities",
@@ -918,7 +942,7 @@
    "group": "multisig",
    "name": "Multisig order executing a STON.fi v1 swap",
    "slug": "multisig-order-executing-a-ston-fi-v1-swap",
-   "note": "approve call 0xa762230f is unsuccessful, execution still proceeds"
+   "note": "The order executes despite a failed approval call and classifies as a STON.fi v1 swap"
   },
   "fjQUb23kT00oQ91fTrD48MAYii2jG9XD_bft1iLtzJc=": {
    "group": "dedust-liquidities",
@@ -944,13 +968,13 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 withdraw refunded to the owner, second sample",
    "slug": "dedust-v2-withdraw-refunded-to-the-owner-second-sample",
-   "note": "same refund payload and lp_tokens_burnt as the first refund sample, different trace"
+   "note": "The second refund returns LP tokens and classifies as a failed liquidity withdrawal"
   },
   "i-gQwY3nWC6BQx1XOSWliBC-b1Pt7Y-Fn5jphK5uCGk=": {
    "group": "dedust-liquidities",
    "name": "DeDust v2 claim reward with jetton payout",
    "slug": "dedust-v2-claim-reward-with-jetton-payout",
-   "note": "reward claim followed by a jetton_transfer carrying the payout"
+   "note": "The reward claim pays a jetton and classifies as a reward claim plus a jetton transfer"
   },
   "ioq-WKX2gMsHeK0oNTMWtXQuUfkraOo7-g-4CXvdV9s=": {
    "group": "dns",
@@ -971,7 +995,7 @@
    "group": "gasless",
    "name": "Gasless send by a Telegram wallet",
    "slug": "gasless-send-by-a-telegram-wallet",
-   "note": "named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden"
+   "note": "The Telegram wallet sends TON and classifies as a gasless request plus a TON transfer"
   },
   "jR18KgOd7Bmlhja1EmBRM_b-bPrdMuJwvsnfwhdYPiY=": {
    "group": "nominator",
@@ -993,6 +1017,12 @@
    "name": "Failed unstake request",
    "slug": "failed-unstake-request"
   },
+  "kw8jYr7-6nfkQPi6v-UceOvmHFvbIX7ZR8c_NYDC2BQ=": {
+   "group": "nft",
+   "name": "teleitem cancel auction (Numbers)",
+   "slug": "teleitem-cancel-auction-numbers",
+   "note": "The Numbers item cancels its auction and classifies as a teleitem auction cancellation"
+  },
   "kzOC0KQqVHHaNaiKPttuaR92uMct8n4kCDLTfq-CPuw=": {
    "group": "dedust-liquidities",
    "name": "DeDust V2 deposit TON/jetton",
@@ -1002,7 +1032,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 deposit TON and jetton with vault excess",
    "slug": "dedust-v2-deposit-ton-and-jetton-with-vault-excess",
-   "note": "target amounts exceed the credited amounts, excess returned"
+   "note": "The deposit returns its excess and classifies as a liquidity deposit"
   },
   "m9eS5wXOsBwyUn9GToVIPeLYaieGF_Ye46_GYVDwg4A=": {
    "group": "wallet-v5-extensions",
@@ -1053,7 +1083,7 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 withdraw with a failed jetton payout",
    "slug": "dedust-v2-withdraw-with-a-failed-jetton-payout",
-   "note": "withdraw action succeeds, the 0x0f8a7ea5 payout leg does not"
+   "note": "The withdrawal succeeds despite a failed jetton payout and classifies as a liquidity withdrawal"
   },
   "rU8BN41CoPsfmLPpLrucPQX8v8lJnwob39gp5yKBdko=": {
    "group": "tonstakers",
@@ -1064,17 +1094,18 @@
    "group": "nft",
    "name": "Telegram NFT mint with auction fill-up assignment",
    "slug": "telegram-nft-mint-with-auction-fill-up-assignment",
-   "note": "telegram_nft_assigned fires under a call_contract parent, next to the nft_mint"
-  },
-  "rV1gzQRFXipz6XEByCTq_3Q2LZpa4i61aLsvHf1CR1A=": {
-   "group": "nft",
-   "name": "teleitem cancel auction (ab-gap)",
-   "slug": "teleitem-cancel-auction-ab-gap"
+   "note": "The mint assigns the item and classifies as an NFT mint plus a Telegram NFT transfer"
   },
   "rbzKlyNgAhDnQ15r4tremaPVl_xURNgmSJQSyhGLSX4=": {
    "group": "tonstakers",
    "name": "TS Stake deposit",
    "slug": "ts-stake-deposit"
+  },
+  "s9f42MHj95A2xmDTz--g2k-Ux08haA11743gA5oA2mM=": {
+   "group": "nft",
+   "name": "teleitem start auction (Numbers)",
+   "slug": "teleitem-start-auction-numbers",
+   "note": "The Numbers item starts an auction and classifies as a teleitem auction start"
   },
   "sS0j8bD7JQj7389dsGXLdNUisE6I1ApyvdPM1gkODVc=": {
    "group": "ton-transfers",
@@ -1095,7 +1126,7 @@
    "group": "gasless",
    "name": "Gasless jetton transfer by a wallet v5",
    "slug": "gasless-jetton-transfer-by-a-wallet-v5",
-   "note": "named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden"
+   "note": "The wallet sends a jetton and classifies as a gasless request plus a jetton transfer"
   },
   "tJchcmap3KKyjSw6GJ2YpZ4OkyN-DwvoD2u_KQh164Q=": {
    "group": "dedust-liquidities",
@@ -1126,7 +1157,13 @@
    "group": "dedust-liquidities",
    "name": "DeDust v2 payout chain with no protocol action, second sample",
    "slug": "dedust-v2-payout-chain-with-no-protocol-action-second-sample",
-   "note": "same opcode chain as the first sample, different pool and trace"
+   "note": "The second payout chain uses the same opcodes and classifies only as contract calls"
+  },
+  "wQzaKAp8fuCzmQ4gKUzUvVjPtkrZIL_xSzDnb3AlByk=": {
+   "group": "dns",
+   "name": "DNS auction close, lone fill-up",
+   "slug": "dns-close-lone-fillup",
+   "note": "The DNS auction closes with one fill up and classifies as a DNS purchase and NFT transfer"
   },
   "ww5gZmgoXhHJ1a1wukBU5Dp1LxufRT1pzfniQTgUXxE=": {
    "group": "evaa",
@@ -1138,6 +1175,12 @@
    "name": "tgBTC burn",
    "slug": "tgbtc-burn"
   },
+  "xpZydCNXEgDfO9yr628mcnB1Z1k3nqlFRtx-l4_gtLs=": {
+   "group": "nft",
+   "name": "teleitem cancel auction (gift 2)",
+   "slug": "teleitem-cancel-auction-gift-2",
+   "note": "The second gift item cancels its auction and classifies as a teleitem auction cancellation"
+  },
   "xu061_cOVdxLMa4sn1JJXEK5XkBiPdCzEDRNI_wWKPs=": {
    "group": "dedust-liquidities",
    "name": "First deposit",
@@ -1147,13 +1190,395 @@
    "group": "dns",
    "name": "DNS purchase 4 (change_dns parent)",
    "slug": "dns-purchase-4",
-   "note": "AuctionFillUp whose parent is the winner's ChangeDnsRecord; dns_purchase must register before change_dns"
+   "note": "The winner changes the DNS record and the trace classifies as a DNS purchase plus a DNS change"
   },
   "yfdIWpnHBPwfCVOofQ4XhwxGW-3MfWR3WTxUC6qVWjE=": {
    "group": "dns",
    "name": "DNS purchase 5 (change_dns parent)",
    "slug": "dns-purchase-5",
-   "note": "same shape, second live trace"
+   "note": "A second winner changes the DNS record and classifies as a DNS purchase plus a DNS change"
+  },
+  "03OcVXvf6lWKtlTLy5QYtEMQSjt1x6j0bwz3O5C2SN0=": {
+   "group": "dns",
+   "name": "dns auction guard release collection-only",
+   "slug": "dns-auction-guard-release-collection-only",
+   "note": "synthetic: A collection match releases the auction and classifies as a DNS release"
+  },
+  "1WiA9HaREX5QRs_4bN0AARpD-wPid__NEEw73KY_6TQ=": {
+   "group": "dns",
+   "name": "change dns",
+   "slug": "change-dns",
+   "note": "synthetic: A DNS record changes and classifies as a DNS change"
+  },
+  "1u08FlgmdxuEEATPvQ-JF7g-LVDddXxhfaO_wkWgVrY=": {
+   "group": "nominator",
+   "name": "nominator deposit",
+   "slug": "nominator-deposit",
+   "note": "synthetic: A nominator deposits stake and classifies as a stake deposit"
+  },
+  "2A6gaaOSYPd3T1kNyeZWRIA51Lk36WzWxG8ZKwD-dWo=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw jetton first",
+   "slug": "stonfi-v2-withdraw-jetton-first",
+   "note": "synthetic: A jetton first withdrawal classifies as a STON.fi v2 liquidity withdrawal"
+  },
+  "7tUfAoNLuIstTBudeatHwPn7mprTH-NQuocqxZKeX78=": {
+   "group": "dns",
+   "name": "dns auction lookup miss release",
+   "slug": "dns-auction-lookup-miss-release",
+   "note": "synthetic: A release with a missing auction lookup classifies only as a contract call"
+  },
+  "AVt2vu-xrqHd8LAo88rUXwP6mJYvvLG4zw3VPXAyGhI=": {
+   "group": "stonfi-v2-swaps",
+   "name": "single pton final",
+   "slug": "stonfi-v2-provide-pton-final",
+   "note": "synthetic: A single pTON contribution completes and classifies as a liquidity deposit"
+  },
+  "EEa1qZeqoJgWvlV7dOLTs_RZJJpXDHHPuXSCTBfhbpk=": {
+   "group": "dedust-liquidities",
+   "name": "dedust withdraw ton first",
+   "slug": "dedust-withdraw-ton-first",
+   "note": "synthetic: A TON first DeDust withdrawal classifies as a liquidity withdrawal"
+  },
+  "HA1SeG6FGWGXK8I1MqU89Mhy57D6u-2TmElBS5h1KVA=": {
+   "group": "dns",
+   "name": "delete dns",
+   "slug": "delete-dns",
+   "note": "synthetic: A DNS record is deleted and classifies as a DNS deletion"
+  },
+  "HYIK9zG_INUWBgpUSrtd8HRgN8bvV5_ookFwRc8UsUc=": {
+   "group": "nominator",
+   "name": "nominator withdraw request two",
+   "slug": "nominator-withdraw-request-two",
+   "note": "synthetic: Two payouts follow the request and classify together as one stake withdrawal"
+  },
+  "LGhBsJgDLw3J7zVKiruow-EAuj2fxAYQFEfudpCcJ6k=": {
+   "group": "tgbtc",
+   "name": "tgbtc new key log only",
+   "slug": "tgbtc-new-key-log-only",
+   "note": "synthetic: A new key log classifies as a tgBTC new key fallback"
+  },
+  "LOCl2H3qoYXxKRBg1jJEAYMd2BORctX3RxTdvuDJQyM=": {
+   "group": "nominator",
+   "name": "nominator withdraw request none",
+   "slug": "nominator-withdraw-request-none",
+   "note": "synthetic: A request with no payout classifies as a stake withdrawal request"
+  },
+  "Nmv_O6y9aJnZFx_GflgmIe2dNEkAUxwvC8f5w4dDd3g=": {
+   "group": "dns",
+   "name": "change dns failed",
+   "slug": "change-dns-failed",
+   "note": "synthetic: A failed DNS record change classifies as a failed DNS change"
+  },
+  "NskYw27t_ci97_r01GsZMNAiHfvxRyD9WRI-1m2GCFo=": {
+   "group": "dns",
+   "name": "dns auction guard purchase code-hash-only",
+   "slug": "dns-auction-guard-purchase-code-hash-only",
+   "note": "synthetic: A code hash match buys the auction and classifies as a DNS purchase"
+  },
+  "OzGzjLNR3FBEZx3-_xl4V5W1MMea5dnOcyrJCs9iicc=": {
+   "group": "dns",
+   "name": "change dns bounce",
+   "slug": "change-dns-bounce",
+   "note": "synthetic: A bounced DNS record change classifies as a successful DNS change"
+  },
+  "PWeNudzaWeKe-YXoQLnEC_BqyL4fkyQv1SeI5aPOKsY=": {
+   "group": "stonfi-v2-swaps",
+   "name": "pair jetton pton",
+   "slug": "stonfi-v2-provide-jetton-pton",
+   "note": "synthetic: A jetton and pTON pair completes and classifies as a liquidity deposit"
+  },
+  "RO_LxCK96NxuF2WuBdRWKE7_UzA642o8H-kyIUm4isI=": {
+   "group": "dns",
+   "name": "dns auction lookup miss purchase",
+   "slug": "dns-auction-lookup-miss-purchase",
+   "note": "synthetic: A purchase with a missing auction lookup classifies only as contract calls"
+  },
+  "Tp-H50ZKDOBAIzhfFb0Nsg-e1exaXa-EK4Rw-2KNp68=": {
+   "group": "dns",
+   "name": "dns purchase parent",
+   "slug": "dns-purchase-parent",
+   "note": "synthetic: A DNS purchase reads its parent and classifies as one DNS purchase"
+  },
+  "U9fAIxeEbrMh4d41VylrrHSdCQfAiK2EPwaFFNIcQxw=": {
+   "group": "dns",
+   "name": "dns auction guard purchase collection-only",
+   "slug": "dns-auction-guard-purchase-collection-only",
+   "note": "synthetic: A collection match buys the auction and classifies as a DNS purchase"
+  },
+  "Ug2__JyJgoH0xBJBkjfjhjdJAHf6gIY-4PW1kPbqsZo=": {
+   "group": "tgbtc",
+   "name": "tgbtc mint log only",
+   "slug": "tgbtc-mint-log-only",
+   "note": "synthetic: A mint log classifies as a tgBTC mint fallback"
+  },
+  "WtV2kLkWvCQof0ePvUGgvVzObSMAzhZ4C19fYM_lxL8=": {
+   "group": "nominator",
+   "name": "nominator two payouts",
+   "slug": "nominator-two-payouts",
+   "note": "synthetic: Two nominator payouts classify as two stake withdrawals"
+  },
+  "XWUMej1qmb9Q3YEpmoHNDlG5yHsIfJr4l5_6vdBJaSQ=": {
+   "group": "stonfi-v2-swaps",
+   "name": "single jetton partial",
+   "slug": "stonfi-v2-provide-jetton-partial",
+   "note": "synthetic: A single jetton contribution classifies as a partial liquidity deposit"
+  },
+  "ZfmQ_t6gnhQDmJUoCRjzCVYB3-52RupetEyV9NczMLc=": {
+   "group": "nominator",
+   "name": "nominator withdraw request 1000",
+   "slug": "nominator-withdraw-request-1000",
+   "note": "synthetic: A request with an unmatched payout classifies as a stake withdrawal request"
+  },
+  "a95D1i1RGPzPj4YShaKEi8TeiBANeN4CAExMcq5PaYg=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw refund",
+   "slug": "stonfi-v2-withdraw-refund",
+   "note": "synthetic: A refunded STON.fi v2 withdrawal classifies as a liquidity withdrawal"
+  },
+  "ad1uBns5aHx3mmclzuhqLZhvnn8NZl1mQ5gZD_VH4TU=": {
+   "group": "stonfi-v2-swaps",
+   "name": "both partial absorb parent",
+   "slug": "stonfi-v2-provide-both-partial",
+   "note": "synthetic: Two partial contributions combine and classify as one partial liquidity deposit"
+  },
+  "d1LUN7zLmbtIoyfnBEFjhC5nA5BkhddtO4eQqU_gcV0=": {
+   "group": "nominator",
+   "name": "nominator withdraw request three",
+   "slug": "nominator-withdraw-request-three",
+   "note": "synthetic: Three unmatched payouts classify as transfers beside a stake withdrawal request"
+  },
+  "hAEvldgk1ghxDfzmVB_8Isoqp2I0zvZ8piAQFkAsYMY=": {
+   "group": "nominator",
+   "name": "nominator non pool",
+   "slug": "nominator-non-pool",
+   "note": "synthetic: A non pool withdrawal attempt classifies only as two TON transfers"
+  },
+  "hwDFd_pUjaqau3YD89reRW5KmvNlOsAgsulQJP3WwxE=": {
+   "group": "stonfi-v2-swaps",
+   "name": "single refund failed",
+   "slug": "stonfi-v2-provide-refund",
+   "note": "synthetic: A failed single contribution refund classifies as a failed liquidity deposit"
+  },
+  "iKIdaDv0_s_z2KdL39WLKHMBDvlbAxIjn6jfeuK4P2U=": {
+   "group": "dns",
+   "name": "renew dns",
+   "slug": "renew-dns",
+   "note": "synthetic: A DNS record renews and classifies as a DNS renewal"
+  },
+  "islrGvLSRNBA_p6ymTyjJJ7lZ2-JJEKSIhsUsjLMiMc=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw ton first",
+   "slug": "stonfi-v2-withdraw-ton-first",
+   "note": "synthetic: A TON first withdrawal classifies as a STON.fi v2 liquidity withdrawal"
+  },
+  "kx7ZSaKm1tMLQMNaR2aBSgCLirOjaPGPzg5rtC5ZF7M=": {
+   "group": "nominator",
+   "name": "nominator aborted payout",
+   "slug": "nominator-aborted-payout",
+   "note": "synthetic: An aborted payout still classifies as a successful stake withdrawal"
+  },
+  "l7f3UPMpJtHhSSuCmMkZonKuYHBUu5c_bXqTAbJ31I8=": {
+   "group": "dedust-liquidities",
+   "name": "dedust withdraw no lp wallet",
+   "slug": "dedust-withdraw-no-lp-wallet",
+   "note": "synthetic: A DeDust withdrawal without an LP wallet classifies only as a jetton transfer"
+  },
+  "lorr0U8CcSkIgfFY89IdhUUjKJKr9H9tTttVr6YoXCM=": {
+   "group": "nominator",
+   "name": "nominator withdraw request 1001",
+   "slug": "nominator-withdraw-request-1001",
+   "note": "synthetic: A request consumes its payout and classifies as a stake withdrawal"
+  },
+  "nFfypk7mEbl14sNJoN6iB_IND8XI3RCZVuu61M4fPyg=": {
+   "group": "dns",
+   "name": "dns auction guard release code-hash-only",
+   "slug": "dns-auction-guard-release-code-hash-only",
+   "note": "synthetic: A code hash match releases the auction and classifies as a DNS release"
+  },
+  "qfK9maJDE9nJM-GqEdvubEUOXrmOI8tOWjOXvVk_Ta4=": {
+   "group": "nominator",
+   "name": "nominator single payout",
+   "slug": "nominator-single-payout",
+   "note": "synthetic: A nominator payout classifies as a stake withdrawal"
+  },
+  "s8itPcpYUOtg1Aq8U_Oyt_99ucaGcK7HPrF4WZWQqRc=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw no lp wallet",
+   "slug": "stonfi-v2-withdraw-no-lp-wallet",
+   "note": "synthetic: A STON.fi withdrawal without an LP wallet classifies as two jetton transfers"
+  },
+  "z0WPI1ImO7fTaUDTVUIPAz7LhtNdQtbyw2bb4d8adD0=": {
+   "group": "stonfi-v2-swaps",
+   "name": "pair jetton jetton",
+   "slug": "stonfi-v2-provide-jetton-jetton",
+   "note": "synthetic: A pair of jettons completes and classifies as a liquidity deposit"
+  },
+  "z4jNjyvSAu_aT7RjH2LJuco1jh5jBEexFJ6IssIpC9E=": {
+   "group": "dedust-liquidities",
+   "name": "dedust withdraw jetton first",
+   "slug": "dedust-withdraw-jetton-first",
+   "note": "synthetic: A jetton first DeDust withdrawal classifies as a liquidity withdrawal"
+  },
+  "CQ8jm8jS9LVPLG48XLd5hQJxH34Fz-6V0vzp1QOlqy4=": {
+   "group": "nft",
+   "name": "Fragment settle-and-transfer, transfer payload spoofs a bid",
+   "slug": "fragment-settle-transfer-spoofed-bid",
+   "note": "synthetic: A spoofed bid payload classifies both transfers as Telegram NFT assignments"
+  },
+  "NOxEMWKlKAr_xUxRG_9kouRZgfXEq5hwV1V2dVH4rCU=": {
+   "group": "nft",
+   "name": "Fragment self-outbid, standing bidder raises against their own bid (composed)",
+   "slug": "fragment-self-outbid-composed-keenetic",
+   "note": "synthetic: A standing bidder raises their own bid and classifies as a bid plus an outbid"
+  },
+  "BhamKuY5ryJZPt6DOvbigcj8pbB31TrfMT2VMmEV1_4=": {
+   "group": "dns",
+   "name": ".ton DNS auction, bid below the 105% minimum increment is rejected (composed)",
+   "slug": "dns-auction-bid-below-minimum-rejected",
+   "note": "synthetic: A bid below the minimum increment is rejected and classifies as a failed auction bid"
+  },
+  "ik8mCQvh-fd_bSqcpf7qBKH5_rxdFBJNsNe0s3xX3kY=": {
+   "group": "nft",
+   "name": "Fragment auction close, maximum bid closes the auction and pays out the seller (composed)",
+   "slug": "fragment-auction-close-max-bid-payout",
+   "note": "synthetic: A maximum bid closes the auction and classifies as a Telegram NFT transfer"
+  },
+  "hFYotMnbSPFhY3v2kBCY3D2r73wSBamx_cqeKMViKrA=": {
+   "group": "nft",
+   "name": "Fragment settle-and-transfer, payout to the seller",
+   "slug": "fragment-settle-transfer-payout-seller",
+   "note": "The settlement pays the seller and relay transfers the item, classifying as two NFT transfers"
+  },
+  "1R7f1gMvE3QXICasO27zO4ag0Zb2tYs42XZMI6fLFa8=": {
+   "group": "nft",
+   "name": "Fragment settle-and-transfer, payout to a third party",
+   "slug": "fragment-settle-transfer-payout-other",
+   "note": "The settlement pays a third party and relay transfers the item, classifying as two NFT transfers"
+  },
+  "o-0qrQ73jIN1uNaZwnYNQS9InHgidaWg00TKeOuo2c4=": {
+   "group": "tonco",
+   "name": "tonco v2 swap USDT to TON (pool exit 200)",
+   "slug": "tonco-v2-swap-usdt-to-ton",
+   "note": "The USDT swap exits through the TON wrapper and classifies as a Tonco jetton swap"
+  },
+  "eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=": {
+   "group": "tonco",
+   "name": "tonco v2 swap TON to USDT (pool exit 200)",
+   "slug": "tonco-v2-swap-ton-to-usdt",
+   "note": "The TON swap uses v2 pool and payout bodies and classifies as a Tonco jetton swap"
+  },
+  "Tp44gVJNH2FKZCQG92DmXsGArGzfEWXVaPIppL4adkE=": {
+   "group": "stonfi-v2-swaps",
+   "name": "pair jetton ton paired provide (chain)",
+   "slug": "stonfi-v2-provide-paired-chain",
+   "note": "The paired jetton and TON provide classifies as a partial liquidity deposit"
+  },
+  "qhJge66-v1EJPRT6xac4cL5htWXcqlxRMhBf6sO-_Wg=": {
+   "group": "nft",
+   "name": "failed transfer, bounce stays standalone (chain)",
+   "slug": "nft-transfer-failed-bounce-chain",
+   "note": "A failed NFT transfer keeps its bounce separate and classifies as a failed NFT transfer"
+  },
+  "bD4GUDXcQ2yzmbRZ2YXEpiNlg11zY9JU1gYVFhxBh4s=": {
+   "group": "nft",
+   "name": "teleitem cancel aborted, bounce stays standalone (chain)",
+   "slug": "teleitem-cancel-auction-bounce-chain",
+   "note": "An aborted auction cancellation keeps its bounce separate and classifies as a failed cancellation"
+  },
+  "fqAcATrl5jO8Ott89ZvpRe3UNwb11z-eHaP6VwHDfAs=": {
+   "group": "nft",
+   "name": "getgems dual payout, owner leg is the payout (api-sourced)",
+   "slug": "getgems-dual-payout-owner-leg",
+   "note": "Four GetGems sales use the owner payout leg and classify as NFT purchases"
+  },
+  "2fRvx_087KHoYhZfp2QzslArb4FdUEsbbRjSIeUDgMY=": {
+   "group": "jetton-mints",
+   "name": "jetton mint 0x642b7d07 chain (api-sourced)",
+   "slug": "jetton-mint-0x642b7d07-chain",
+   "note": "The 0x642b7d07 mint chain classifies as one jetton mint and one contract call"
+  },
+  "ujWM2IApMQAaYi_oBO5VWgPJj258sUBZRi52gesSB-A=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 deposit slot order (api-sourced)",
+   "slug": "stonfi-v2-deposit-slot-order",
+   "note": "The STON.fi v2 deposit keeps canonical slot order and classifies as a liquidity deposit"
+  },
+  "nEdMBNWGvDUfAjr8AeLBhgB-EIMygWUZmbtWc72LFUM=": {
+   "group": "mutations",
+   "name": "Tonco deposit, router wallet interface pruned",
+   "slug": "tonco-deposit-router-wallet-interface-pruned",
+   "note": "synthetic: A Tonco deposit lacks the router wallet interface and still classifies as a deposit"
+  },
+  "yiHIyt0a6wWpCZ2HyjSYcN-J-bt-fekirz-ZJARQ0lc=": {
+   "group": "mutations",
+   "name": "Tonco deposit, fund-account wallet interface pruned",
+   "slug": "tonco-deposit-fund-account-wallet-interface-pruned",
+   "note": "synthetic: A Tonco deposit lacks the fund wallet interface and still classifies as a deposit"
+  },
+  "LtfHA5H3AjxeL6cXoPP1Xt6hhsBFllWJR59agrw0GL0=": {
+   "group": "mutations",
+   "name": "Tonco swap, intermediate wallet interface pruned",
+   "slug": "tonco-swap-intermediate-wallet-miss",
+   "note": "synthetic: A Tonco swap lacks an intermediate wallet and classifies as two jetton transfers"
+  },
+  "TIPfXq6pzI9BouyiGiiy04DBqreAzocYnqyyE_ydtWw=": {
+   "group": "evaa",
+   "name": "EVAA liquidation ALTS jetton success",
+   "slug": "liquidate-alts-jetton-success"
+  },
+  "dsqOhobEBnBJeg2mAUe_Q5YtuVug0ac--2xDLzAkZ2M=": {
+   "group": "evaa",
+   "name": "EVAA liquidation TON success",
+   "slug": "liquidate-ton-success"
+  },
+  "Iq5x1H67TD8ExK7BujNojqa_t6oAdBMPsCa44S0bw2M=": {
+   "group": "evaa",
+   "name": "EVAA liquidation TON unsatisfied",
+   "slug": "liquidate-ton-unsatisfied"
+  },
+  "yfu-nSd0GWEtLshp9_aZrKBwVoSGvct8XJqHAKe8EFQ=": {
+   "group": "evaa",
+   "name": "EVAA liquidation TON bounce",
+   "slug": "liquidate-ton-bounce"
+  },
+  "lkXOvxpiT9rdz2JqxvEwVS7M2wwxLK52n1P3RD6yVf4=": {
+   "group": "evaa",
+   "name": "EVAA liquidation main jetton report success",
+   "slug": "liquidate-main-jetton-report"
+  },
+  "KFWQRXh705boDKq5Lk2LP-o5d2wJ9mDlO-v3kzRyMXA=": {
+   "group": "evaa",
+   "name": "EVAA liquidation main jetton payout success",
+   "slug": "liquidate-main-jetton-payout"
+  },
+  "-Ow-V1XJF0cgtq9IShbmSek3R1z70ZWUn7fSEHbl5fA=": {
+   "group": "evaa",
+   "name": "Ton withdrawal success, no note",
+   "slug": "ton-withdrawal-success-no-note"
+  },
+  "qf1iKv-5kX1BBNhMLV07KmZYW8rsBx1UVK_GZtwQHQs=": {
+   "group": "evaa",
+   "name": "Ton supply success, no note",
+   "slug": "ton-supply-success-no-note"
+  },
+  "Y5tVikUunaDaXAozUjgAuxrG_uErWSsRcBHXstkqbDw=": {
+   "group": "election",
+   "name": "Election deposit, typical amount",
+   "slug": "election-deposit-typical",
+   "note": "Median-sized successful election deposit from signed window 6"
+  },
+  "vvrJBGqKy47TpcraThtQAM1eVOImbvrQoU9_JBDnuio=": {
+   "group": "election",
+   "name": "Election deposit, low amount",
+   "slug": "election-deposit-low-amount",
+   "note": "Low-sized successful election deposit from signed window 9"
+  },
+  "YPIq9bxFdW5tY9O4K9HOPpWUZ-Wc7VKrQgMo3NRbxXQ=": {
+   "group": "stonfi-v2-swaps",
+   "name": "Stonfi v2 paired liquidity deposit",
+   "slug": "stonfi-v2-provide-real-paired",
+   "note": "Two deposit legs from one external message merge into one liquidity action"
   }
  }
 }

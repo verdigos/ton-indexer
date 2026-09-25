@@ -75,8 +75,8 @@ actions:
     value: 320380400
     opcode: 0xae9307ce
     tx_hashes:
-      - cfX2fAq/aa6CulLqd2KYz7HLe++znTb8U5eootO54ZM=
       - wv7NI/z+pSdJZV+tLQuqAMudmWIqSgy4f5zOgh6lUCE=
+      - cfX2fAq/aa6CulLqd2KYz7HLe++znTb8U5eootO54ZM=
     accounts:
       - 0:32F3F3C9881BF73850082C9F5F4D5B654F4062E71EDD93D868BC59447F9AA2AA
       - 0:AA5C2D9CB469BECB874312C79ABC9DA6C2E64C92C108FE31A2F26B00D8134CD7
@@ -133,20 +133,19 @@ actions:
     amount: 7919563
     value: null
     opcode: null
-    jetton_transfer_data:
+    data:
       comment: Claim staking rewards
-      custom_payload: null
+      comment_encrypted: false
       forward_amount: 1
       forward_payload: cellhash:C1A0F6F3BDCEEA31756ABBF389B1C3B2F65461D149D32726D90FDAEAA27B7471
-      is_encrypted_comment: false
       query_id: 1724742998050577044
       response_destination: 0:D94FCAE73C2E76C960834E0F5E739B0AD28D42EB9EE1C6A1BD5E0E7FE8257CCF
     tx_hashes:
+      - wv7NI/z+pSdJZV+tLQuqAMudmWIqSgy4f5zOgh6lUCE=
       - 5HArE56qKFtuwZGRqKTqUAo6VlBVWhaT6OCsA6vYt7Q=
       - 8Ou2g38Cv3f8+sRAHIkUscGxRR0UvdYyI5uZb7tjCas=
       - ACCAqz4d8b+0caiJyXjxXZzU+A8XU0zCiMjaGm6zN0I=
       - OTfRrO+GahgKIINGIAR1ZegoZXCy9JWIVVFxfI3LkSw=
-      - wv7NI/z+pSdJZV+tLQuqAMudmWIqSgy4f5zOgh6lUCE=
     accounts:
       - 0:A048BDFAAC1F51AEAE2C1100CF5F1C1D1D316AD4E013A4030F7E2DF2A4ADE68D
       - 0:AA5C2D9CB469BECB874312C79ABC9DA6C2E64C92C108FE31A2F26B00D8134CD7
@@ -176,16 +175,15 @@ actions:
     amount: null
     value: null
     opcode: null
-    jvault_claim_data:
-      claimed_amounts:
-        - 7919563
-      claimed_jettons:
-        - 0:A048BDFAAC1F51AEAE2C1100CF5F1C1D1D316AD4E013A4030F7E2DF2A4ADE68D
+    data:
+      claimed_rewards:
+        - amount: 7919563
+          asset: 0:A048BDFAAC1F51AEAE2C1100CF5F1C1D1D316AD4E013A4030F7E2DF2A4ADE68D
     tx_hashes:
+      - Lsy5I/gotIvt0EYwoPuqd+1s+IyYNR3Sc0XmM/lWKa8=
       - 5HArE56qKFtuwZGRqKTqUAo6VlBVWhaT6OCsA6vYt7Q=
       - 8Ou2g38Cv3f8+sRAHIkUscGxRR0UvdYyI5uZb7tjCas=
       - ACCAqz4d8b+0caiJyXjxXZzU+A8XU0zCiMjaGm6zN0I=
-      - Lsy5I/gotIvt0EYwoPuqd+1s+IyYNR3Sc0XmM/lWKa8=
       - OTfRrO+GahgKIINGIAR1ZegoZXCy9JWIVVFxfI3LkSw=
       - YFU0GyIqweV4yEvgslz44GGfZPWiOe01FSsHY96Q2Ck=
       - cfX2fAq/aa6CulLqd2KYz7HLe++znTb8U5eootO54ZM=

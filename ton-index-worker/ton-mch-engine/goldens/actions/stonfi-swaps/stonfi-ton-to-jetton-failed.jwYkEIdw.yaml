@@ -17,33 +17,29 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi
+    data:
       dex_incoming_transfer:
         amount: 3400000000
         asset: 0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C
         destination: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
         destination_jetton_wallet: 0:1150B518B2626AD51899F98887F8824B70065456455F7FE2813F012699A4061F
         source: 0:EDD3A5FADE4706FEDE334D9FC0EEC8E73A6244555523558C1EA605CA18E416E0
-        source_jetton_wallet: null
       dex_outgoing_transfer:
         amount: 3400000000
         asset: 0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C
         destination: 0:EDD3A5FADE4706FEDE334D9FC0EEC8E73A6244555523558C1EA605CA18E416E0
-        destination_jetton_wallet: null
         source: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
-        source_jetton_wallet: null
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi
       sender: 0:EDD3A5FADE4706FEDE334D9FC0EEC8E73A6244555523558C1EA605CA18E416E0
     tx_hashes:
+      - jwYkEIdwbHJAGiZD6JYHs/TWBBdJQBWK0hIfwDL1wqU=
       - +Q78wptC/HMQhv40l64AJcnWq+2QluYZN7NYYYH4H5A=
       - 2ks9MkKkoapzN9PHeVGaog+b2KKbgiawmz3bSVwIeX0=
       - 7YKEiBo2vUKpZfIZYlnBrYt5Y1k5CGkFAXcrHSuUA7w=
       - DcXP703xYcqmxgrsCkpAHfaVhlirIB11D38WU9bo9E8=
       - SZ0Vw7pOoIBG7gm8Kkpz6K6PIjgh6r2nW3DjD5S0UZE=
       - ZpvAwVAVo3ZEpSs1+iVfD72RjFaRVFk7lx/kJ9iqjTo=
-      - jwYkEIdwbHJAGiZD6JYHs/TWBBdJQBWK0hIfwDL1wqU=
     accounts:
       - 0:1150B518B2626AD51899F98887F8824B70065456455F7FE2813F012699A4061F
       - 0:27D1F23D42624F723F42ABAF1D23EFC2E63A5EC7B0E12E54BB026BBE10D42630
@@ -70,9 +66,9 @@ actions:
     amount: null
     value: 34000000
     opcode: null
-    ton_transfer_data:
-      content: BlumTradingBotFee#1744132167716
-      encrypted: false
+    data:
+      comment: BlumTradingBotFee#1744132167716
+      comment_encrypted: false
     tx_hashes:
       - jwYkEIdwbHJAGiZD6JYHs/TWBBdJQBWK0hIfwDL1wqU=
       - vm66vaSYyQpl68ie91JdOP4xF/yJCpN0nDQeUZ1swng=

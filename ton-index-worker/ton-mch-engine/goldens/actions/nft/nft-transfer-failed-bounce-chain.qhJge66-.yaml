@@ -1,0 +1,65 @@
+# nft / failed transfer, bounce stays standalone (chain)
+# note: A failed NFT transfer keeps its bounce separate and classifies as a failed NFT transfer
+# trace: qhJge66-v1EJPRT6xac4cL5htWXcqlxRMhBf6sO-_Wg=
+actions:
+  - type: call_contract
+    anchor: call_contract#ffffffff@103600248000006
+    id: Y+GWz0ond04o3TOC9zwE6zFdF2nqOrq7DlNRvgPwVBw=
+    success: true
+    source: 0:D3968390BB52438E66F00251E59AF649E86591CE8B1595F319EACCDFC217787B
+    source_secondary: null
+    destination: 0:DBD9A756AFCB354723DBD593E13B3489DCDF724247767282766B886F38FDA48A
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 864764265
+    opcode: 0xffffffff
+    tx_hashes:
+      - Aa7zaNz0doWGcCiLY1koeEHZUy4PbE7Si1piEOM+O/U=
+      - skzw436jBLFY8SEQz8/snHRNLIFLQOCg5Gtk+fgu9s8=
+    accounts:
+      - 0:D3968390BB52438E66F00251E59AF649E86591CE8B1595F319EACCDFC217787B
+      - 0:DBD9A756AFCB354723DBD593E13B3489DCDF724247767282766B886F38FDA48A
+    start_lt: 103600248000006
+    end_lt: 103600248000007
+    start_utime: 1789458093
+    end_utime: 1789458093
+    mc_seqno_end: 92833487
+  - type: nft_transfer
+    matcher: nft_transfer
+    anchor: nft_transfer@103600248000004
+    id: /0fdfwXZDQjE3Of4tRJO1iYy9WbujraWj8jEt9vRflA=
+    success: false
+    source: 0:DBD9A756AFCB354723DBD593E13B3489DCDF724247767282766B886F38FDA48A
+    source_secondary: null
+    destination: 0:9353069312F8736AEA10B56D67B69A6CE8F7F4C816E36D2DF25BB9366C00F4D6
+    destination_secondary: null
+    asset: 0:58B22EF862A9E6412D427026D443E918728069D84A482F8621FC1E7DD304D6F5
+    asset_secondary: 0:D3968390BB52438E66F00251E59AF649E86591CE8B1595F319EACCDFC217787B
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      forward_amount: 810000000
+      forward_payload: cellhash:7D73F9FA423ABA4FA76E22FA5C328B5FDFE758BDFCFD5E5D60C648E57E3672DD
+      is_purchase: false
+      nft_index: 205532
+      query_id: 0
+      response_destination: 0:DBD9A756AFCB354723DBD593E13B3489DCDF724247767282766B886F38FDA48A
+    tx_hashes:
+      - qhJge66+v1EJPRT6xac4cL5htWXcqlxRMhBf6sO+/Wg=
+      - Aa7zaNz0doWGcCiLY1koeEHZUy4PbE7Si1piEOM+O/U=
+    accounts:
+      - 0:9353069312F8736AEA10B56D67B69A6CE8F7F4C816E36D2DF25BB9366C00F4D6
+      - 0:D3968390BB52438E66F00251E59AF649E86591CE8B1595F319EACCDFC217787B
+      - 0:DBD9A756AFCB354723DBD593E13B3489DCDF724247767282766B886F38FDA48A
+    start_lt: 103600248000004
+    end_lt: 103600248000005
+    start_utime: 1789458093
+    end_utime: 1789458093
+    mc_seqno_end: 92833487

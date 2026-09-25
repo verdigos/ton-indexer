@@ -1,5 +1,5 @@
 # gasless / Gasless jetton transfer by a wallet v5
-# note: named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden
+# note: The wallet sends a jetton and classifies as a gasless request plus a jetton transfer
 # trace: tF9rJ18uKOZuwJaQ0z2ZB2ln0OcFMEa0fy6rYxMgQNY=
 actions:
   - type: call_contract
@@ -18,8 +18,8 @@ actions:
     value: 25583249
     opcode: 0x73696e74
     tx_hashes:
-      - EirR598TMc1bzh+VfytIF+bHNcEnZ2tcFifWUq8nNt0=
       - tF9rJ18uKOZuwJaQ0z2ZB2ln0OcFMEa0fy6rYxMgQNY=
+      - EirR598TMc1bzh+VfytIF+bHNcEnZ2tcFifWUq8nNt0=
     accounts:
       - 0:147CB558F69A4D95D99F76A6D600E839172EECBF4C06D1A2695F430274FA956F
       - 0:16C2A925BAEEA63544C029E30A88868D1C0372E21DFD3BDB06707CED83733FEE
@@ -44,8 +44,8 @@ actions:
     value: 25583249
     opcode: null
     tx_hashes:
-      - EirR598TMc1bzh+VfytIF+bHNcEnZ2tcFifWUq8nNt0=
       - tF9rJ18uKOZuwJaQ0z2ZB2ln0OcFMEa0fy6rYxMgQNY=
+      - EirR598TMc1bzh+VfytIF+bHNcEnZ2tcFifWUq8nNt0=
     accounts:
       - 0:147CB558F69A4D95D99F76A6D600E839172EECBF4C06D1A2695F430274FA956F
       - 0:16C2A925BAEEA63544C029E30A88868D1C0372E21DFD3BDB06707CED83733FEE
@@ -70,14 +70,10 @@ actions:
     amount: 2093172
     value: null
     opcode: null
-    extra:
-      parent_gasless_action: dQSOwTkDA/8wH/TeVfe7vmQTrKAbyT7JKZiRbAl9qHg=
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 1
-      forward_payload: null
-      is_encrypted_comment: false
+      parent_gasless_action: dQSOwTkDA/8wH/TeVfe7vmQTrKAbyT7JKZiRbAl9qHg=
       query_id: 0
       response_destination: 0:7AE5056C3FD9406F9BBBE7C7089CD4C40801D9075486CBEDB7CE12DF119EACF1
     tx_hashes:

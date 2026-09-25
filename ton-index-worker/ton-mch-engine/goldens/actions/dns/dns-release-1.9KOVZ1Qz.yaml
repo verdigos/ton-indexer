@@ -46,8 +46,8 @@ actions:
     value: 24456081
     opcode: 0x4ed14b65
     tx_hashes:
-      - AMEaf0birGUgUHlMrImxwLeYqfDzBzuNWSUx1nP71l0=
       - DtBf9VjAp7R66eT0DRaX6hqnjkhKdJUd8F4UDziLh+Y=
+      - AMEaf0birGUgUHlMrImxwLeYqfDzBzuNWSUx1nP71l0=
     accounts:
       - 0:1B33B862C1A3FAFE9B676350AE40FED6C451D1185FE4389C0C834A5D05D22CCA
       - 0:8967297A3F7FD14D0AF321B4E1C91A15879D87E299E4CC172D4E04C3D820896C
@@ -72,23 +72,9 @@ actions:
     amount: null
     value: 1000000000
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
-      forward_payload: null
-      is_purchase: null
-      marketplace: null
-      marketplace_address: null
-      nft_item_index: 76359553714204298836367978451999958273959253463034392790126697222337078493184
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+    data:
+      nft_index: 76359553714204298836367978451999958273959253463034392790126697222337078493184
       query_id: 0
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
     tx_hashes:
       - 9KOVZ1QzXhyT1yO6OsUTvBwkV9pZoG2YVBkCCKN6zi0=
       - DtBf9VjAp7R66eT0DRaX6hqnjkhKdJUd8F4UDziLh+Y=

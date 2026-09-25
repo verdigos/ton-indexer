@@ -43,8 +43,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: dedust
+    data:
       dex_incoming_transfer:
         amount: 3423056355653
         asset: 0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF
@@ -59,21 +58,19 @@ actions:
         destination_jetton_wallet: 0:D73B1F0B4F9C7D83701B69C9724144D2BC1B2DC07E3780B9EF1EAFDBEDAFC040
         source: 0:09C5B9B0870270F85A26165B75458BA475E4E5B620A65A5B2EAD0B1031126165
         source_jetton_wallet: 0:D10FA4FA26903310E34D971E93DC7388135CA8B8A9E85B11C132445F6CE307A3
-      min_out_amount: null
       peer_swaps:
         - amount_in: 3423056355653
           amount_out: 94771943760
           asset_in: 0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF
-          asset_out: null
         - amount_in: 94771943760
           amount_out: 139497569039755
-          asset_in: null
           asset_out: 0:2F956143C461769579BAEF2E32CC2D7BC18283F40D20BB03E432CD603AC33FFC
+      protocol: dedust
       sender: 0:3225E9C36215BC23875DA06755EC2704F5CCE4F1C2BEB4C595F6F7001603DA47
     tx_hashes:
+      - C7bHOfSrBJPLHXMZkVnIQladzgYZHIlKOiJRvbxRRuI=
       - 9YeeIme1GAt5jIEHS6xblzIsOy24w7DpyRU+6XoC4KI=
       - BaEH9LPjbcnI1DX+lgVgAUfiAMQG7FMmUGdx7Y3KBYw=
-      - C7bHOfSrBJPLHXMZkVnIQladzgYZHIlKOiJRvbxRRuI=
       - PRVYBD64rm4y/VoMjFFEicOLJXgkoPTOicMgF0T7XUQ=
       - Y9pHvfaJk4eJ9qouo46z7FC18ixAOAbyhocfi6URWoM=
       - Ye27dO5Y57PKzBqPTBsz0Dqqo83HkNCXjnsFA5tp1CE=
@@ -113,8 +110,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: coffee
+    data:
       dex_incoming_transfer:
         amount: 1591706048226
         asset: 0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF
@@ -124,17 +120,14 @@ actions:
         source_jetton_wallet: 0:A347D287741B24F74CF9D736B8849DA858776BD521F84008A09CD3D59645D9CB
       dex_outgoing_transfer:
         amount: 44828407358
-        asset: null
         destination: 0:3D264E3CB401B01DC7D1CFC232470D185A3EBA63D933E738617F9942B9294C4E
-        destination_jetton_wallet: null
         source: 0:DB2EA4FFCE1C691118F41275C6DA2AABD60EF53836FF5E873BE11F11CD448494
-        source_jetton_wallet: null
-      min_out_amount: null
       peer_swaps: []
+      protocol: coffee
       sender: 0:3225E9C36215BC23875DA06755EC2704F5CCE4F1C2BEB4C595F6F7001603DA47
     tx_hashes:
-      - /b8zsGxSmygCstw+JxEWWI7eJ8C0l0H7XtwBSnpwhVk=
       - C7bHOfSrBJPLHXMZkVnIQladzgYZHIlKOiJRvbxRRuI=
+      - /b8zsGxSmygCstw+JxEWWI7eJ8C0l0H7XtwBSnpwhVk=
       - LXJohdQzWciR3+sD/GHNIAkczHuzkwIvg6t1If3k7q8=
       - O8smQDgQypQ2DvJFfPlYspWslAhe+jjMTZ4gZSUxQPs=
       - TrkfhVWgv/Q55pIw/juWuBc3mh+ZFAxk6WBAjuUgdUg=
@@ -170,15 +163,12 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi_v2
+    data:
       dex_incoming_transfer:
         amount: 44426053349
-        asset: null
         destination: 0:F1FBE8D453D3D4B4796D3D8657EF0773222D123D8DCA67C9EF3ACD2266F40977
         destination_jetton_wallet: 0:F03B20E57B01B0F0C91E5E067FA0E98F4C8849225689C212667F87DF20F2AFFB
         source: 0:3D264E3CB401B01DC7D1CFC232470D185A3EBA63D933E738617F9942B9294C4E
-        source_jetton_wallet: null
       dex_outgoing_transfer:
         amount: 64948588105456
         asset: 0:2F956143C461769579BAEF2E32CC2D7BC18283F40D20BB03E432CD603AC33FFC
@@ -186,16 +176,16 @@ actions:
         destination_jetton_wallet: 0:D73B1F0B4F9C7D83701B69C9724144D2BC1B2DC07E3780B9EF1EAFDBEDAFC040
         source: 0:F1FBE8D453D3D4B4796D3D8657EF0773222D123D8DCA67C9EF3ACD2266F40977
         source_jetton_wallet: 0:1931D820A02C0E71254B953FD1CA266D2D23328D81C8B6D503F500557BF36320
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi_v2
       sender: 0:3D264E3CB401B01DC7D1CFC232470D185A3EBA63D933E738617F9942B9294C4E
     tx_hashes:
+      - iLcNDba13bw9TBp7Uuk7jdQNxsCPD6tRvlXLJGkJdsM=
       - 2/WUDM283G2YoAp9X3ueFWeSeQdbBNgjLw+Qp1JpmIw=
       - Bx9K7csadq13wVnX/11s0iX/mfj2hn/uhk0lX6RifpY=
       - GwMkAdIxPf485D7NxL1MLa4RGSCWH+LqlwyAbHKvdUQ=
       - PH5oCCISPdmGyThxwyblQ7pM4qJMNXI5rEaIQ7Zwmrc=
       - RArZBEgF/ba+MlM0HcDVE3TXuANH7roEyRT7p0eS6gs=
-      - iLcNDba13bw9TBp7Uuk7jdQNxsCPD6tRvlXLJGkJdsM=
       - owuCkqIsMSRTmu2xYJKwf6e5kpZQaXLf1ltrbLvIYww=
       - quMI72JiSVf/tXvQ2GObGJcBWmTB1YElFaymn8J7kzE=
     accounts:

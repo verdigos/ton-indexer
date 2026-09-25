@@ -17,8 +17,8 @@ actions:
     value: 10000000
     opcode: 0x1a84c0e0
     tx_hashes:
-      - TqXTPyRduyxiK5QnkHiDN5WoMBsCie7HrNvAGA/GZfY=
       - nHpSvQFpFOIuaqsJTJ9rtDYH6VNRqRsYIIp/Ez5AJdg=
+      - TqXTPyRduyxiK5QnkHiDN5WoMBsCie7HrNvAGA/GZfY=
     accounts:
       - 0:AFCEC6CCE463D696DDBDF9469CE1CEDEEA02CA47F665BCEB99A8A2F2C5D45731
       - 0:F8DD1B5D010FD8F2797CE92AB3C6394BFFEAC0BDD66204393FB3B39317EA11C6
@@ -75,8 +75,8 @@ actions:
     value: 564977956
     opcode: 0xbe44e7a6
     tx_hashes:
-      - nHpSvQFpFOIuaqsJTJ9rtDYH6VNRqRsYIIp/Ez5AJdg=
       - qfc7rbl0z5dhsr95Znhul1F/gaQf6GnBluggfMJcAjY=
+      - nHpSvQFpFOIuaqsJTJ9rtDYH6VNRqRsYIIp/Ez5AJdg=
     accounts:
       - 0:AFCEC6CCE463D696DDBDF9469CE1CEDEEA02CA47F665BCEB99A8A2F2C5D45731
       - 0:E1177970B722A9422D8EF674B85CDCB2C88295EE397D7150A4A382F91921409C
@@ -104,8 +104,8 @@ actions:
     value: 564977956
     opcode: 0xbe44e7a6
     tx_hashes:
-      - nHpSvQFpFOIuaqsJTJ9rtDYH6VNRqRsYIIp/Ez5AJdg=
       - qfc7rbl0z5dhsr95Znhul1F/gaQf6GnBluggfMJcAjY=
+      - nHpSvQFpFOIuaqsJTJ9rtDYH6VNRqRsYIIp/Ez5AJdg=
     accounts:
       - 0:AFCEC6CCE463D696DDBDF9469CE1CEDEEA02CA47F665BCEB99A8A2F2C5D45731
       - 0:E1177970B722A9422D8EF674B85CDCB2C88295EE397D7150A4A382F91921409C
@@ -131,9 +131,9 @@ actions:
     value: null
     opcode: null
     tx_hashes:
+      - xBl/8BTUqSv52IWAzrmg54+V0YR/WQsV1buJxKBq4vE=
       - 7vd2vnxSdN9UAY8nV1AvNzWWX4D5AuXVXqu+2/Fnbrk=
       - CrI/IkL3ea8uFgZ8ymj808tauWBoP3N+SBJFtoOc4s8=
-      - xBl/8BTUqSv52IWAzrmg54+V0YR/WQsV1buJxKBq4vE=
     accounts:
       - 0:219F19946DDAA7ED0923267A89FA39A82BA5D9B631ABB0F15BA61241830C92EA
       - 0:AD9E0A84E13EFB6D37634044F7B49820FD121E900057BF6E71DED212378D7C05
@@ -163,13 +163,13 @@ actions:
     value: null
     opcode: null
     tx_hashes:
+      - xBl/8BTUqSv52IWAzrmg54+V0YR/WQsV1buJxKBq4vE=
       - 7vd2vnxSdN9UAY8nV1AvNzWWX4D5AuXVXqu+2/Fnbrk=
       - An7bZlhNuL9S8CqbDmGzzjB16a+j96WDpoZUZvtDmTE=
       - CrI/IkL3ea8uFgZ8ymj808tauWBoP3N+SBJFtoOc4s8=
       - TqXTPyRduyxiK5QnkHiDN5WoMBsCie7HrNvAGA/GZfY=
       - nHpSvQFpFOIuaqsJTJ9rtDYH6VNRqRsYIIp/Ez5AJdg=
       - qfc7rbl0z5dhsr95Znhul1F/gaQf6GnBluggfMJcAjY=
-      - xBl/8BTUqSv52IWAzrmg54+V0YR/WQsV1buJxKBq4vE=
     accounts:
       - 0:219F19946DDAA7ED0923267A89FA39A82BA5D9B631ABB0F15BA61241830C92EA
       - 0:AD9E0A84E13EFB6D37634044F7B49820FD121E900057BF6E71DED212378D7C05
@@ -197,12 +197,11 @@ actions:
     amount: null
     value: 539257156
     opcode: null
-    ton_transfer_data:
-      content: null
-      encrypted: false
+    data:
+      comment_encrypted: false
     tx_hashes:
-      - An7bZlhNuL9S8CqbDmGzzjB16a+j96WDpoZUZvtDmTE=
       - nHpSvQFpFOIuaqsJTJ9rtDYH6VNRqRsYIIp/Ez5AJdg=
+      - An7bZlhNuL9S8CqbDmGzzjB16a+j96WDpoZUZvtDmTE=
     accounts:
       - 0:219F19946DDAA7ED0923267A89FA39A82BA5D9B631ABB0F15BA61241830C92EA
       - 0:AFCEC6CCE463D696DDBDF9469CE1CEDEEA02CA47F665BCEB99A8A2F2C5D45731

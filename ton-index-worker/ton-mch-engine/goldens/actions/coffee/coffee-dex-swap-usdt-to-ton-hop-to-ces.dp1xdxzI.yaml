@@ -17,8 +17,8 @@ actions:
     value: 90074181
     opcode: 0x178d4519
     tx_hashes:
-      - LDXOCINBCr5ya/dERO9w5jLCeQGh2HMl5jQy3MP7RXE=
       - ZZFJVTQW4YMF2/I8e0lIrBh2O1fYiUAdS7hKITjL4gs=
+      - LDXOCINBCr5ya/dERO9w5jLCeQGh2HMl5jQy3MP7RXE=
     accounts:
       - 0:8EA33875123015261EF940102531A1E0B760216E9C0B295A399524475A3D1082
       - 0:A2FD1B5E81548267DBABD109E38D31DA9FDC9193A26689C429454E16C25BBBAA
@@ -43,8 +43,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: coffee
+    data:
       dex_incoming_transfer:
         amount: 10000000
         asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
@@ -59,25 +58,23 @@ actions:
         destination_jetton_wallet: 0:8EA33875123015261EF940102531A1E0B760216E9C0B295A399524475A3D1082
         source: 0:E9D6A57EAB067C173862FB893BBD1CF706D656BF7392F1A313B9149AB9963117
         source_jetton_wallet: 0:A2FD1B5E81548267DBABD109E38D31DA9FDC9193A26689C429454E16C25BBBAA
-      min_out_amount: null
       peer_swaps:
         - amount_in: 10000000
           amount_out: 3110612273
           asset_in: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
-          asset_out: null
         - amount_in: 3110612273
           amount_out: 13876673279
-          asset_in: null
           asset_out: 0:A5D12E31BE87867851A28D3CE271203C8FA1A28AE826256E73C506D94D49EDAD
+      protocol: coffee
       sender: 0:E39C30B5790D4AB456435CD2E7DA12C7CDB2043D020DD6C400CE951F78204B5A
     tx_hashes:
+      - dp1xdxzIC7tCyZfy80VTW5be7SimpOOTnuf3/8BZjb0=
       - /xfc9kL0r/24SK8030P/U0kNicgUSG4ArIcHxiemAX0=
       - 6UQEmKQndbI/ZnjTuWgSJwMTnuSjg4iFNdMMBrl6in8=
       - LDXOCINBCr5ya/dERO9w5jLCeQGh2HMl5jQy3MP7RXE=
       - Vg8uOBTnmnnzoh9iOsO45aN+2+W4rZ3U7s5sQVLMSos=
       - ZZFJVTQW4YMF2/I8e0lIrBh2O1fYiUAdS7hKITjL4gs=
       - Zo2QVqXJesx5L2vb81DWSxmwJNWlSy/4IF/UwxQ04uU=
-      - dp1xdxzIC7tCyZfy80VTW5be7SimpOOTnuf3/8BZjb0=
       - ebrw4Ka6YX2bWk2yMYSglwqk2K8g05N1vmNPEqK7fho=
       - fRb9A/d9c6kgakVJIYy7xF1fGmhdmbvgSHSTPYgw598=
       - p6C4ju5q/IrWlS/OncIO8eshNYU+8IjWR2xgYNLLSDE=

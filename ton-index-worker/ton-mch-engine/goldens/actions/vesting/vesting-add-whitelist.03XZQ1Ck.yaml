@@ -46,8 +46,8 @@ actions:
     value: 496523600
     opcode: 0xf258a69b
     tx_hashes:
-      - BbxgEIO8vDScr3AXNWyL1CsU3D1cv8VIvE4yLMgJYic=
       - N8B/OJbZp7RSfQ6anS0VEQNoxsdylsghLOXHguYLuBg=
+      - BbxgEIO8vDScr3AXNWyL1CsU3D1cv8VIvE4yLMgJYic=
     accounts:
       - 0:E9D864419C6A77FBC1D2EC7AFE840C1C349FCC1D2E19520FC73F547DD1721E9E
       - 0:FD8B2FC26CB0FE2D27B911FD0409D72DEDA2089C1EA7722D2910EA5354900B2D
@@ -75,7 +75,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    vesting_add_whitelist_data:
+    data:
       accounts_added:
         - "-1:ECB7B7B4C200424F8D837AC9E0C5EDCA800A162546CD5706FB86549C0FE03038"
       query_id: 0

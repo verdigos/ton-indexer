@@ -17,8 +17,8 @@ actions:
     amount: null
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - CwcLdAHHpMSrEbbd/9S7YRvBreXTQHSGIov5Mbv39KA=
       - UlGGUqfDzs+wdhNAvh/Du4oiBWX0pylK06xI8nh5sdY=

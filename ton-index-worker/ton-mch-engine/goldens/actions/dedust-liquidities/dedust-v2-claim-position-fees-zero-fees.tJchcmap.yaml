@@ -75,8 +75,8 @@ actions:
     value: 150000000
     opcode: 0x5652f1df
     tx_hashes:
-      - 5diF9YcaMWUnsQbbTkc4cCHL8yFRgrETDhYYvgCZeCk=
       - tJchcmap3KKyjSw6GJ2YpZ4OkyN+DwvoD2u/KQh164Q=
+      - 5diF9YcaMWUnsQbbTkc4cCHL8yFRgrETDhYYvgCZeCk=
     accounts:
       - 0:258C66CB3E424DE963D6615CCDF6AA5AA084906EBC1C79379D176E1BF64B400F
       - 0:565816422F6E1AE682296E6E361E7C836A6E2BAE8DA66FBD0259992A8EF20161
@@ -104,8 +104,8 @@ actions:
     value: 147754128
     opcode: 0xd53276db
     tx_hashes:
-      - +vMXFps2W9UrxLxWEzANVP83tSlYyjdg+zb6HHnPcTQ=
       - rsTheWr1KR6LuIu3E1OtyFyliGvZfin15f1SA+pUbHg=
+      - +vMXFps2W9UrxLxWEzANVP83tSlYyjdg+zb6HHnPcTQ=
     accounts:
       - 0:258C66CB3E424DE963D6615CCDF6AA5AA084906EBC1C79379D176E1BF64B400F
       - 0:565816422F6E1AE682296E6E361E7C836A6E2BAE8DA66FBD0259992A8EF20161
@@ -133,26 +133,18 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_withdraw_liquidity_data:
-      amount1: 0
-      amount2: 0
-      asset1_out: null
-      asset2_out: null
-      dex: dedust_v2
-      dex_jetton_wallet_1: null
-      dex_jetton_wallet_2: null
-      dex_wallet_1: null
-      dex_wallet_2: null
+    data:
       is_refund: false
-      lp_tokens_burnt: null
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+      legs:
+        - amount: 0
+        - amount: 0
+      protocol: dedust_v2
     tx_hashes:
+      - tJchcmap3KKyjSw6GJ2YpZ4OkyN+DwvoD2u/KQh164Q=
       - +vMXFps2W9UrxLxWEzANVP83tSlYyjdg+zb6HHnPcTQ=
       - 5diF9YcaMWUnsQbbTkc4cCHL8yFRgrETDhYYvgCZeCk=
       - FskBo9N9WDZo0Pw/scGUgUaiykt6VP1dTJWPCgjI10U=
       - rsTheWr1KR6LuIu3E1OtyFyliGvZfin15f1SA+pUbHg=
-      - tJchcmap3KKyjSw6GJ2YpZ4OkyN+DwvoD2u/KQh164Q=
     accounts:
       - 0:258C66CB3E424DE963D6615CCDF6AA5AA084906EBC1C79379D176E1BF64B400F
       - 0:259512A43B0BEB083EFB5161CC6E9216DEBD7FDEDE3BC80165A4C8CDA14A244A

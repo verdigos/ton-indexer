@@ -17,8 +17,8 @@ actions:
     value: 30650250
     opcode: 0x9b3aa3fa
     tx_hashes:
-      - 5mPsdUW8coyMEytKKPDZHE8bOapWZ/DA3ZM3lcFvhck=
       - eyN9t70wIRmDyk0c/JAVld/AsdrZPdGACJUJFPNNA/g=
+      - 5mPsdUW8coyMEytKKPDZHE8bOapWZ/DA3ZM3lcFvhck=
     accounts:
       - 0:0826B21D9267FA328FE4F7CFA10D01F66D0F6E1694A1E3399C183F769E1C42CE
       - 0:5F0564FB5F604783DB57031CE1CF668A88D4D4D6DA6DE4DB222B4B920D6FD800
@@ -43,19 +43,17 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 12000000000
-      amount2: 271261828086
-      asset1: null
-      asset2: 0:F6EB371DE82AA9CFB5B22CA547F31FDC0FA0FBB41AE89BA84A73272FF0BF2157
-      dex: dedust
-      lp_tokens_minted: 502474030067
-      target_amount_1: 12000000000
-      target_amount_2: 271261828086
-      target_asset_1: null
-      target_asset_2: 0:F6EB371DE82AA9CFB5B22CA547F31FDC0FA0FBB41AE89BA84A73272FF0BF2157
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:06BEBAC2CAEB0C48509223A13F8F3DC76C962B032EC9FB7F2B6A05DA6A80D7C6
+    data:
+      legs:
+        - amount: 12000000000
+          target_amount: 12000000000
+        - amount: 271261828086
+          asset: 0:F6EB371DE82AA9CFB5B22CA547F31FDC0FA0FBB41AE89BA84A73272FF0BF2157
+          target_amount: 271261828086
+          target_asset: 0:F6EB371DE82AA9CFB5B22CA547F31FDC0FA0FBB41AE89BA84A73272FF0BF2157
+          user_jetton_wallet: 0:06BEBAC2CAEB0C48509223A13F8F3DC76C962B032EC9FB7F2B6A05DA6A80D7C6
+      protocol: dedust
+      tokens_minted: 502474030067
       vault_excesses:
         - amount: 32170776099
           asset: 0:F6EB371DE82AA9CFB5B22CA547F31FDC0FA0FBB41AE89BA84A73272FF0BF2157

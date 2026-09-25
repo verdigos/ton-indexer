@@ -1,0 +1,29 @@
+# dns / dns auction lookup miss release
+# note: synthetic: A release with a missing auction lookup classifies only as a contract call
+# trace: 7tUfAoNLuIstTBudeatHwPn7mprTH-NQuocqxZKeX78=
+actions:
+  - type: call_contract
+    anchor: call_contract#4ed14b65@400
+    id: LT80KsqN1L42K8d2+AqAIVE/qR+3w9JoW1wrEgZJiIA=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 123
+    opcode: 0x4ed14b65
+    tx_hashes:
+      - MJaRrQ0d/7Rz+aLEWUV2G1ZAh2IEre2gVXW4SppBV5k=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 400
+    end_lt: 400
+    start_utime: 1400
+    end_utime: 1400
+    mc_seqno_end: 0

@@ -17,9 +17,10 @@ actions:
     amount: null
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
+      - 9ncN7iBzDJswNbex9fiAbG37vXl9qu6HOrLPe16yp0w=
       - nb9Xk9SbZJgaFjzPI9QHnj0Bl5lhiu3giMigcMz6spw=
       - pt06tYv472psrCfFhWJXhxXVilaU7Gaw9o14VXxwTcg=
     accounts:

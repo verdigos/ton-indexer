@@ -43,8 +43,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: tonco
+    data:
       dex_incoming_transfer:
         amount: 10000000
         asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
@@ -59,21 +58,20 @@ actions:
         destination_jetton_wallet: 0:AC1A1D26FA88B310EDC87D2604A5101E438B48D487A157D507B38BA741087706
         source: 0:BFFADD270A738531DA7B13BA8FC403826C2586173F9EDE9C316FAB53BC59AC86
         source_jetton_wallet: 0:3EB3EBA11279124F2DDD8ECA6C10BCC602CFA4FA9CC819A46A7AF0E6FD9BC7B4
-      min_out_amount: 541070180798
+      min_out_amount: 535713050295
       peer_swaps:
         - amount_in: 10000000
           amount_out: 2907640091
           asset_in: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
-          asset_out: null
         - amount_in: 2907640091
           amount_out: 541070180798
-          asset_in: null
           asset_out: 0:6CA2C99C66B0FA1478A303BA9618BC39C28FDA1FC50DE37E618BDDF98C9FD24C
+      protocol: tonco
       sender: 0:E39C30B5790D4AB456435CD2E7DA12C7CDB2043D020DD6C400CE951F78204B5A
     tx_hashes:
+      - CjtIXjqazbSFrtPqqMMFBgMG6+huwp5CfNtXpQAf8xY=
       - 42S+VZzVnUTp+q5ZbQ2u3J/yxxijnd2cCQFgyrX44Rk=
       - ALsY50LpLX+cfiLZBi2U+yWMQjW+P02DasiskpTWhKg=
-      - CjtIXjqazbSFrtPqqMMFBgMG6+huwp5CfNtXpQAf8xY=
       - DS1punj08LCjKqNdpA8i2Imepa6eeekZAyEWS914wj0=
       - FFB5mxDtCwEK/dsnbGAeRvOtoQtEWWDr6swcjL5G5vY=
       - GG7VH+M6MpihkKUq+K2+1Ho5Y8phm3nii27iDgiNVL8=

@@ -17,15 +17,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi
+    data:
       dex_incoming_transfer:
         amount: 36835916573
         asset: 0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C
         destination: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
         destination_jetton_wallet: 0:1150B518B2626AD51899F98887F8824B70065456455F7FE2813F012699A4061F
         source: 0:2DBD3BF762622A10C64EDF8174F71F146781EB88B2DA07E15D2D80D4D910A88C
-        source_jetton_wallet: null
       dex_outgoing_transfer:
         amount: 1000000000008933
         asset: 0:AFC49CB8786F21C87045B19EDE78FC6B46C51048513F8E9A6D44060199C1BF0C
@@ -33,14 +31,14 @@ actions:
         destination_jetton_wallet: 0:288B4785CAE8505994ACFBC20CF58E1CBDC0E6FE2B78EE306680FF63CF8D1D6C
         source: 0:779DCC815138D9500E449C5291E7F12738C23D575B5310000F6A253BD607384E
         source_jetton_wallet: 0:306CF19A0860B02ECB4079142F34C59A602DABFBCDEE122EA31917152314BCB1
-      min_out_amount: null
       peer_swaps: []
+      protocol: stonfi
       sender: 0:2DBD3BF762622A10C64EDF8174F71F146781EB88B2DA07E15D2D80D4D910A88C
     tx_hashes:
+      - T4ZexTBP42cObyNEUyj8zpd2kDXElijp03HzIIVMqvQ=
       - 6eaovAfFwfDVWsVGIAZ6z7ZqZnscVtUFymQceGhZX1Y=
       - Nbvg0EHJ/yW/EpVW34DX6OHyE3qkJIk479gqu7qzdG8=
       - RpwLze5Kly3ZNplRsBSTwhoul86DK70DDY3yfIGANnQ=
-      - T4ZexTBP42cObyNEUyj8zpd2kDXElijp03HzIIVMqvQ=
       - WdllPmz5fTJBXqoDEClxrsfMAqm4pK5p5C522GmNjy4=
       - lfuJ+jKyfhZtBuLfUj495oXZP1ip+kOtqDKxepdMlio=
       - m9z5diRhDgBEXtT/VeukUyAxSa1hnhZvwyFhwq7KBjQ=

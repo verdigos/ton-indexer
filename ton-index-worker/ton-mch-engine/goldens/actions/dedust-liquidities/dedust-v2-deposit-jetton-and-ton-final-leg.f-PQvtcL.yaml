@@ -17,8 +17,8 @@ actions:
     value: 145759792
     opcode: 0x855afcbd
     tx_hashes:
-      - F3iQLPBOGqNA5fF1oeRzdoMttyKYFrl0was2zWid7RY=
       - e+y9YV0cFuu00t9u60zO4SV+vtbFEpZdcXRelOmFt/U=
+      - F3iQLPBOGqNA5fF1oeRzdoMttyKYFrl0was2zWid7RY=
     accounts:
       - 0:001AF15D22ED5C36E5655F8EC516E01EE0B6E778763B169F742EBBFDFE106481
       - 0:00BA322D6C069ED0D84529DDF63643C5F31909137B68E7BC692EA2B34286FA7A
@@ -43,8 +43,8 @@ actions:
     value: 248666450
     opcode: 0xdc5ddba1
     tx_hashes:
-      - 5c/5VsOBwL1r1n3J3EHQ3Bxl4oE06vqczrtiro/LNSA=
       - ZR4l+Q8qWxv28lfoke7gryF8AMdgS6ng7CiKAltqb18=
+      - 5c/5VsOBwL1r1n3J3EHQ3Bxl4oE06vqczrtiro/LNSA=
     accounts:
       - 0:0065B43BCEC4814DCF68458A185FD01EE7E2980E5B356642E2D31B4D39AE8D8F
       - 0:00BA322D6C069ED0D84529DDF63643C5F31909137B68E7BC692EA2B34286FA7A
@@ -69,23 +69,21 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 46543920065588
-      amount2: 151756020744
-      asset1: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
-      asset2: null
-      dex: dedust_v2
-      lp_tokens_minted: 2657690739975
-      target_amount_1: 46543920065588
-      target_amount_2: 151756020745
-      target_asset_1: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
-      target_asset_2: null
-      user_jetton_wallet_1: 0:FDF41673C4E371BCA254E621BD92BA7EC5089DF1D5D719E31114AB46AA6BFA2C
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 46543920065588
+          asset: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
+          target_amount: 46543920065588
+          target_asset: 0:EE1A0A9953BFC012088EC047BE69BA3321E7EEA1A8AB4D62CEC9DEDCFDFF0687
+          user_jetton_wallet: 0:FDF41673C4E371BCA254E621BD92BA7EC5089DF1D5D719E31114AB46AA6BFA2C
+        - amount: 151756020744
+          target_amount: 151756020745
+      protocol: dedust_v2
+      tokens_minted: 2657690739975
       vault_excesses:
         - amount: 1
-          asset: null
     tx_hashes:
+      - f+PQvtcLmt4lrRMFr9OlMrkLoFLt6hXatdfQHMI3GZM=
       - 1b+XtXQ8ziXUb9IKzbQ3L/Ak8w1UxHL2wvKPtUGgpgg=
       - 5c/5VsOBwL1r1n3J3EHQ3Bxl4oE06vqczrtiro/LNSA=
       - F3iQLPBOGqNA5fF1oeRzdoMttyKYFrl0was2zWid7RY=
@@ -95,7 +93,6 @@ actions:
       - W584ACMuQweXQFQI5newjFk+L6XKSKHqO+gZvc2zjqo=
       - ZR4l+Q8qWxv28lfoke7gryF8AMdgS6ng7CiKAltqb18=
       - e+y9YV0cFuu00t9u60zO4SV+vtbFEpZdcXRelOmFt/U=
-      - f+PQvtcLmt4lrRMFr9OlMrkLoFLt6hXatdfQHMI3GZM=
       - fa/n4vsHKfPJ35Co0o9W1wwRxl9GH2GNjfFy1mUahmo=
       - tn5AqJ+3FSJ0Hr9eXkiw9V6kNJ7R+B+Xu9G2NypzVFs=
     accounts:

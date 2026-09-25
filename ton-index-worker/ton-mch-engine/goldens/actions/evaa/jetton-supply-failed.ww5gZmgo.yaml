@@ -60,7 +60,7 @@ actions:
     ancestor_type:
       - evaa_supply
   - type: evaa_supply
-    matcher: evaa_supply
+    matcher: evaa_supply_jetton
     anchor: evaa_supply@45799309000002
     id: nz3Xei9EuhG1H5A3hCyvcHpVlvBQc4fNOAV8Pu/CvR0=
     success: false
@@ -75,19 +75,19 @@ actions:
     amount: 1500000000
     value: null
     opcode: null
-    evaa_supply_data:
+    data:
       asset_id: "0xb387968236197958ca4ac55e9b5be38e688c7631af84c86756431f49a878ef33"
       is_ton: false
       master: 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
       master_jetton_wallet: 0:706C5D28B712F203756B4638C2D6AEE2DC6ECBB68129772063644B8DB6B842E1
       recipient_jetton_wallet: 0:F86A74601D394C1BC736D789543E39F70D42C188B97DEF577390CE705FB2B317
     tx_hashes:
+      - ww5gZmgoXhHJ1a1wukBU5Dp1LxufRT1pzfniQTgUXxE=
       - AWHhhBGXarvozpiFytZY4RllOqsPOb7Updv1hZZzD1Q=
       - F3vnuuc6aTxuh3cv8NCeKnQmr7R0g3HzcID4swSClDw=
       - fAdSIakaBPPRU4Mqjy8XpzFAYQQOo6+ldkINdcqegcw=
       - u3cPjEM9VvZ4p+cDAYTEne44UWQokfFkoZppynVIVXk=
       - uxfrqzL/uChmvgnHWTIJx3/x/kwS5iK6w9fMkDrSA2I=
-      - ww5gZmgoXhHJ1a1wukBU5Dp1LxufRT1pzfniQTgUXxE=
     accounts:
       - 0:488191CDBFC7B2EAD6D724182980F6654358B963A883804BF0C30258E6549321
       - 0:706C5D28B712F203756B4638C2D6AEE2DC6ECBB68129772063644B8DB6B842E1
@@ -115,19 +115,16 @@ actions:
     amount: 1500000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 290000000
       forward_payload: cellhash:D1F41BE9C0A195A87204764B10D47CFB4AB5285FB8170E9F93515C99105D01FE
-      is_encrypted_comment: false
       query_id: 0
-      response_destination: null
     tx_hashes:
+      - ww5gZmgoXhHJ1a1wukBU5Dp1LxufRT1pzfniQTgUXxE=
       - AWHhhBGXarvozpiFytZY4RllOqsPOb7Updv1hZZzD1Q=
       - F3vnuuc6aTxuh3cv8NCeKnQmr7R0g3HzcID4swSClDw=
       - uxfrqzL/uChmvgnHWTIJx3/x/kwS5iK6w9fMkDrSA2I=
-      - ww5gZmgoXhHJ1a1wukBU5Dp1LxufRT1pzfniQTgUXxE=
     accounts:
       - 0:706C5D28B712F203756B4638C2D6AEE2DC6ECBB68129772063644B8DB6B842E1
       - 0:87A94BE9FF96ADED4166DDFBC9B124B88B8820B40EDE3321270BE6774E341CD3
@@ -157,20 +154,18 @@ actions:
     amount: 1500000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
+    data:
+      comment_encrypted: false
       custom_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       forward_amount: 1
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:87A94BE9FF96ADED4166DDFBC9B124B88B8820B40EDE3321270BE6774E341CD3
     tx_hashes:
+      - u3cPjEM9VvZ4p+cDAYTEne44UWQokfFkoZppynVIVXk=
       - 8FMlq1todr5vovucuIu8ihGAuTIUj2GtPb+T/LnEC3Y=
       - NWkcL+E3uKLcAHw9z6kalmG73LfGqPpuJN0RZjlEsts=
       - l8aDr7uvH+qE8oZ6VjAqRM0ahbLMESCttqfW1zyfB5w=
       - m5ciVqSZMHR3LbxUuMqh8sxNbTv0HAYzcAUQPeFs930=
-      - u3cPjEM9VvZ4p+cDAYTEne44UWQokfFkoZppynVIVXk=
     accounts:
       - 0:706C5D28B712F203756B4638C2D6AEE2DC6ECBB68129772063644B8DB6B842E1
       - 0:87A94BE9FF96ADED4166DDFBC9B124B88B8820B40EDE3321270BE6774E341CD3

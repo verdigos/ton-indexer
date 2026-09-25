@@ -46,8 +46,8 @@ actions:
     value: 713717600
     opcode: 0x102e0000
     tx_hashes:
-      - H2hmS7+ZI61Ojsxoxt3PBoJWDktsK7A4T56DYQlyouM=
       - jFpffArWdai3aBRt0KiB9TWhqL8oFk+Ypq8l4fUDNp4=
+      - H2hmS7+ZI61Ojsxoxt3PBoJWDktsK7A4T56DYQlyouM=
     accounts:
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
       - 0:CBB3B4378D1DC4CF7D80D9B33C8F50D80C4D20DBE96F0902DB78627300CE5E11
@@ -66,7 +66,7 @@ actions:
     success: false
     source: 0:FED2DAE52C20DFFA3089FEBB3F95DAB0D6CF1D656DB6611A40F8B444FF970A91
     source_secondary: null
-    destination: null
+    destination: 0:0000000000000000000000000000000000000000000000000000000000000000
     destination_secondary: 0:CBB3B4378D1DC4CF7D80D9B33C8F50D80C4D20DBE96F0902DB78627300CE5E11
     asset: null
     asset_secondary: null
@@ -75,11 +75,12 @@ actions:
     amount: 0
     value: null
     opcode: null
-    evaa_liquidate_data:
-      asset_id: "0x1c1163e125ce481"
-      debt_amount: 12142081103633125532
-      fail_reason: unknown
+    data:
+      asset_id: "0xe08b1f092e7240fb61bf8249d71aa635102acdd50122138105c35dd2896b5331"
+      debt_amount: 190017
+      fail_reason: not_liquidatable
     tx_hashes:
+      - f4J1gD7fmSBUMJy47G3qmk7CvXa1O8Ofr7Ehw+Ttd2Y=
       - GClR8SmCi46UpHSyOMXlfW5Ca/sfDN0MhizZTQUXLRQ=
       - H2hmS7+ZI61Ojsxoxt3PBoJWDktsK7A4T56DYQlyouM=
       - I6pE7umlH1eotnpzlvP/gVMlk5Aa8N/jArGZNGDvH5Y=
@@ -88,10 +89,10 @@ actions:
       - RoiqzGsR/1aBAz/+IzNbh/ZMeoavjX69Kh31BO1/Jig=
       - WWm1C6TCfk+dau2vBgy87tcS2jGtM6QDLAvf7FX5dIM=
       - e9vhqVnUAHKE38dRDrH6NTDsI5WAOIy0L49O22ojNiY=
-      - f4J1gD7fmSBUMJy47G3qmk7CvXa1O8Ofr7Ehw+Ttd2Y=
       - fi+3My8B05BNiobCiGRrCNfMUn7G/LjN/Hp5qV6txJs=
       - jFpffArWdai3aBRt0KiB9TWhqL8oFk+Ypq8l4fUDNp4=
     accounts:
+      - 0:0000000000000000000000000000000000000000000000000000000000000000
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
       - 0:6EDBBD4A487E2884FCECC6516FF871798F83FA16F0E4FEC403BBAB86CF0057AF
       - 0:BCD3E5DEB9D90B67AE55922B9DACD38AC1F5357D4A6017CCA3F7B69F221BB3A3
@@ -118,19 +119,17 @@ actions:
     amount: 190017
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 800000000
       forward_payload: cellhash:CEE71F7953CAC2463FE6333CD37B9E61ADCD1C89F2282275FEC0565116B8BBD4
-      is_encrypted_comment: false
       query_id: 1774057841294772000
       response_destination: 0:FED2DAE52C20DFFA3089FEBB3F95DAB0D6CF1D656DB6611A40F8B444FF970A91
     tx_hashes:
+      - f4J1gD7fmSBUMJy47G3qmk7CvXa1O8Ofr7Ehw+Ttd2Y=
       - GClR8SmCi46UpHSyOMXlfW5Ca/sfDN0MhizZTQUXLRQ=
       - RoiqzGsR/1aBAz/+IzNbh/ZMeoavjX69Kh31BO1/Jig=
       - WWm1C6TCfk+dau2vBgy87tcS2jGtM6QDLAvf7FX5dIM=
-      - f4J1gD7fmSBUMJy47G3qmk7CvXa1O8Ofr7Ehw+Ttd2Y=
       - jFpffArWdai3aBRt0KiB9TWhqL8oFk+Ypq8l4fUDNp4=
     accounts:
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
@@ -161,17 +160,16 @@ actions:
     amount: 190017
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
+    data:
+      comment_encrypted: false
       custom_payload: cellhash:E475606B6FD3DD6FF6AEBA141D32B1CB12B912754D0D0AA0414D45FB2B05495B
       forward_amount: 583619991
       forward_payload: cellhash:E475606B6FD3DD6FF6AEBA141D32B1CB12B912754D0D0AA0414D45FB2B05495B
-      is_encrypted_comment: false
       query_id: 1774057841294772000
       response_destination: 0:FED2DAE52C20DFFA3089FEBB3F95DAB0D6CF1D656DB6611A40F8B444FF970A91
     tx_hashes:
-      - I6pE7umlH1eotnpzlvP/gVMlk5Aa8N/jArGZNGDvH5Y=
       - PYLH3YhjCvYaxcb6HO4x8UDZCc/4RnDepBx2iKPZijw=
+      - I6pE7umlH1eotnpzlvP/gVMlk5Aa8N/jArGZNGDvH5Y=
       - RMzxf3K5ZEOhFVedNdBQomPLroVmYqH7Cpo8odcfzDM=
       - e9vhqVnUAHKE38dRDrH6NTDsI5WAOIy0L49O22ojNiY=
       - fi+3My8B05BNiobCiGRrCNfMUn7G/LjN/Hp5qV6txJs=

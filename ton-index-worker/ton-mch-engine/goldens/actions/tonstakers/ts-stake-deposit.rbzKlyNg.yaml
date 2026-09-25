@@ -17,8 +17,8 @@ actions:
     value: 987924800
     opcode: 0x178d4519
     tx_hashes:
-      - iLXG2yPGnNkIhXk52pSa+RjNXNSZyg+qI/v9nkFDaQ8=
       - tYvFEuKkQWuOCmnuERN03ffK+rplYJJoSoh+ZAzSRgE=
+      - iLXG2yPGnNkIhXk52pSa+RjNXNSZyg+qI/v9nkFDaQ8=
     accounts:
       - 0:BDF3FA8098D129B54B4F73B5BAC5D1E1FD91EB054169C3916DFC8CCD536D1000
       - 0:E42D6A4F3EA62E2B57376AA23331BE5243F9ACFB0E46CD67AD652FD574C99DAF
@@ -43,13 +43,13 @@ actions:
     amount: 10000000000
     value: null
     opcode: null
-    staking_data:
-      provider: liquid_staking
+    data:
+      protocol: liquid_staking
       tokens_minted: 9439323796
     tx_hashes:
+      - rbzKlyNgAhDnQ15r4tremaPVl/xURNgmSJQSyhGLSX4=
       - /7lfl/nvDY009KqdkU8BK6ieEAAxSGzUP5/eMdA/2zk=
       - iLXG2yPGnNkIhXk52pSa+RjNXNSZyg+qI/v9nkFDaQ8=
-      - rbzKlyNgAhDnQ15r4tremaPVl/xURNgmSJQSyhGLSX4=
       - tYvFEuKkQWuOCmnuERN03ffK+rplYJJoSoh+ZAzSRgE=
       - wHE+TagEFmWT9cWI3hvxtG1bKfcS4UQ+y7ySifFcBs8=
       - xcbagVRZBwqnCl+FTkfJcW0WwmG9Sjrl3hFETNKR2dE=

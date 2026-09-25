@@ -1,0 +1,103 @@
+# dns / DNS auction close, lone fill-up
+# note: The DNS auction closes with one fill up and classifies as a DNS purchase and NFT transfer
+# trace: wQzaKAp8fuCzmQ4gKUzUvVjPtkrZIL_xSzDnb3AlByk=
+actions:
+  - type: call_contract
+    anchor: call_contract#370fec51@104275150000014
+    id: JWVT5xlPf3FCHWXWdXPdjKnQmU/0ghU+i76XJkKSggA=
+    success: true
+    source: 0:D7699C69FD35DD9227D66EEE5E02AAD6892CD80C8FD454B09F6163131A48C278
+    source_secondary: null
+    destination: 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 3996793416
+    opcode: 0x370fec51
+    tx_hashes:
+      - WEoK1NHqKQkH0aktPXxVbONPFiJyhjJrrPo+iBE7Y0c=
+      - w5WPQR9HVRdTLXpaCamp/bt2DwT4SOxpiQIyHbXjyBo=
+    accounts:
+      - 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
+      - 0:D7699C69FD35DD9227D66EEE5E02AAD6892CD80C8FD454B09F6163131A48C278
+    start_lt: 104275150000014
+    end_lt: 104275150000015
+    start_utime: 1789727922
+    end_utime: 1789727922
+    mc_seqno_end: 93492609
+    parent_action_id: vt+z+XehPPmCppvKiGb/fgRc8dSVFV1mqcn4D/7y53c=
+    ancestor_type:
+      - dns_purchase
+  - type: dns_purchase
+    matcher: dns_purchase
+    anchor: dns_purchase@104275150000014
+    id: vt+z+XehPPmCppvKiGb/fgRc8dSVFV1mqcn4D/7y53c=
+    success: true
+    source: null
+    source_secondary: null
+    destination: 0:7FE6172E00C622F3C0087B5E95FACFBC76E538CB0CA29D139491A1364202C17E
+    destination_secondary: null
+    asset: 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
+    asset_secondary: 0:D7699C69FD35DD9227D66EEE5E02AAD6892CD80C8FD454B09F6163131A48C278
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      nft_index: "45266594938235478679994155035777330359576119094505113826472133971303668392116"
+      payout_amount: 3996793416
+      price: 3996793416
+      query_id: 1789727922
+    tx_hashes:
+      - WEoK1NHqKQkH0aktPXxVbONPFiJyhjJrrPo+iBE7Y0c=
+      - w5WPQR9HVRdTLXpaCamp/bt2DwT4SOxpiQIyHbXjyBo=
+    accounts:
+      - 0:7FE6172E00C622F3C0087B5E95FACFBC76E538CB0CA29D139491A1364202C17E
+      - 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
+      - 0:D7699C69FD35DD9227D66EEE5E02AAD6892CD80C8FD454B09F6163131A48C278
+    start_lt: 104275150000014
+    end_lt: 104275150000015
+    start_utime: 1789727922
+    end_utime: 1789727922
+    mc_seqno_end: 93492609
+  - type: nft_transfer
+    matcher: nft_transfer
+    anchor: nft_transfer@104275150000012
+    id: MCV1nIAKY41dg9Kr0H5pTdm2d4dtZ5O/PjwDuK/krjI=
+    success: true
+    source: 0:7FE6172E00C622F3C0087B5E95FACFBC76E538CB0CA29D139491A1364202C17E
+    source_secondary: null
+    destination: 0:932D75BB74F3471087FBB9F55993ED41A68E19D31253B7697A9C9BEF42DABE87
+    destination_secondary: null
+    asset: 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
+    asset_secondary: 0:D7699C69FD35DD9227D66EEE5E02AAD6892CD80C8FD454B09F6163131A48C278
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      forward_amount: 1
+      forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
+      is_purchase: false
+      nft_index: "45266594938235478679994155035777330359576119094505113826472133971303668392116"
+      query_id: 1789727922
+      response_destination: 0:7FE6172E00C622F3C0087B5E95FACFBC76E538CB0CA29D139491A1364202C17E
+    tx_hashes:
+      - wQzaKAp8fuCzmQ4gKUzUvVjPtkrZIL/xSzDnb3AlByk=
+      - WEoK1NHqKQkH0aktPXxVbONPFiJyhjJrrPo+iBE7Y0c=
+      - nJ4jWVXBBKBdWH0dpANqkkw8228cVzDWSBomSI4eITQ=
+      - nMt9//uWO8+UAgp5FrcINwcNOAfDbm/mr/D2tTFDS6A=
+    accounts:
+      - 0:7FE6172E00C622F3C0087B5E95FACFBC76E538CB0CA29D139491A1364202C17E
+      - 0:932D75BB74F3471087FBB9F55993ED41A68E19D31253B7697A9C9BEF42DABE87
+      - 0:D7699C69FD35DD9227D66EEE5E02AAD6892CD80C8FD454B09F6163131A48C278
+    start_lt: 104275150000012
+    end_lt: 104275150000017
+    start_utime: 1789727922
+    end_utime: 1789727922
+    mc_seqno_end: 93492609

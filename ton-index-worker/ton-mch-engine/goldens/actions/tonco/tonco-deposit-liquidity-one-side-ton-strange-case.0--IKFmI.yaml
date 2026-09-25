@@ -43,8 +43,8 @@ actions:
     value: 27819200
     opcode: 0xd5ecca2a
     tx_hashes:
-      - L6w/c3HvlQSx2wWktyR6FXXSUAz45y/blvUVLDPgwdg=
       - oMh2x5RVMHq5Py8YqnFNjuCDRl6D5/kdje6FAT4Ndyk=
+      - L6w/c3HvlQSx2wWktyR6FXXSUAz45y/blvUVLDPgwdg=
     accounts:
       - 0:A797F301E9EC010C88765AE955DA0530C5C95B3A6F553FEE9CB5C89008ED29A0
       - 0:B066D702EAE43F5546A98B90ED7E8C38578741F8AE9CADF43BA3D8F55F2D2478
@@ -69,23 +69,20 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 200000000000
-      amount2: null
-      asset1: 0:AE3E6D351E576276E439E7168117FD64696FD6014CB90C77B2F2CBAACD4FCC00
-      asset2: null
-      dex: tonco
-      lp_tokens_minted: 1736002138543
+    data:
+      legs:
+        - amount: 200000000000
+          asset: 0:AE3E6D351E576276E439E7168117FD64696FD6014CB90C77B2F2CBAACD4FCC00
+          target_amount: 200000000000
+          target_asset: 0:AE3E6D351E576276E439E7168117FD64696FD6014CB90C77B2F2CBAACD4FCC00
+          user_jetton_wallet: 0:5B2E06C2F9983FD9CC8AC7F92462C20EB53AD9EFD3CF017394D571DBBDF6F6DC
+        - target_amount: 0
       nft_address: 0:A797F301E9EC010C88765AE955DA0530C5C95B3A6F553FEE9CB5C89008ED29A0
       nft_index: 23
-      target_amount_1: 200000000000
-      target_amount_2: 0
-      target_asset_1: 0:AE3E6D351E576276E439E7168117FD64696FD6014CB90C77B2F2CBAACD4FCC00
-      target_asset_2: null
+      protocol: tonco
       tick_lower: -17390
       tick_upper: -16400
-      user_jetton_wallet_1: 0:5B2E06C2F9983FD9CC8AC7F92462C20EB53AD9EFD3CF017394D571DBBDF6F6DC
-      user_jetton_wallet_2: null
+      tokens_minted: 1736002138543
       vault_excesses: []
     tx_hashes:
       - 0++IKFmIbKevaBKSEvai2YCm47/coyO30KO1VyYaXvI=

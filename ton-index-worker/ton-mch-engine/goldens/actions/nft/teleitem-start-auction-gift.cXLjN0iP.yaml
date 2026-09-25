@@ -1,0 +1,98 @@
+# nft / teleitem start auction (gift)
+# note: The gift item starts an auction and classifies as a teleitem auction start
+# trace: cXLjN0iPaW5tGQ2BnWpheqSCTZCpT9CWIpE2-HhCdno=
+actions:
+  - type: call_contract
+    anchor: call_contract#487a8e81@103975352000034
+    id: zz7gl2vYh0xBwuHWV/XL05oVvGpsAs6XvScDeq1DKbI=
+    success: true
+    source: 0:16AC93BA02B45B5CF3234D66D819DE96C6479F31567CCB6A200847F31EEE933F
+    source_secondary: null
+    destination: 0:B310745C146357A64076CD0FB9E0F12FEF06916F954E2BAFE17B92CDC289DEA3
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 100000000
+    opcode: 0x487a8e81
+    tx_hashes:
+      - cXLjN0iPaW5tGQ2BnWpheqSCTZCpT9CWIpE2+HhCdno=
+      - dd3k7KqPjDJ+Yz38AmjSjs7sFu5Z+jDaa6mlFYAB+G0=
+    accounts:
+      - 0:16AC93BA02B45B5CF3234D66D819DE96C6479F31567CCB6A200847F31EEE933F
+      - 0:B310745C146357A64076CD0FB9E0F12FEF06916F954E2BAFE17B92CDC289DEA3
+    start_lt: 103975352000034
+    end_lt: 103975352000035
+    start_utime: 1789608053
+    end_utime: 1789608053
+    mc_seqno_end: 93200147
+    parent_action_id: Tuzl3Yzn1+FCjre6u3f6FGijTusPivEW0fiCQA5gTDQ=
+    ancestor_type:
+      - teleitem_start_auction
+  - type: call_contract
+    anchor: call_contract#a37a0983@103975352000036
+    id: e+IbCK2ceyuQlDo/TTpRfxldopKYBq3g9vroTkw3gG8=
+    success: true
+    source: 0:B310745C146357A64076CD0FB9E0F12FEF06916F954E2BAFE17B92CDC289DEA3
+    source_secondary: null
+    destination: 0:16AC93BA02B45B5CF3234D66D819DE96C6479F31567CCB6A200847F31EEE933F
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 99295532
+    opcode: 0xa37a0983
+    tx_hashes:
+      - dd3k7KqPjDJ+Yz38AmjSjs7sFu5Z+jDaa6mlFYAB+G0=
+      - 1qrftsG8LwfZMax63tXyDnh94B4E5BDTkKEg3zEKC+A=
+    accounts:
+      - 0:16AC93BA02B45B5CF3234D66D819DE96C6479F31567CCB6A200847F31EEE933F
+      - 0:B310745C146357A64076CD0FB9E0F12FEF06916F954E2BAFE17B92CDC289DEA3
+    start_lt: 103975352000036
+    end_lt: 103975352000037
+    start_utime: 1789608053
+    end_utime: 1789608053
+    mc_seqno_end: 93200147
+    parent_action_id: Tuzl3Yzn1+FCjre6u3f6FGijTusPivEW0fiCQA5gTDQ=
+    ancestor_type:
+      - teleitem_start_auction
+  - type: teleitem_start_auction
+    matcher: teleitem_start_auction
+    anchor: teleitem_start_auction@103975352000034
+    id: Tuzl3Yzn1+FCjre6u3f6FGijTusPivEW0fiCQA5gTDQ=
+    success: true
+    source: 0:16AC93BA02B45B5CF3234D66D819DE96C6479F31567CCB6A200847F31EEE933F
+    source_secondary: null
+    destination: 0:B310745C146357A64076CD0FB9E0F12FEF06916F954E2BAFE17B92CDC289DEA3
+    destination_secondary: null
+    asset: 0:449E05A57737AFF68AB372DBB9F46A3D69F5FC1C5F0792C67DA49EF1D5B4495E
+    asset_secondary: 0:B310745C146357A64076CD0FB9E0F12FEF06916F954E2BAFE17B92CDC289DEA3
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      marketplace_fee_address: 0:16AC93BA02B45B5CF3234D66D819DE96C6479F31567CCB6A200847F31EEE933F
+      max_bid: 21000000000
+      min_bid: 21000000000
+      mp_fee_base: 0
+      mp_fee_factor: 0
+      nft_index: "61027809285182656061022853204428780503701736818393257518347701569945082016729"
+      royalty_fee_base: 0
+    tx_hashes:
+      - cXLjN0iPaW5tGQ2BnWpheqSCTZCpT9CWIpE2+HhCdno=
+      - 1qrftsG8LwfZMax63tXyDnh94B4E5BDTkKEg3zEKC+A=
+      - dd3k7KqPjDJ+Yz38AmjSjs7sFu5Z+jDaa6mlFYAB+G0=
+    accounts:
+      - 0:16AC93BA02B45B5CF3234D66D819DE96C6479F31567CCB6A200847F31EEE933F
+      - 0:B310745C146357A64076CD0FB9E0F12FEF06916F954E2BAFE17B92CDC289DEA3
+    start_lt: 103975352000034
+    end_lt: 103975352000037
+    start_utime: 1789608053
+    end_utime: 1789608053
+    mc_seqno_end: 93200147

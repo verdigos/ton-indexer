@@ -46,8 +46,8 @@ actions:
     value: 49403199
     opcode: 0xf7733acd
     tx_hashes:
-      - AwZRzTtUBtX7zgtWSUV917AZwh5SEJS6inPW34tILgM=
       - YBeUige0mZTPzA1nO8K7YYe6zaLHBlo/V63puEwAazU=
+      - AwZRzTtUBtX7zgtWSUV917AZwh5SEJS6inPW34tILgM=
     accounts:
       - 0:74DDD0211F5AD8DA314C1C796905F7FBFE937E608B0AAE6B34F3EF804F6C8743
       - 0:9A347A64C17280DE13431138A8D7712BBA0CF43674CA94D3AD940B617EDA15B9
@@ -75,7 +75,7 @@ actions:
     amount: 138886000000000
     value: null
     opcode: null
-    vesting_send_message_data:
+    data:
       message_boc: cellhash:6728C5BB19FD90BFDEF6D2D1AC4D4739DDF2B3AF66D77C962944BEDFBFC82D75
       query_id: 0
     tx_hashes:

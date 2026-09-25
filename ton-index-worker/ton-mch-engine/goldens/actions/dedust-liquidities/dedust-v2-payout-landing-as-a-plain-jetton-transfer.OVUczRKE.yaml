@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 payout landing as a plain jetton transfer
-# note: only the jetton_transfer matcher fires; the surrounding DeDust payout chain stays unclassified
+# note: The payout chain lands as one jetton transfer while the other calls stay unclassified
 # trace: OVUczRKE1uzsXPhTEAJQhJWb0yAPrnMLZZocBRwMJd0=
 actions:
   - type: call_contract
@@ -18,8 +18,8 @@ actions:
     value: 146389200
     opcode: 0x0d299e12
     tx_hashes:
-      - 5aEGvGikZ6880kyTz4uHvXsXebubeRgpYHXS13RpGW4=
       - bFjWJ2SMlJU4pj3kUiuggKucs2VwYJ+q0LprYcz8Prg=
+      - 5aEGvGikZ6880kyTz4uHvXsXebubeRgpYHXS13RpGW4=
     accounts:
       - 0:5C38A066720B280D06C2BAC00F6FB2D55FC77D372EECC9F9E9A3F18AA4B13E2D
       - 0:5CB2C61097B4FA4C2E26C081E88E9F76FB4A8A7516C057FB7785392E21BFC49E
@@ -96,8 +96,8 @@ actions:
     value: 86335402
     opcode: 0xd53276db
     tx_hashes:
-      - +gmkTsrT4wc0NbvM1QH2IwoneUWKytV9+MUJmmlTkvE=
       - 5aEGvGikZ6880kyTz4uHvXsXebubeRgpYHXS13RpGW4=
+      - +gmkTsrT4wc0NbvM1QH2IwoneUWKytV9+MUJmmlTkvE=
     accounts:
       - 0:5CB2C61097B4FA4C2E26C081E88E9F76FB4A8A7516C057FB7785392E21BFC49E
       - 0:CC86C4A3FF87C015FD36775E6D057ABC7DD57091FCA0C4C4E93231303FDE3CB9
@@ -122,12 +122,9 @@ actions:
     amount: 92711829709
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 8023621649071792609
       response_destination: 0:CC86C4A3FF87C015FD36775E6D057ABC7DD57091FCA0C4C4E93231303FDE3CB9
     tx_hashes:

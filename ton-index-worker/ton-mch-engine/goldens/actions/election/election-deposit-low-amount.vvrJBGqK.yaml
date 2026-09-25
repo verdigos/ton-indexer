@@ -1,0 +1,58 @@
+# election / Election deposit, low amount
+# note: Low-sized successful election deposit from signed window 9
+# trace: vvrJBGqKy47TpcraThtQAM1eVOImbvrQoU9_JBDnuio=
+actions:
+  - type: call_contract
+    anchor: call_contract#4e73744b@102591429000002
+    id: WqB0kTGJ39HYObtmNIaN1cMdM6fZ7jYq2cuy91vu4eg=
+    success: true
+    source: "-1:B61C70353AF78F7462612FBEB9DD00F6C0214833DB54DDF23231B0593EBFC221"
+    source_secondary: null
+    destination: "-1:37C23EB96B6AC6F66681C43E6DE13D530E15435E633B97CCBD4CE9B18D42D0C1"
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1300000000
+    opcode: 0x4e73744b
+    tx_hashes:
+      - vvrJBGqKy47TpcraThtQAM1eVOImbvrQoU9/JBDnuio=
+      - Y6mJGC+zZIWqjZD0T9W6eE0jXArrzb5byiKMGpdKJ6o=
+    accounts:
+      - "-1:37C23EB96B6AC6F66681C43E6DE13D530E15435E633B97CCBD4CE9B18D42D0C1"
+      - "-1:B61C70353AF78F7462612FBEB9DD00F6C0214833DB54DDF23231B0593EBFC221"
+    start_lt: 102591429000002
+    end_lt: 102591429000003
+    start_utime: 1789054792
+    end_utime: 1789054792
+    mc_seqno_end: 91844785
+  - type: election_deposit
+    matcher: election_deposit
+    anchor: election_deposit@102591429000004
+    id: EktEGnps7CQGOVtwJ0Fa0jRiCCQiO36r3zqAkeSWdTo=
+    success: true
+    source: "-1:37C23EB96B6AC6F66681C43E6DE13D530E15435E633B97CCBD4CE9B18D42D0C1"
+    source_secondary: null
+    destination: null
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 748503198470000
+    value: null
+    opcode: null
+    tx_hashes:
+      - Y6mJGC+zZIWqjZD0T9W6eE0jXArrzb5byiKMGpdKJ6o=
+      - WPZQ2+w2bApmLvS4gAzAu1n/abYrnK08Z3+N9VD5Z44=
+      - gwIYMimG+bC4w2jMYVY+ofyDRZW3vjYZrU6r1DTbgyE=
+    accounts:
+      - "-1:3333333333333333333333333333333333333333333333333333333333333333"
+      - "-1:37C23EB96B6AC6F66681C43E6DE13D530E15435E633B97CCBD4CE9B18D42D0C1"
+    start_lt: 102591429000004
+    end_lt: 102591429000007
+    start_utime: 1789054792
+    end_utime: 1789054792
+    mc_seqno_end: 91844785

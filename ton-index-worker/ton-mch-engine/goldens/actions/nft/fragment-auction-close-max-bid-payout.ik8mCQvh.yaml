@@ -1,0 +1,71 @@
+# nft / Fragment auction close, maximum bid closes the auction and pays out the seller (composed)
+# note: synthetic: A maximum bid closes the auction and classifies as a Telegram NFT transfer
+# trace: ik8mCQvh-fd_bSqcpf7qBKH5_rxdFBJNsNe0s3xX3kY=
+actions:
+  - type: call_contract
+    anchor: call_contract#557cea20@101739666000009
+    id: jH9YGbns/LV7caKQo8A1wJPT+1Xzf+iPYrI3SaKTRao=
+    success: true
+    source: 0:B6E5A230EFE9C715CFAFB8D1BFFC61AE32B2F67ED79F3CB72A7D1BE436872882
+    source_secondary: null
+    destination: 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 236000000000
+    opcode: 0x557cea20
+    tx_hashes:
+      - CY1Ykj4hEL3TWzO0N8XbkV0L/iDPYjW5Wh1LI1ZeQPI=
+      - X5SybxI24jT0dG+aovC3KzNbu5hq8Z63wSfA4dAsm0M=
+    accounts:
+      - 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+      - 0:B6E5A230EFE9C715CFAFB8D1BFFC61AE32B2F67ED79F3CB72A7D1BE436872882
+    start_lt: 101739666000009
+    end_lt: 101791630000012
+    start_utime: 1788753040
+    end_utime: 1788753040
+    mc_seqno_end: 91102300
+  - type: nft_transfer
+    matcher: telegram_nft_purchase
+    anchor: nft_transfer@0
+    id: E0kC5E7fZEMuvVKAsilJrd0POEOji3VwWzRxlfKVFvg=
+    success: true
+    source: 0:E047B8D9CBD0FCF08042DDD2B8A842636FD0FC5A67C26CBF6FFB8163B23CE6ED
+    source_secondary: null
+    destination: 0:95570A96D1E7169C30EABF0B88CAE6914A193CA7F3CA681CBA04D1A8429C5220
+    destination_secondary: null
+    asset: 0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2
+    asset_secondary: 0:B6E5A230EFE9C715CFAFB8D1BFFC61AE32B2F67ED79F3CB72A7D1BE436872882
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      forward_payload: cellhash:DBF0C0E2CB2FEED30FDC206C0F0217F88FCDDCD5F53563C3F792BEAF7DAAB9B4
+      is_purchase: true
+      marketplace_fee_address: 0:E047B8D9CBD0FCF08042DDD2B8A842636FD0FC5A67C26CBF6FFB8163B23CE6ED
+      nft_index: "9824106364531410919823695778980965809496756910010020756228949261811666816417"
+      payout_amount: 448299774108
+      price: 472000000000
+      query_id: 101739666000008
+      royalty_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
+      royalty_amount: 23599933333
+    tx_hashes:
+      - CY1Ykj4hEL3TWzO0N8XbkV0L/iDPYjW5Wh1LI1ZeQPI=
+      - +il5XEYlYvXuDIYojc4j9rz3JEcTP0LuhDY+elpJqiw=
+      - T09/2i3sxmuZXsk8PmGZrZupd9SuLsoB4k2GgA65+2o=
+      - nyKSUT1Mvz47+Jl32GEBxCxuUZY69+71aWjxKky7MY8=
+    accounts:
+      - 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
+      - 0:95570A96D1E7169C30EABF0B88CAE6914A193CA7F3CA681CBA04D1A8429C5220
+      - 0:B6E5A230EFE9C715CFAFB8D1BFFC61AE32B2F67ED79F3CB72A7D1BE436872882
+      - 0:E047B8D9CBD0FCF08042DDD2B8A842636FD0FC5A67C26CBF6FFB8163B23CE6ED
+    start_lt: 0
+    end_lt: 101836587000018
+    start_utime: 0
+    end_utime: 1788753040
+    mc_seqno_end: 91102300

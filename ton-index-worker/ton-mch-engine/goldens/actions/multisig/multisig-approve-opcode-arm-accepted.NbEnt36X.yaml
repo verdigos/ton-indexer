@@ -17,8 +17,8 @@ actions:
     value: 49368997
     opcode: 0x82609bf6
     tx_hashes:
-      - /4ZE1IveLViRUav6xSDcUYbL+n9pwnp+725bQCJ6z6o=
       - EZaYOszVVm2tz9UZcy2zNHG8BZ+jPenUtLie1vp7wRY=
+      - /4ZE1IveLViRUav6xSDcUYbL+n9pwnp+725bQCJ6z6o=
     accounts:
       - 0:6CA4809C8EAC9EB91E400F14B41497529BB19FABC55840B225458E6E57732EF8
       - 0:9D2C15CB9FEA1077B6F1C040C662D00AEE7D3D0C88E0B029189D418BA806383F
@@ -46,8 +46,8 @@ actions:
     value: 49919732
     opcode: 0xa762230f
     tx_hashes:
-      - EZaYOszVVm2tz9UZcy2zNHG8BZ+jPenUtLie1vp7wRY=
       - NbEnt36XgsN+t3PduVYXBz3WRhYM6RGDAgja56FUGjY=
+      - EZaYOszVVm2tz9UZcy2zNHG8BZ+jPenUtLie1vp7wRY=
     accounts:
       - 0:6CA4809C8EAC9EB91E400F14B41497529BB19FABC55840B225458E6E57732EF8
       - 0:9D2C15CB9FEA1077B6F1C040C662D00AEE7D3D0C88E0B029189D418BA806383F
@@ -75,13 +75,13 @@ actions:
     amount: null
     value: null
     opcode: null
-    multisig_approve_data:
+    data:
       exit_code: 0
       signer_index: 3
     tx_hashes:
+      - NbEnt36XgsN+t3PduVYXBz3WRhYM6RGDAgja56FUGjY=
       - /4ZE1IveLViRUav6xSDcUYbL+n9pwnp+725bQCJ6z6o=
       - EZaYOszVVm2tz9UZcy2zNHG8BZ+jPenUtLie1vp7wRY=
-      - NbEnt36XgsN+t3PduVYXBz3WRhYM6RGDAgja56FUGjY=
     accounts:
       - 0:176687C662880BEAF2D50B1EE6141FA2AE67BE2ECBA7B78EA8748EF567441F58
       - 0:1D62318246DAD1312135627097597D8CAF2881E68474BA52ED841E6A027B3059

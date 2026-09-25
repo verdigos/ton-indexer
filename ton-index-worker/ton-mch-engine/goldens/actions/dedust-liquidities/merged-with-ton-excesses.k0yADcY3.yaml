@@ -17,8 +17,8 @@ actions:
     value: 10515200
     opcode: 0x9b3aa3fa
     tx_hashes:
-      - 1FPrNBt0tzcFCnBp1lDfnNXrxBQqhUBOLiu9+EYghxE=
       - qwQVkiiC6pshhnaGqwy5C/DlqE7X5g9TKwTDX9QmLIA=
+      - 1FPrNBt0tzcFCnBp1lDfnNXrxBQqhUBOLiu9+EYghxE=
     accounts:
       - 0:5F0564FB5F604783DB57031CE1CF668A88D4D4D6DA6DE4DB222B4B920D6FD800
       - 0:7F6506A4BDA7EB33E9D04BF5CFB2A0E1D438E93A2E409CA2267572F2C3EF4A21
@@ -43,23 +43,21 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 309183516
-      amount2: 123460785601
-      asset1: null
-      asset2: 0:D0114AF42CF8BC9BA0FA1745ABBEEA24EED65B01CAF4CA7D98EE12B6F7530CCC
-      dex: dedust
-      lp_tokens_minted: 26804816539
-      target_amount_1: 309183516
-      target_amount_2: 123460785601
-      target_asset_1: null
-      target_asset_2: 0:D0114AF42CF8BC9BA0FA1745ABBEEA24EED65B01CAF4CA7D98EE12B6F7530CCC
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:43409DB48F515393135A8FE9009B31B9ECF9BD133C1A30E05353A17B90EEFB9F
+    data:
+      legs:
+        - amount: 309183516
+          target_amount: 309183516
+        - amount: 123460785601
+          asset: 0:D0114AF42CF8BC9BA0FA1745ABBEEA24EED65B01CAF4CA7D98EE12B6F7530CCC
+          target_amount: 123460785601
+          target_asset: 0:D0114AF42CF8BC9BA0FA1745ABBEEA24EED65B01CAF4CA7D98EE12B6F7530CCC
+          user_jetton_wallet: 0:43409DB48F515393135A8FE9009B31B9ECF9BD133C1A30E05353A17B90EEFB9F
+      protocol: dedust
+      tokens_minted: 26804816539
       vault_excesses:
         - amount: 58659608
-          asset: null
     tx_hashes:
+      - k0yADcY39ZkSu5Y7keHvfMzFyadhlDZ1OvxH+c8aU7M=
       - +06TB1rknEBJSsiGoJOQVzO4wQR1BiAfRNRddDWgU3Q=
       - /1n3wdMFgUXx7HsERLfMYPeu7znAC0b7kRf20J6WlI4=
       - 1FPrNBt0tzcFCnBp1lDfnNXrxBQqhUBOLiu9+EYghxE=
@@ -76,7 +74,6 @@ actions:
       - ZAJZkgzKGnt1AgPBVumC78MjVOWQ3qOxRiJLpv6hfQA=
       - f+R4qh7Ak3fwUMieGy5P3UhWdrrqLYLiaYAm9jAkOlo=
       - hmQDST46ajtH0aVw8cQ2u60qfhEIeMdGiCpZIoFZWuk=
-      - k0yADcY39ZkSu5Y7keHvfMzFyadhlDZ1OvxH+c8aU7M=
       - qwQVkiiC6pshhnaGqwy5C/DlqE7X5g9TKwTDX9QmLIA=
       - vl0o755Rewoh/NOgJRA6aR84DA/GY41WlW9uhQ9n2xI=
       - wVettRyVZ4FwKbIq9rOFN3QF05NjFz5xps42nN3xP5s=

@@ -17,8 +17,8 @@ actions:
     value: 340000000
     opcode: 0x499a9262
     tx_hashes:
-      - d5DlG/zsgTS3UhHW7WLs59G5KiDO4i7o7yIdZhh0xTs=
       - mTVGq+A5PCaXAdu+Xuab0J+vtygXRJ1GwqZbW+aYN84=
+      - d5DlG/zsgTS3UhHW7WLs59G5KiDO4i7o7yIdZhh0xTs=
     accounts:
       - 0:65B421152A62C54E6442A21046863932D38BC088726A8624867A2769BA42253E
       - 0:E3C257DF3F8AF0EBD28AB14EF3C994E1CAD17A2FFCD03A42E862EE0C53D3830F
@@ -46,8 +46,8 @@ actions:
     value: 337732000
     opcode: 0xffffffff
     tx_hashes:
-      - +O3MLt54W2snrdLOQlpqbHjCaEOBfMnvPbXyhAX7KG8=
       - d5DlG/zsgTS3UhHW7WLs59G5KiDO4i7o7yIdZhh0xTs=
+      - +O3MLt54W2snrdLOQlpqbHjCaEOBfMnvPbXyhAX7KG8=
     accounts:
       - 0:65B421152A62C54E6442A21046863932D38BC088726A8624867A2769BA42253E
       - 0:E3C257DF3F8AF0EBD28AB14EF3C994E1CAD17A2FFCD03A42E862EE0C53D3830F
@@ -56,6 +56,9 @@ actions:
     start_utime: 1736528805
     end_utime: 1736528816
     mc_seqno_end: 43820528
+    parent_action_id: EeCW4S+OQLr2YlYTlVwgDb4XC7nfZ+whR/8e8x1nYTc=
+    ancestor_type:
+      - jvault_unstake
   - type: jvault_unstake
     matcher: jvault_unstake
     anchor: jvault_unstake@52779926000002
@@ -71,16 +74,19 @@ actions:
     asset2_secondary: null
     amount: 716000000000
     value: null
-    opcode: 0x00000038
+    opcode: null
+    data:
+      exit_code: 56
     tx_hashes:
-      - d5DlG/zsgTS3UhHW7WLs59G5KiDO4i7o7yIdZhh0xTs=
       - mTVGq+A5PCaXAdu+Xuab0J+vtygXRJ1GwqZbW+aYN84=
+      - +O3MLt54W2snrdLOQlpqbHjCaEOBfMnvPbXyhAX7KG8=
+      - d5DlG/zsgTS3UhHW7WLs59G5KiDO4i7o7yIdZhh0xTs=
     accounts:
       - 0:65B421152A62C54E6442A21046863932D38BC088726A8624867A2769BA42253E
       - 0:B7AE84E2451B282F37D854AEF2555A086634C4A808D05378EEEDA43B1D64D52F
       - 0:E3C257DF3F8AF0EBD28AB14EF3C994E1CAD17A2FFCD03A42E862EE0C53D3830F
     start_lt: 52779926000002
-    end_lt: 52779932000001
+    end_lt: 52779936000001
     start_utime: 1736528789
-    end_utime: 1736528805
-    mc_seqno_end: 43820524
+    end_utime: 1736528816
+    mc_seqno_end: 43820528

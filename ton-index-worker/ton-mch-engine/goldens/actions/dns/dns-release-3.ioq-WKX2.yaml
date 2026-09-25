@@ -46,23 +46,9 @@ actions:
     amount: null
     value: 5000000000
     opcode: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
-      forward_payload: null
-      is_purchase: null
-      marketplace: null
-      marketplace_address: null
-      nft_item_index: 38635352237179861710045854923340894515876392805202579644473459379936209928192
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+    data:
+      nft_index: 38635352237179861710045854923340894515876392805202579644473459379936209928192
       query_id: 1785441283542
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
     tx_hashes:
       - ioq+WKX2gMsHeK0oNTMWtXQuUfkraOo7+g+4CXvdV9s=
       - xIiC8e0r4ABwWw2P2c+UTFxcL7i40Ws0Vtb/vTh1P0Q=

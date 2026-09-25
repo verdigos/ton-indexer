@@ -46,8 +46,8 @@ actions:
     value: 334251600
     opcode: 0xd53276db
     tx_hashes:
-      - 6KmfZ4LwAfXYlntxLMUD8NGw2GIqrHjBqLWOXzLUzgk=
       - v8A6XXoWpSft8Eqxw2luL1gZRtddEkCN5Z3SEbcOl8Y=
+      - 6KmfZ4LwAfXYlntxLMUD8NGw2GIqrHjBqLWOXzLUzgk=
     accounts:
       - 0:7941C7152CDFC0029AA5FC9B138707AB7378E76840B9CC9F941079C1FFB61A52
       - 0:DABD8F4D9B50321C038E873EC24E19868965A3902B06256ADE528AB5A2BE5648
@@ -75,8 +75,8 @@ actions:
     value: 380550400
     opcode: 0xd68a4ac1
     tx_hashes:
-      - O7nXdY9vSgRkYGXw6K/N/RRWJxmWw4DIamzkyFt1+mQ=
       - yiy9/VemtGCBt6vTHCzXqjcaX91ag/Zx32foWbmKKhA=
+      - O7nXdY9vSgRkYGXw6K/N/RRWJxmWw4DIamzkyFt1+mQ=
     accounts:
       - 0:7941C7152CDFC0029AA5FC9B138707AB7378E76840B9CC9F941079C1FFB61A52
       - 0:A22E95FD1B3A5C55FD2BC574C1C0C0E9DF041D6F64E13A4FABAC9EF9B4B62C6D
@@ -133,8 +133,8 @@ actions:
     value: 380550400
     opcode: 0xd68a4ac1
     tx_hashes:
-      - O7nXdY9vSgRkYGXw6K/N/RRWJxmWw4DIamzkyFt1+mQ=
       - yiy9/VemtGCBt6vTHCzXqjcaX91ag/Zx32foWbmKKhA=
+      - O7nXdY9vSgRkYGXw6K/N/RRWJxmWw4DIamzkyFt1+mQ=
     accounts:
       - 0:7941C7152CDFC0029AA5FC9B138707AB7378E76840B9CC9F941079C1FFB61A52
       - 0:A22E95FD1B3A5C55FD2BC574C1C0C0E9DF041D6F64E13A4FABAC9EF9B4B62C6D
@@ -159,12 +159,10 @@ actions:
     amount: 12266000000000
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 400000000
       forward_payload: cellhash:257E0DAE7C3F99807F9CE92EC6E3454216C071E12FC139C9826763899FBE98D4
-      is_encrypted_comment: false
       query_id: 1726590054338682078
       response_destination: 0:DABD8F4D9B50321C038E873EC24E19868965A3902B06256ADE528AB5A2BE5648
     tx_hashes:
@@ -202,7 +200,7 @@ actions:
     amount: 12266000000000
     value: null
     opcode: null
-    jvault_stake_data:
+    data:
       period: 2592000
       stake_wallet: 0:7941C7152CDFC0029AA5FC9B138707AB7378E76840B9CC9F941079C1FFB61A52
     tx_hashes:

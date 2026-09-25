@@ -46,8 +46,8 @@ actions:
     value: 241453954
     opcode: 0x00000211
     tx_hashes:
-      - Gfpse+4t8rFmlifFmdLRnvyDkfLiUNvmuQHPWE7qgZE=
       - KNmtpg++oHP1XERiPCVv6M346M5OvfNcmdzcQ3d1Dnk=
+      - Gfpse+4t8rFmlifFmdLRnvyDkfLiUNvmuQHPWE7qgZE=
     accounts:
       - 0:A378E318EFE4DDCECBAFB9275CBB003C79644E92DB7D058CB35E55E1B1E3C273
       - 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
@@ -104,8 +104,8 @@ actions:
     value: 275613600
     opcode: 0x106e0000
     tx_hashes:
-      - KNmtpg++oHP1XERiPCVv6M346M5OvfNcmdzcQ3d1Dnk=
       - lm3GydZZgRu8az2mHcYLWfNOBE97H6ZBPcDWi9wR1wU=
+      - KNmtpg++oHP1XERiPCVv6M346M5OvfNcmdzcQ3d1Dnk=
     accounts:
       - 0:A378E318EFE4DDCECBAFB9275CBB003C79644E92DB7D058CB35E55E1B1E3C273
       - 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
@@ -133,19 +133,18 @@ actions:
     amount: 1000000040
     value: null
     opcode: null
-    evaa_withdraw_data:
+    data:
       asset_id: "0x3313e2f57ba870af34480350c789b0987d15b43a53172bfce294de21e7d724e7"
-      fail_reason: null
       is_ton: false
       master: 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
       master_jetton_wallet: 0:910B4B5E961BF54044AF4F1DB89CDA94581EF6CC2CAC5D0D01C7DEE5573B9C43
       recipient_jetton_wallet: 0:FCDA58A21B343F303964401D89ABCD922B6A51EF6EA3A8DC2A4B7BD37494A2D5
     tx_hashes:
+      - OyAQgEdEKZcuU2+3dAkKpk/RFjTYJXXQYxCKoZSB7uA=
       - 4wX2SPh3FBJCP8ZQ5ixnLQK+kf8hNgctvLPsB8ttbns=
       - 7mlRkxcRRp8K4mxz/15Rdato4NqFjJzmcM0vVSO39S4=
       - Gfpse+4t8rFmlifFmdLRnvyDkfLiUNvmuQHPWE7qgZE=
       - KNmtpg++oHP1XERiPCVv6M346M5OvfNcmdzcQ3d1Dnk=
-      - OyAQgEdEKZcuU2+3dAkKpk/RFjTYJXXQYxCKoZSB7uA=
       - b/LTj8HoCL5NTEIZCvVGp9Z1x0uKCXMls0eLKnSIT2o=
       - lh0/qlYYgUOeQ7830l/NVdGJ6DXwGWzfWNGvuxFenFE=
       - lm3GydZZgRu8az2mHcYLWfNOBE97H6ZBPcDWi9wR1wU=
@@ -177,18 +176,17 @@ actions:
     amount: 1000000040
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
+    data:
+      comment_encrypted: false
       custom_payload: cellhash:76E9C2382A6537C4FCA66AD5C2DC92D6E318B5AD0FA1F8C856CF8C4B0590465F
       forward_amount: 0
       forward_payload: cellhash:76E9C2382A6537C4FCA66AD5C2DC92D6E318B5AD0FA1F8C856CF8C4B0590465F
-      is_encrypted_comment: false
       query_id: 0
       response_destination: 0:B9C2F27E009E3B27734CF7EC5E9627F8F646920ABEC4B2ED83619F6226CFF821
     tx_hashes:
+      - Gfpse+4t8rFmlifFmdLRnvyDkfLiUNvmuQHPWE7qgZE=
       - 4wX2SPh3FBJCP8ZQ5ixnLQK+kf8hNgctvLPsB8ttbns=
       - 7mlRkxcRRp8K4mxz/15Rdato4NqFjJzmcM0vVSO39S4=
-      - Gfpse+4t8rFmlifFmdLRnvyDkfLiUNvmuQHPWE7qgZE=
       - b/LTj8HoCL5NTEIZCvVGp9Z1x0uKCXMls0eLKnSIT2o=
     accounts:
       - 0:910B4B5E961BF54044AF4F1DB89CDA94581EF6CC2CAC5D0D01C7DEE5573B9C43
@@ -218,12 +216,12 @@ actions:
     amount: null
     value: 22017208
     opcode: null
-    ton_transfer_data:
-      content: EVAA withdraw.
-      encrypted: false
+    data:
+      comment: EVAA withdraw.
+      comment_encrypted: false
     tx_hashes:
-      - lh0/qlYYgUOeQ7830l/NVdGJ6DXwGWzfWNGvuxFenFE=
       - wicb/qOdePNJGX2yfrmeRYQ0J5sAdpy6iXzZGkUFeZo=
+      - lh0/qlYYgUOeQ7830l/NVdGJ6DXwGWzfWNGvuxFenFE=
     accounts:
       - 0:A378E318EFE4DDCECBAFB9275CBB003C79644E92DB7D058CB35E55E1B1E3C273
       - 0:B9C2F27E009E3B27734CF7EC5E9627F8F646920ABEC4B2ED83619F6226CFF821

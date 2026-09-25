@@ -46,8 +46,8 @@ actions:
     value: 148596074
     opcode: 0x29ff1bcf
     tx_hashes:
-      - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
       - eqC+iJC977tFMqUEYZy61gtvsrbM1rMazQoF6nvt+1Q=
+      - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
     accounts:
       - 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
       - 0:26EC6A7A585F31A1E34F70F6B1C45FEA0A561F805D17B4A78909B6120EF2D9F0
@@ -75,8 +75,8 @@ actions:
     value: 150000000
     opcode: 0x5652f1df
     tx_hashes:
-      - 9J1LDeN0UIMV1E/jhswNeDaIWTvo8iz7jMlHb2ZZr/Y=
       - fjQUb23kT00oQ91fTrD48MAYii2jG9XD/bft1iLtzJc=
+      - 9J1LDeN0UIMV1E/jhswNeDaIWTvo8iz7jMlHb2ZZr/Y=
     accounts:
       - 0:12C0363D59F32479735CE6DAF8F2C36588EE8BA6442B1E0CCD9DC2EA6F9031F2
       - 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
@@ -133,27 +133,27 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_withdraw_liquidity_data:
-      amount1: 205461734260
-      amount2: 25732251
-      asset1_out: 0:91522B63EDE858BD2CD9293CA1AB4DBE1E96E12CD800BE7305E48EC3C77D50C4
-      asset2_out: 0:D9BC35BB09FDF7623329795AFBEF53CCAD883298617289B4DD70BE32FAE9EE16
-      dex: dedust_v2
-      dex_jetton_wallet_1: 0:1A3BED709B87DBBA810701B73E0F16A4470EF2A92701B9EF4D8CC837A4C119DF
-      dex_jetton_wallet_2: 0:D6DFD4C6453FF2958AA15AB940FA3E697349FB013958C0F552E58EFC566D53DE
-      dex_wallet_1: 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
-      dex_wallet_2: 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
+    data:
       is_refund: false
-      lp_tokens_burnt: null
-      user_jetton_wallet_1: 0:5F745B939A5D7A5624859B5B065F3AB5060306F8615C3A7828AD177D79084818
-      user_jetton_wallet_2: 0:AE3591F11C5F9B70937BF92B6AA5278AC28420082319D13E61C9220F1EE55AD8
+      legs:
+        - amount: 205461734260
+          asset: 0:91522B63EDE858BD2CD9293CA1AB4DBE1E96E12CD800BE7305E48EC3C77D50C4
+          dex_jetton_wallet: 0:1A3BED709B87DBBA810701B73E0F16A4470EF2A92701B9EF4D8CC837A4C119DF
+          dex_wallet: 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
+          user_jetton_wallet: 0:5F745B939A5D7A5624859B5B065F3AB5060306F8615C3A7828AD177D79084818
+        - amount: 25732251
+          asset: 0:D9BC35BB09FDF7623329795AFBEF53CCAD883298617289B4DD70BE32FAE9EE16
+          dex_jetton_wallet: 0:D6DFD4C6453FF2958AA15AB940FA3E697349FB013958C0F552E58EFC566D53DE
+          dex_wallet: 0:26BF91940A8F83D1C98A55F326A9BFE5F0C64B651D1E51697D7F1EA34CFDB75E
+          user_jetton_wallet: 0:AE3591F11C5F9B70937BF92B6AA5278AC28420082319D13E61C9220F1EE55AD8
+      protocol: dedust_v2
     tx_hashes:
+      - fjQUb23kT00oQ91fTrD48MAYii2jG9XD/bft1iLtzJc=
       - 1uI+npDWnqXgJOfZkwZMGSysVKlVvCXOSA2z46nIdv0=
       - 9J1LDeN0UIMV1E/jhswNeDaIWTvo8iz7jMlHb2ZZr/Y=
       - DksAkNRRES3S/OVb6dOrk6ledsTTE9VGmRJyv6nmJW0=
       - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
       - eqC+iJC977tFMqUEYZy61gtvsrbM1rMazQoF6nvt+1Q=
-      - fjQUb23kT00oQ91fTrD48MAYii2jG9XD/bft1iLtzJc=
       - nL0Y071jbvN2uAT3s4h6ATcHwDVa34wgtgFfDQGeqDM=
       - rIgpzHTj9LuaIFQ2GduIMUwGRuhnriU/jwMwJjoy8CQ=
       - scQ9a7Xz+KTkfG+ZOiD2SALVENkU9xJFLtjiCnVMAtE=
@@ -188,17 +188,14 @@ actions:
     amount: 205461734260
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 557926665469839454
       response_destination: 0:12C0363D59F32479735CE6DAF8F2C36588EE8BA6442B1E0CCD9DC2EA6F9031F2
     tx_hashes:
-      - DksAkNRRES3S/OVb6dOrk6ledsTTE9VGmRJyv6nmJW0=
       - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
+      - DksAkNRRES3S/OVb6dOrk6ledsTTE9VGmRJyv6nmJW0=
       - rIgpzHTj9LuaIFQ2GduIMUwGRuhnriU/jwMwJjoy8CQ=
       - scQ9a7Xz+KTkfG+ZOiD2SALVENkU9xJFLtjiCnVMAtE=
     accounts:
@@ -230,17 +227,14 @@ actions:
     amount: 25732251
     value: null
     opcode: null
-    jetton_transfer_data:
-      comment: null
-      custom_payload: null
+    data:
+      comment_encrypted: false
       forward_amount: 0
-      forward_payload: null
-      is_encrypted_comment: false
       query_id: 557926665469839454
       response_destination: 0:12C0363D59F32479735CE6DAF8F2C36588EE8BA6442B1E0CCD9DC2EA6F9031F2
     tx_hashes:
-      - 1uI+npDWnqXgJOfZkwZMGSysVKlVvCXOSA2z46nIdv0=
       - L+PCLd/kkZ+6bhuFTe8hbhlPDlN/R6oLFBqYYALnXgY=
+      - 1uI+npDWnqXgJOfZkwZMGSysVKlVvCXOSA2z46nIdv0=
       - nL0Y071jbvN2uAT3s4h6ATcHwDVa34wgtgFfDQGeqDM=
       - u7Y/5DbgwWBHvZUEPwq5O+XM4caQiGvCQv4edXAb/Y8=
     accounts:

@@ -1,0 +1,61 @@
+# dns / dns auction guard release collection-only
+# note: synthetic: A collection match releases the auction and classifies as a DNS release
+# trace: 03OcVXvf6lWKtlTLy5QYtEMQSjt1x6j0bwz3O5C2SN0=
+actions:
+  - type: call_contract
+    anchor: call_contract#4ed14b65@400
+    id: LT80KsqN1L42K8d2+AqAIVE/qR+3w9JoW1wrEgZJiIA=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 123
+    opcode: 0x4ed14b65
+    tx_hashes:
+      - MJaRrQ0d/7Rz+aLEWUV2G1ZAh2IEre2gVXW4SppBV5k=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 400
+    end_lt: 400
+    start_utime: 1400
+    end_utime: 1400
+    mc_seqno_end: 0
+    parent_action_id: 62F8pusf7LxGiBE/S5ynikA1sYoiwptbv/PlrYiQFWs=
+    ancestor_type:
+      - dns_release
+  - type: dns_release
+    matcher: dns_release
+    anchor: dns_release@400
+    id: 62F8pusf7LxGiBE/S5ynikA1sYoiwptbv/PlrYiQFWs=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    destination_secondary: null
+    asset: 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 123
+    opcode: null
+    data:
+      nft_index: 42
+      query_id: 7
+    tx_hashes:
+      - MJaRrQ0d/7Rz+aLEWUV2G1ZAh2IEre2gVXW4SppBV5k=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 400
+    end_lt: 400
+    start_utime: 1400
+    end_utime: 1400
+    mc_seqno_end: 0

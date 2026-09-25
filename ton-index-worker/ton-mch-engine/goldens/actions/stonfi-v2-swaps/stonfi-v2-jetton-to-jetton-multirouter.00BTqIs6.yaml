@@ -95,8 +95,8 @@ actions:
     value: 36586854
     opcode: 0x63381632
     tx_hashes:
-      - 6+odbhOHcS8ndrd1mvb4pJ7Khf4HIhJdCgtiLoAq06M=
       - jidoKkkur2JFUwLSUMlejmpZSU3FTk/0N6rxVXTdMIE=
+      - 6+odbhOHcS8ndrd1mvb4pJ7Khf4HIhJdCgtiLoAq06M=
     accounts:
       - 0:320FB3BC0AF55D47C00425CAFDE9F1C8D627C5AB6D52F1032DD5CCE2E487C93F
       - 0:3F64CDDA881C6C23403BF5FCFB640706684A73DD2BBB07E47968DA8965720E0B
@@ -121,8 +121,8 @@ actions:
     value: 28452939
     opcode: 0xd53276db
     tx_hashes:
-      - WxPBzXq3jz1If5xyxgSs2QVqpVJPZ4dxIanteihvHMA=
       - dpGfcCBFkMtcs4cJej/gEMjbS5XIs+qjsaIOUb3Lfng=
+      - WxPBzXq3jz1If5xyxgSs2QVqpVJPZ4dxIanteihvHMA=
     accounts:
       - 0:1FB062431B96BA9615C52239F7F4A2180E12819F8019A91CC792B61AA2F4311E
       - 0:F4F07F66BCE06AB508684CBDD290E8E0AFDD3D26CBBAA89429DFFBC717B3362A
@@ -147,8 +147,8 @@ actions:
     value: 26358717
     opcode: 0xd53276db
     tx_hashes:
-      - /L7kTBPycAh0Hd3kEa3zD5yOoxnPpBD15HCzh9NTcig=
       - GrwZ8DgDsAsowAPK3GVY5zw0D0gcPF+dRwxUEeDKLAw=
+      - /L7kTBPycAh0Hd3kEa3zD5yOoxnPpBD15HCzh9NTcig=
     accounts:
       - 0:1FB062431B96BA9615C52239F7F4A2180E12819F8019A91CC792B61AA2F4311E
       - 0:F192047F03B8101AC43B190DC35A0CD29C6CB4EACD7CD036648DE395BB1C4C2B
@@ -173,8 +173,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: stonfi_v2
+    data:
       dex_incoming_transfer:
         amount: 7205784725
         asset: 0:3690254DC15B2297610CDA60744A45F2B710AA4234B89ADB630E99D79B01BD4F
@@ -189,7 +188,6 @@ actions:
         destination_jetton_wallet: 0:ED426EE902C1AE5421A764C72D660864488418F3739424F9FF81F6348BADBE28
         source: 0:320FB3BC0AF55D47C00425CAFDE9F1C8D627C5AB6D52F1032DD5CCE2E487C93F
         source_jetton_wallet: 0:CBE8EB5022D36DD20F014C2F2C8F76DB1B7BD0D062158F7072C07F34ED5A3223
-      min_out_amount: null
       peer_swaps:
         - amount_in: 7205784725
           amount_out: 37841924
@@ -199,10 +197,11 @@ actions:
           amount_out: 33957063173
           asset_in: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
           asset_out: 0:AE3E6D351E576276E439E7168117FD64696FD6014CB90C77B2F2CBAACD4FCC00
+      protocol: stonfi_v2
       sender: 0:1FB062431B96BA9615C52239F7F4A2180E12819F8019A91CC792B61AA2F4311E
     tx_hashes:
-      - /h4WJevLkmJ1kIThzFo4JGrevx0G44ebOWpeCJpGJA8=
       - 00BTqIs6w2qgKXyjfUIwS1WMPbYzWvOn0P16eku/O+4=
+      - /h4WJevLkmJ1kIThzFo4JGrevx0G44ebOWpeCJpGJA8=
       - 6+YKtb0hL54/S3KDN9hB4+Oh7kz+8jAHZ2n9qh8uVJ8=
       - ACz/zZeeo5a6+DS1POLDE8wtcBI48nSfPeYE+xQrqsM=
       - Bj81wG/tOhhl9gLyVmsGarSkTQ6scTB6f1yK1GxGdGM=

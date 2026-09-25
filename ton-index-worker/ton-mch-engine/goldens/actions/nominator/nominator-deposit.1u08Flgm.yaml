@@ -1,0 +1,32 @@
+# nominator / nominator deposit
+# note: synthetic: A nominator deposits stake and classifies as a stake deposit
+# trace: 1u08FlgmdxuEEATPvQ-JF7g-LVDddXxhfaO_wkWgVrY=
+actions:
+  - type: stake_deposit
+    matcher: nominator_pool_deposit
+    anchor: nominator_pool_deposit@100
+    id: 6PIuY4jNXmQcSuMReh9zl6f1rcQJ4MdWNGjzNiPqqas=
+    success: true
+    source: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    source_secondary: null
+    destination: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 1000
+    value: null
+    opcode: null
+    data:
+      protocol: nominator
+    tx_hashes:
+      - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 100
+    end_lt: 100
+    start_utime: 1100
+    end_utime: 1100
+    mc_seqno_end: 0

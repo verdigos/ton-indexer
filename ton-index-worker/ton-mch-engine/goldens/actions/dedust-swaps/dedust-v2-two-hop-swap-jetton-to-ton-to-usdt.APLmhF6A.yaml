@@ -1,5 +1,5 @@
 # dedust-swaps / DeDust v2 two-hop swap jetton to TON to USDT
-# note: two peer_swaps steps, no intermediate jetton transfer actions
+# note: The two hop route crosses TON and classifies as one DeDust v2 swap
 # trace: APLmhF6A2x2HJkhGrBOB86fUizlonodaK7bUPNGDOIU=
 actions:
   - type: jetton_swap
@@ -18,8 +18,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    jetton_swap_data:
-      dex: dedust_v2
+    data:
       dex_incoming_transfer:
         amount: 6000000000000000
         asset: 0:0242039EAD1119D1DCEA9837F24584ABCAB3490906DD34BF29C7180809E9CB12
@@ -39,15 +38,14 @@ actions:
         - amount_in: 6000000000000000
           amount_out: 1860425790
           asset_in: 0:0242039EAD1119D1DCEA9837F24584ABCAB3490906DD34BF29C7180809E9CB12
-          asset_out: null
         - amount_in: 1860425790
           amount_out: 3396175
-          asset_in: null
           asset_out: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+      protocol: dedust_v2
       sender: 0:D0DB2C7F2C12A8034635ED82A8161A10E10D22BC2F3860C8A0A8C0CFF0180BAF
     tx_hashes:
-      - /DVoqnCFe3tZzMdtUpDCi50X9GTYXFFrYs0AAnVOMo4=
       - APLmhF6A2x2HJkhGrBOB86fUizlonodaK7bUPNGDOIU=
+      - /DVoqnCFe3tZzMdtUpDCi50X9GTYXFFrYs0AAnVOMo4=
       - DRABUYsCmjCeGKkUSd/a6x3I5JSOByA2ZaCLiVaehvk=
       - F50zKrRKVhWxpK+UZXP0vSP4PxKSojjsO5aYosq+l8M=
       - Feh+OKLZzB39vWyFEBsjDAMiuVU9rQHJoZ+o4fT5sSo=

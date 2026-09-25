@@ -1,0 +1,62 @@
+# jetton-mints / jetton mint 0x642b7d07 chain (api-sourced)
+# note: The 0x642b7d07 mint chain classifies as one jetton mint and one contract call
+# trace: 2fRvx_087KHoYhZfp2QzslArb4FdUEsbbRjSIeUDgMY=
+actions:
+  - type: call_contract
+    anchor: call_contract#00005001@101951741000002
+    id: vmqApJRFytAltb3VNrTXizPnCqvgixf8gQzbnW9Djfs=
+    success: true
+    source: 0:403D9B29E9D60C9495AB06DE0F9D6A95655FECD604456389D5074A252132F4D0
+    source_secondary: null
+    destination: 0:F762436DFE554BEE65D091E6038761586F6FBE62421E8FA09CBC8268F9723715
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1200100000000
+    opcode: 0x00005001
+    tx_hashes:
+      - 2fRvx/087KHoYhZfp2QzslArb4FdUEsbbRjSIeUDgMY=
+      - uL506j75edq79QOgFmYbVCYjAav8MkxbXU9HNGVEA9w=
+    accounts:
+      - 0:403D9B29E9D60C9495AB06DE0F9D6A95655FECD604456389D5074A252132F4D0
+      - 0:F762436DFE554BEE65D091E6038761586F6FBE62421E8FA09CBC8268F9723715
+    start_lt: 101951741000002
+    end_lt: 101951741000003
+    start_utime: 1788799073
+    end_utime: 1788799073
+    mc_seqno_end: 91215721
+  - type: jetton_mint
+    matcher: jetton_mint
+    anchor: jetton_mint@101951741000005
+    id: ZXGvlyxITNhywIVtCUPJARo661Hx38m73FWAw+hKyKk=
+    success: true
+    source: null
+    source_secondary: null
+    destination: 0:403D9B29E9D60C9495AB06DE0F9D6A95655FECD604456389D5074A252132F4D0
+    destination_secondary: 0:B9B73FC53DDB773DF70AD761D009BCCAE72519C3F795B8F4AEAFFE729BA5DC31
+    asset: 0:BD117A2891899ACC2FC270153DF2F91C9E50B37AAB1DE788274EC2A8DDC1EA8B
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 6475924065593
+    value: null
+    opcode: null
+    tx_hashes:
+      - uL506j75edq79QOgFmYbVCYjAav8MkxbXU9HNGVEA9w=
+      - 6HgkPnAlQRTxkJxa6myCN1aQ/+kHxsQsbTQuRVYUl1I=
+      - Uyjp6Bg4TOnzw1vgBrL23omP4pbzXJzmS5pZg3l2VTE=
+      - udQUPfJmJdankFT26O1u4rL4YjMLdSFDdtK1s8oLJ4o=
+      - ydfuRbn7VBQRkqzGMGHh1kRWVI0bOXWkiCaE05b9Vp0=
+    accounts:
+      - 0:403D9B29E9D60C9495AB06DE0F9D6A95655FECD604456389D5074A252132F4D0
+      - 0:B9B73FC53DDB773DF70AD761D009BCCAE72519C3F795B8F4AEAFFE729BA5DC31
+      - 0:BD117A2891899ACC2FC270153DF2F91C9E50B37AAB1DE788274EC2A8DDC1EA8B
+      - 0:F762436DFE554BEE65D091E6038761586F6FBE62421E8FA09CBC8268F9723715
+    start_lt: 101951741000005
+    end_lt: 101951741000011
+    start_utime: 1788799073
+    end_utime: 1788799073
+    mc_seqno_end: 91215721

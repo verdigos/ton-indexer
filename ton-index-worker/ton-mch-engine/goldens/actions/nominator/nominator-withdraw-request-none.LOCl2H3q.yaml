@@ -1,0 +1,32 @@
+# nominator / nominator withdraw request none
+# note: synthetic: A request with no payout classifies as a stake withdrawal request
+# trace: LOCl2H3qoYXxKRBg1jJEAYMd2BORctX3RxTdvuDJQyM=
+actions:
+  - type: stake_withdrawal_request
+    matcher: nominator_pool_withdraw_request
+    anchor: nominator_pool_withdraw_request@100
+    id: 1Pv4xov5nNetqCLCcHYpyIJsaRFpr4KDqm8DoLTsdh8=
+    success: true
+    source: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    source_secondary: null
+    destination: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      protocol: nominator
+    tx_hashes:
+      - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 100
+    end_lt: 100
+    start_utime: 1100
+    end_utime: 1100
+    mc_seqno_end: 0

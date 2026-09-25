@@ -17,8 +17,8 @@ actions:
     value: 248669193
     opcode: 0xdc5ddba1
     tx_hashes:
-      - izVtvBoX8MZOt/n2JyRGInpPXE9yFBQmBDTVYxai+rc=
       - qZOBOtyKo7/RWPe6yJfuhaXBOzX/N1XmS9cou8kf5N4=
+      - izVtvBoX8MZOt/n2JyRGInpPXE9yFBQmBDTVYxai+rc=
     accounts:
       - 0:1305BD8A781613048846E8A0B910B1429123F86FC1C6B05FFB469281F7930964
       - 0:1309FE836D986792A1AF59F560E168E02E84B4276191498EFF0C1C78C877A7C5
@@ -43,28 +43,25 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 2044642517
-      amount2: 999999999
-      asset1: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      asset2: null
-      dex: dedust_v2
-      lp_tokens_minted: 1429909967
-      target_amount_1: 2044642518
-      target_amount_2: 1000000000
-      target_asset_1: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
-      target_asset_2: null
-      user_jetton_wallet_1: 0:8E4499C900841D7583D9559A2F1F0BA229330240C156A198B57611D5F1017C02
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 2044642517
+          asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+          target_amount: 2044642518
+          target_asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
+          user_jetton_wallet: 0:8E4499C900841D7583D9559A2F1F0BA229330240C156A198B57611D5F1017C02
+        - amount: 999999999
+          target_amount: 1000000000
+      protocol: dedust_v2
+      tokens_minted: 1429909967
       vault_excesses:
         - amount: 1
           asset: 0:65AAC9B5E380EAE928DB3C8E238D9BC0D61A9320FDC2BC7A2F6C87D6FEDF9208
         - amount: 1
-          asset: null
     tx_hashes:
+      - 8ioobbcdHm4jq4mKPqgCBQAiXz+DfiRKz8u6D48Tm2M=
       - 4LPZ8mQB5ZEYMX9LPPaNtSe0vWBCT5ek2p3FCuL62so=
       - 5YYDmitBjdD+/XnoUISTSI+pzzJbyqwpC5jbXnuPm7k=
-      - 8ioobbcdHm4jq4mKPqgCBQAiXz+DfiRKz8u6D48Tm2M=
       - ChFMqZJxL84WLcZn5Deq2VJo6BxEJuzxBR03KvsfS3c=
       - HQ7r1tdsVHWeXwSdJ7CotAaDDIl5LhoiTBa765xiclM=
       - KjqfAWJVaZLzNIG/dfWyJYS/VbFqOzKpAX2vOA762eU=

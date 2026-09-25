@@ -17,8 +17,8 @@ actions:
     amount: null
     value: null
     opcode: null
-    staking_data:
-      provider: nominator
+    data:
+      protocol: nominator
     tx_hashes:
       - 59b4F0GX09WQKfMi2v09JdqqO1eab4fH8YPSrGqujnM=
       - eQc/VhpKUvtTHZpkUyfCeJZ8MakglMgAN7z5gX8kzsQ=

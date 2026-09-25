@@ -17,8 +17,8 @@ actions:
     value: 5596400
     opcode: 0x2565934c
     tx_hashes:
-      - +wqkKPTvDLfbpZPWAd8KOO9shxAVips+ro3JQv3G5tU=
       - lqk5/zZ8bMt3ZsroaXveJjcEVsL1+emQENvrA5meZuI=
+      - +wqkKPTvDLfbpZPWAd8KOO9shxAVips+ro3JQv3G5tU=
     accounts:
       - 0:AB6831390BF3B13923E7DEFFB9552A65626113BF0BA2D2D3DC203DECFCE4A6F6
       - 0:E796C95723646D2355A12E6B5E9646F8095406C6BF04FF14888E5D0783BF6336
@@ -75,7 +75,7 @@ actions:
     amount: null
     value: null
     opcode: null
-    cocoon_register_proxy_data:
+    data:
       query_id: 0
     tx_hashes:
       - +5SK3b3jO5MhZCqc6AMK931wBbvGGZcZPM0AruldKXE=

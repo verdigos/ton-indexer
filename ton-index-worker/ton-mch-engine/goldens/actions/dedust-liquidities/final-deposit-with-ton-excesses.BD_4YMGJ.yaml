@@ -17,30 +17,24 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 822575606
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: dedust
-      lp_tokens_minted: 1099749988636946
-      target_amount_1: 832575606
-      target_amount_2: 1000000000000000
-      target_asset_1: null
-      target_asset_2: 0:FAAA2ECE2F5D2B6CF8864F70BEB3A5A37B208BD0FF2DD6A45ED1983E8A187729
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
+    data:
+      legs:
+        - amount: 822575606
+          target_amount: 832575606
+        - target_amount: 1000000000000000
+          target_asset: 0:FAAA2ECE2F5D2B6CF8864F70BEB3A5A37B208BD0FF2DD6A45ED1983E8A187729
+      protocol: dedust
+      tokens_minted: 1099749988636946
       vault_excesses:
         - amount: 879143313
-          asset: null
     tx_hashes:
+      - BD/4YMGJ9vOn8+2PFwxAj/vwi/UcrYRD61OXsHMHSb8=
       - 3wqSxltGDZw7JJRmxj6JG0EMUBF2i2Hy4CA6etDNsYo=
       - 5P64iG9lCEYmhaRQ/gFlbYe56ug8pfwWcAG9X+8VeHs=
       - 6KB6Z8cM+uGLkIVQoUlG4MAn40V5BK+PB40y8SazZ3g=
       - 7q1Cqe6FpgtWMRNFDp/CY2O2MAHd+MLbF2Q+ZZxMySs=
       - 9MrSS0FL63c3acAurjMH7o9poHKhPEN0Iv29PPXGZck=
       - 9xK/W23xDJ9/4vFLMLQwy6cYXmgxBDKTNq5vV2S/QAE=
-      - BD/4YMGJ9vOn8+2PFwxAj/vwi/UcrYRD61OXsHMHSb8=
       - ISnMaB+v+KJgjvuPm9ub57aL8fpHu9FgcMb/s8Jg2zc=
       - dWRxua0cVEleSTZwPOFbAsTpb6jANYkZ7bChOO9sPA4=
       - jtsl8IzaczgWMTjO9z6W7hMF0OvVItzo2ErCqvVoJ68=

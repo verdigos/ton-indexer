@@ -17,8 +17,8 @@ actions:
     value: 974946000
     opcode: 0x132f9a45
     tx_hashes:
-      - 9oGSzvp1o5dhSXD2IiVA60fTCXKE7vgxFnYvJQoVGEs=
       - DyQJCORFmmOHuVWR/KyXUxIyUfWlehqYm+CNPn9doYY=
+      - 9oGSzvp1o5dhSXD2IiVA60fTCXKE7vgxFnYvJQoVGEs=
     accounts:
       - 0:0BA5C4C5C3A4896EB494116FBA4CDB83CE84ED3266FFA8C2859960F9D778669E
       - 0:7ABD6C4CD7E44D1E3D293C1F8324F4AF610F69F62966E009662D3442484D3025
@@ -43,11 +43,11 @@ actions:
     amount: null
     value: null
     opcode: 0x132f9a45
-    nft_mint_data:
-      nft_item_index: 49
+    data:
+      nft_index: 49
     tx_hashes:
-      - 9oGSzvp1o5dhSXD2IiVA60fTCXKE7vgxFnYvJQoVGEs=
       - DyQJCORFmmOHuVWR/KyXUxIyUfWlehqYm+CNPn9doYY=
+      - 9oGSzvp1o5dhSXD2IiVA60fTCXKE7vgxFnYvJQoVGEs=
     accounts:
       - 0:0BA5C4C5C3A4896EB494116FBA4CDB83CE84ED3266FFA8C2859960F9D778669E
       - 0:7ABD6C4CD7E44D1E3D293C1F8324F4AF610F69F62966E009662D3442484D3025
@@ -72,26 +72,11 @@ actions:
     amount: null
     value: null
     opcode: null
-    nft_listing_data:
-      marketplace_fee_address: null
-      royalty_address: null
-    nft_transfer_data:
-      custom_payload: null
-      forward_amount: null
+    data:
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: false
-      marketplace: null
-      marketplace_address: null
-      nft_item_index: 49
-      payout_amount: null
-      payout_comment: null
-      payout_comment_encoded: null
-      payout_comment_encrypted: null
-      price: null
+      nft_index: 49
       query_id: 6083770387559464359
-      real_prev_owner: null
-      response_destination: null
-      royalty_amount: null
     tx_hashes:
       - 9oGSzvp1o5dhSXD2IiVA60fTCXKE7vgxFnYvJQoVGEs=
       - RXwDHifCEHqiY0cswOOgE6VlR/4DmoS/E9sb6QoYkaA=
@@ -119,13 +104,13 @@ actions:
     amount: 67599
     value: null
     opcode: null
-    staking_data:
-      provider: liquid_staking
-      ts_nft: 0:7ABD6C4CD7E44D1E3D293C1F8324F4AF610F69F62966E009662D3442484D3025
+    data:
+      nft_address: 0:7ABD6C4CD7E44D1E3D293C1F8324F4AF610F69F62966E009662D3442484D3025
+      protocol: liquid_staking
     tx_hashes:
+      - GO+NI0EjOuhj1z4YzHK+VDAAOJsLm710DvyRRRMXhoY=
       - BZ813BpSIbji0ENW40+a24tcfCt3Id6mVg12JnR0jCk=
       - DyQJCORFmmOHuVWR/KyXUxIyUfWlehqYm+CNPn9doYY=
-      - GO+NI0EjOuhj1z4YzHK+VDAAOJsLm710DvyRRRMXhoY=
       - Y1AisfkNC94JFyH0Wgp7+IeFdZpuI/NmXDobacmzSYw=
       - y8HAvsj8wJ/GaxA1/ejlQHv7SDeOay9VaSCHtSCaVMc=
     accounts:

@@ -43,23 +43,16 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 3029999999827
-      amount2: null
-      asset1: null
-      asset2: null
-      dex: tonco
-      lp_tokens_minted: null
-      nft_address: null
-      nft_index: null
-      target_amount_1: 2999999999829
-      target_amount_2: 5708578661
-      target_asset_1: null
-      target_asset_2: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+    data:
+      legs:
+        - amount: 3029999999827
+          target_amount: 2999999999829
+        - asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+          target_amount: 5708578661
+          target_asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+      protocol: tonco
       tick_lower: -57180
       tick_upper: -52980
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: null
       vault_excesses: []
     tx_hashes:
       - 0GW2kNF4nRhw5xA3b5E35+EhF9H25H3Nvm5MJJo2VD0=
@@ -94,31 +87,27 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 5765664447
-      amount2: null
-      asset1: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
-      asset2: null
-      dex: tonco
-      lp_tokens_minted: 1398855824493
+    data:
+      legs:
+        - target_amount: 2999999999829
+        - amount: 5765664447
+          asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+          target_amount: 5708578661
+          target_asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+          user_jetton_wallet: 0:2BC21F6C2C85ECCF0DFC7FC5CAEC8A124799E6BB47E37206D014322F0DE33EFA
       nft_address: 0:A74CC446A0805F61AF677B3754167DFC5CBB37D94488F9B3D9FA04C91262A06F
       nft_index: 3086
-      target_amount_1: 2999999999829
-      target_amount_2: 5708578661
-      target_asset_1: null
-      target_asset_2: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+      protocol: tonco
       tick_lower: -57180
       tick_upper: -52980
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:2BC21F6C2C85ECCF0DFC7FC5CAEC8A124799E6BB47E37206D014322F0DE33EFA
+      tokens_minted: 1398855824493
       vault_excesses:
         - amount: 29999999998
-          asset: null
         - amount: 57085786
           asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
     tx_hashes:
-      - 05FySquQjWLMhKiYPdAZBbm275vwF/WoH9QW7Oa1Lvg=
       - 0GW2kNF4nRhw5xA3b5E35+EhF9H25H3Nvm5MJJo2VD0=
+      - 05FySquQjWLMhKiYPdAZBbm275vwF/WoH9QW7Oa1Lvg=
       - 4GapwjeG9SDeFzTrhpGJPAhkXSpRAM4Wd9CbqH9YAO8=
       - EEg5MQDZN/PLB4O0RQYBwzZAK7uEMc24/bdKbqipWWw=
       - LiocA4LJfk9DE8Cnx3BWQ/kOI3l9zyJnj3Ae5dejzlo=

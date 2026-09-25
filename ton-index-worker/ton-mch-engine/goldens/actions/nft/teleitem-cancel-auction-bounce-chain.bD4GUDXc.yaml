@@ -1,0 +1,87 @@
+# nft / teleitem cancel aborted, bounce stays standalone (chain)
+# note: An aborted auction cancellation keeps its bounce separate and classifies as a failed cancellation
+# trace: bD4GUDXcQ2yzmbRZ2YXEpiNlg11zY9JU1gYVFhxBh4s=
+actions:
+  - type: call_contract
+    anchor: call_contract#371638ae@102329403000009
+    id: GifsGKX/0gN+lQARZXLHcM2sWDZuvSxXJFuRUGnNAqY=
+    success: false
+    source: 0:BF00000D70AB265EF58EEA300AC126A78A31786EFF425ED8CB66A5E22C168FCB
+    source_secondary: null
+    destination: 0:77671494485C8835DDDCA3893FC3024C358A90F27487B072E964F9A326F33787
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 100000000
+    opcode: 0x371638ae
+    tx_hashes:
+      - bD4GUDXcQ2yzmbRZ2YXEpiNlg11zY9JU1gYVFhxBh4s=
+      - ryAT4sOj9MCWNv6cfWri1kVn0OxypCWusnxsuZ3neew=
+    accounts:
+      - 0:77671494485C8835DDDCA3893FC3024C358A90F27487B072E964F9A326F33787
+      - 0:BF00000D70AB265EF58EEA300AC126A78A31786EFF425ED8CB66A5E22C168FCB
+    start_lt: 102329403000009
+    end_lt: 102329403000010
+    start_utime: 1788950036
+    end_utime: 1788950036
+    mc_seqno_end: 91587748
+    parent_action_id: EX13X5+ru6ivT1AgxcVB0whqhzMjaBoTkXyCVXVZA/Y=
+    ancestor_type:
+      - teleitem_cancel_auction
+  - type: call_contract
+    anchor: call_contract#ffffffff@102329403000011
+    id: WTbUqjD+3TvAlJsZXTOd34R7Jsd9NzAPOiQfVO6ZtXY=
+    success: true
+    source: 0:77671494485C8835DDDCA3893FC3024C358A90F27487B072E964F9A326F33787
+    source_secondary: null
+    destination: 0:BF00000D70AB265EF58EEA300AC126A78A31786EFF425ED8CB66A5E22C168FCB
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 99725732
+    opcode: 0xffffffff
+    tx_hashes:
+      - ryAT4sOj9MCWNv6cfWri1kVn0OxypCWusnxsuZ3neew=
+      - F7j0wcIs5DH9cjQ/UNHCygbV8aL7xuoaj1JYb3ILp6M=
+    accounts:
+      - 0:77671494485C8835DDDCA3893FC3024C358A90F27487B072E964F9A326F33787
+      - 0:BF00000D70AB265EF58EEA300AC126A78A31786EFF425ED8CB66A5E22C168FCB
+    start_lt: 102329403000011
+    end_lt: 102329404000001
+    start_utime: 1788950036
+    end_utime: 1788950036
+    mc_seqno_end: 91587749
+  - type: teleitem_cancel_auction
+    matcher: teleitem_cancel_auction
+    anchor: teleitem_cancel_auction@102329403000009
+    id: EX13X5+ru6ivT1AgxcVB0whqhzMjaBoTkXyCVXVZA/Y=
+    success: false
+    source: 0:BF00000D70AB265EF58EEA300AC126A78A31786EFF425ED8CB66A5E22C168FCB
+    source_secondary: null
+    destination: 0:77671494485C8835DDDCA3893FC3024C358A90F27487B072E964F9A326F33787
+    destination_secondary: null
+    asset: 0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2
+    asset_secondary: 0:77671494485C8835DDDCA3893FC3024C358A90F27487B072E964F9A326F33787
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+    tx_hashes:
+      - bD4GUDXcQ2yzmbRZ2YXEpiNlg11zY9JU1gYVFhxBh4s=
+      - ryAT4sOj9MCWNv6cfWri1kVn0OxypCWusnxsuZ3neew=
+    accounts:
+      - 0:77671494485C8835DDDCA3893FC3024C358A90F27487B072E964F9A326F33787
+      - 0:BF00000D70AB265EF58EEA300AC126A78A31786EFF425ED8CB66A5E22C168FCB
+    start_lt: 102329403000009
+    end_lt: 102329403000010
+    start_utime: 1788950036
+    end_utime: 1788950036
+    mc_seqno_end: 91587748

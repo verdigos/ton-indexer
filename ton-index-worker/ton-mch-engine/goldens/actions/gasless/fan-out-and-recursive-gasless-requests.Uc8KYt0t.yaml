@@ -1,5 +1,5 @@
 # gasless / Fan-out and recursive gasless requests
-# note: named from the v1.3-only yaml; trace file is untracked and no longer in the working tree, and it has no action golden
+# note: The requests fan out recursively and classify as three gasless requests and two TON transfers
 # trace: Uc8KYt0t3y8-gnvbfOxMZBW8F5k945xqkllMS-ZMISE=
 actions:
   - type: call_contract
@@ -69,7 +69,7 @@ actions:
     amount: null
     value: 50000000
     opcode: 0x63896e74
-    extra:
+    data:
       parent_gasless_action: gO97CeOTBPYim5SwqUyDtArsh23/58t3YNzdbBfKOV4=
     tx_hashes:
       - euUglJSmhxEuwEToxuTtH3TV4f1nFErc0mPCkrVkbIc=
@@ -97,7 +97,7 @@ actions:
     amount: null
     value: 50000000
     opcode: 0x9f63adb5
-    extra:
+    data:
       parent_gasless_action: UG1NzQKEpYWcH3pNCrU+lS90yMtBRlIvW3dLN09wfKU=
     tx_hashes:
       - euUglJSmhxEuwEToxuTtH3TV4f1nFErc0mPCkrVkbIc=
@@ -125,7 +125,7 @@ actions:
     amount: null
     value: 50000000
     opcode: 0xe624dd6c
-    extra:
+    data:
       parent_gasless_action: pbaynrSWUYvhDe7sJzeqLyX9rZaWttGq163n2OxGnvE=
     tx_hashes:
       - Uc8KYt0t3y8+gnvbfOxMZBW8F5k945xqkllMS+ZMISE=
@@ -153,7 +153,7 @@ actions:
     amount: null
     value: 150000000
     opcode: 0xec55ff77
-    extra:
+    data:
       parent_gasless_action: gO97CeOTBPYim5SwqUyDtArsh23/58t3YNzdbBfKOV4=
     tx_hashes:
       - Uc8KYt0t3y8+gnvbfOxMZBW8F5k945xqkllMS+ZMISE=
@@ -233,7 +233,7 @@ actions:
     amount: null
     value: 50000000
     opcode: null
-    extra:
+    data:
       parent_gasless_action: gO97CeOTBPYim5SwqUyDtArsh23/58t3YNzdbBfKOV4=
     tx_hashes:
       - euUglJSmhxEuwEToxuTtH3TV4f1nFErc0mPCkrVkbIc=
@@ -261,14 +261,12 @@ actions:
     amount: null
     value: 1000000
     opcode: null
-    extra:
+    data:
+      comment_encrypted: false
       parent_gasless_action: pbaynrSWUYvhDe7sJzeqLyX9rZaWttGq163n2OxGnvE=
-    ton_transfer_data:
-      content: null
-      encrypted: false
     tx_hashes:
-      - F9nuQKFRIkxftP0qW8EodiOrzeEahE+h4AIsP9Tnk2g=
       - n+oK/degCHC7gvuu7K+hQvLGtqqi6nB1vDwO5JWEWQk=
+      - F9nuQKFRIkxftP0qW8EodiOrzeEahE+h4AIsP9Tnk2g=
     accounts:
       - 0:646F6F1F13124496504BD65441BC0D0677645A3B1E460896F0A299F13E53625A
       - 0:66F41CE49EE0B793F757811074B3B4852CCC4A47B4830350E45A2C7AEF6B8DB2
@@ -292,11 +290,9 @@ actions:
     amount: null
     value: 1000000
     opcode: null
-    extra:
+    data:
+      comment_encrypted: false
       parent_gasless_action: UG1NzQKEpYWcH3pNCrU+lS90yMtBRlIvW3dLN09wfKU=
-    ton_transfer_data:
-      content: null
-      encrypted: false
     tx_hashes:
       - ly0YrQSWNup3vkBc8bROD2oQiTDdZWHqeWD9WOxgkc4=
       - vJ48CIswpa8tWNuMB53x3W3oO0/U5K/NdP8B73yGsn8=

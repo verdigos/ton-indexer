@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 withdraw with a dust TON leg
-# note: amount1 is 29268 nanoton against a large jetton leg
+# note: The withdrawal includes a dust TON leg and classifies as a liquidity withdrawal
 # trace: XoYtOPQk2eBbj66i8zjGejuCdoIcPAT1XcqSIxZ9zSE=
 actions:
   - type: dex_withdraw_liquidity
@@ -18,25 +18,23 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_withdraw_liquidity_data:
-      amount1: 29268
-      amount2: 10250317998610657
-      asset1_out: null
-      asset2_out: 0:92013DCD875466A35CDFC3AF2191BF13711D209F1A723392D6FA868ACEEC6D6D
-      dex: dedust_v2
-      dex_jetton_wallet_1: null
-      dex_jetton_wallet_2: 0:ABF2606E102E82FF92159CCB4F73B7B53D4056490AB4DF653624444AB10B8980
-      dex_wallet_1: 0:4E80314D28CE7DAF60A3EDE43956F7A964E3D34087B6E1C7FA4B7E33DE4BCB81
-      dex_wallet_2: 0:4E80314D28CE7DAF60A3EDE43956F7A964E3D34087B6E1C7FA4B7E33DE4BCB81
+    data:
       is_refund: false
-      lp_tokens_burnt: 17320508075
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:A69456E667CCEB98DBBE507F5495B061D379AA04DCA77617B3718BB5E04952A1
+      legs:
+        - amount: 29268
+          dex_wallet: 0:4E80314D28CE7DAF60A3EDE43956F7A964E3D34087B6E1C7FA4B7E33DE4BCB81
+        - amount: 10250317998610657
+          asset: 0:92013DCD875466A35CDFC3AF2191BF13711D209F1A723392D6FA868ACEEC6D6D
+          dex_jetton_wallet: 0:ABF2606E102E82FF92159CCB4F73B7B53D4056490AB4DF653624444AB10B8980
+          dex_wallet: 0:4E80314D28CE7DAF60A3EDE43956F7A964E3D34087B6E1C7FA4B7E33DE4BCB81
+          user_jetton_wallet: 0:A69456E667CCEB98DBBE507F5495B061D379AA04DCA77617B3718BB5E04952A1
+      protocol: dedust_v2
+      tokens_burnt: 17320508075
     tx_hashes:
+      - XoYtOPQk2eBbj66i8zjGejuCdoIcPAT1XcqSIxZ9zSE=
       - A34KyPh1QG+zkaF5AteNafsr/v/K97HcB1/uuAI5oBo=
       - KMqGajjzBhkCX8oDO3pGzHNPSRS42DR4N3rgafm/hBY=
       - TEjPCT2pfh6yBY7Tvithe6dRUFSZZ3WsZ9Fjgz91fqw=
-      - XoYtOPQk2eBbj66i8zjGejuCdoIcPAT1XcqSIxZ9zSE=
       - YN0C1UqccSRHL2LVAK2i0oEKqBpMEJC6r//v6dc2Z8I=
       - dV+hB5MjsC7ekqw+lIq1Ms5858wU5YshEbQVbCbtPms=
       - f7WELxroZSNAjI6NH5JZR5cZ59zl4q2qFoJ5jYZLb/A=

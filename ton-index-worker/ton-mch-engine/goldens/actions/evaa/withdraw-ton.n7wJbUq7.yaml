@@ -17,8 +17,8 @@ actions:
     value: 350000000
     opcode: 0x00000002
     tx_hashes:
-      - /SAUHO+JfDQfka5IiBGUqWU1omb3PmG0Od9TuDMIFgo=
       - n7wJbUq7/+Li9GUnwlje3eGe5u1mZQGNEXQlGV8L+cI=
+      - /SAUHO+JfDQfka5IiBGUqWU1omb3PmG0Od9TuDMIFgo=
     accounts:
       - 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
       - 0:F4A601F44755743A2259DFEDED666AC795CE55285F2E3411B6A0C7C24DCA09E2
@@ -75,8 +75,8 @@ actions:
     value: 560883088
     opcode: 0x0000211a
     tx_hashes:
-      - Hhwuy2Qju3xLGrRWxYb6ajUFl0XZ7kxDgcd6jrrVJZM=
       - edCwz/2kL80M7L+gq/5bRyQ0VQZqXlTndD6F5pNor80=
+      - Hhwuy2Qju3xLGrRWxYb6ajUFl0XZ7kxDgcd6jrrVJZM=
     accounts:
       - 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
       - 0:F4A601F44755743A2259DFEDED666AC795CE55285F2E3411B6A0C7C24DCA09E2
@@ -162,20 +162,17 @@ actions:
     amount: 417016017
     value: null
     opcode: null
-    evaa_withdraw_data:
+    data:
       asset_id: "0x1a4219fe5e60d63af2a3cc7dce6fec69b45c6b5718497a6148e7c232ac87bd8a"
-      fail_reason: null
       is_ton: true
       master: 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
-      master_jetton_wallet: null
-      recipient_jetton_wallet: null
     tx_hashes:
+      - n7wJbUq7/+Li9GUnwlje3eGe5u1mZQGNEXQlGV8L+cI=
       - /SAUHO+JfDQfka5IiBGUqWU1omb3PmG0Od9TuDMIFgo=
       - Hhwuy2Qju3xLGrRWxYb6ajUFl0XZ7kxDgcd6jrrVJZM=
       - MPdBQP6a70oNOCoBPQLuepRxexiGbn7AM3uAAVrsq6U=
       - cCfx+NrTPHSmSctbzOwVPan475CSHgUxsRexdMnVMms=
       - edCwz/2kL80M7L+gq/5bRyQ0VQZqXlTndD6F5pNor80=
-      - n7wJbUq7/+Li9GUnwlje3eGe5u1mZQGNEXQlGV8L+cI=
       - xa+MEsVZb3VtEJzRLpGBabBz8fiD8VeE4JwFpdTBM7w=
     accounts:
       - 0:BCAD466A47FA565750729565253CD073CA24D856804499090C2100D95C809F9E
@@ -201,12 +198,12 @@ actions:
     amount: null
     value: 22017162
     opcode: null
-    ton_transfer_data:
-      content: EVAA withdraw.
-      encrypted: false
+    data:
+      comment: EVAA withdraw.
+      comment_encrypted: false
     tx_hashes:
-      - MPdBQP6a70oNOCoBPQLuepRxexiGbn7AM3uAAVrsq6U=
       - xa+MEsVZb3VtEJzRLpGBabBz8fiD8VeE4JwFpdTBM7w=
+      - MPdBQP6a70oNOCoBPQLuepRxexiGbn7AM3uAAVrsq6U=
     accounts:
       - 0:CE29635B425B669DA1A661B9E986C7324A3AB740CC78E565F7FD4948CE855DA0
       - 0:F4A601F44755743A2259DFEDED666AC795CE55285F2E3411B6A0C7C24DCA09E2

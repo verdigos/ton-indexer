@@ -1,5 +1,5 @@
 # dedust-liquidities / DeDust v2 deposit TON and jetton with pool deploy
-# note: three contract_deploy rows alongside the deposit
+# note: The deposit deploys three contracts and classifies as a liquidity deposit
 # trace: ZmxsFjYsHqPDUouPjWIZHrPExhYisMFjIGBG320OY5U=
 actions:
   - type: contract_deploy
@@ -18,8 +18,8 @@ actions:
     value: 198700065
     opcode: 0x178d4519
     tx_hashes:
-      - P5ypVWmHx5SzkWoVWLBsWpNIAsN2iIr5fm1PqUPa7xM=
       - mqWoFc3CiGBUfIWvOqLqiaguUiPPC9RsDomRv/GgZ6Y=
+      - P5ypVWmHx5SzkWoVWLBsWpNIAsN2iIr5fm1PqUPa7xM=
     accounts:
       - 0:F53213BCD3168925B5D68D37689CFC1B49060B3C6CE2982EBA2F375AB42E9851
       - 0:F823C9B2F2CBF162F96575A81A95228F913209D48F8BB3649F99051C149552C5
@@ -44,8 +44,8 @@ actions:
     value: 145958993
     opcode: 0x855afcbd
     tx_hashes:
-      - ltzMJI+j9HvTepwSvOGkYSW+XvmnJ7wcdrya0A/HWYU=
       - utvyN46AR6Ec6WwgS0ImM9JI2cHzjYQWEoo14nR+Y1Q=
+      - ltzMJI+j9HvTepwSvOGkYSW+XvmnJ7wcdrya0A/HWYU=
     accounts:
       - 0:5E1CD9F57A990F23668EA0902629D169CC55C00D873492310C8DBEC7131B84B1
       - 0:5EF28240FCADE47CA0E311B8A1E2A407AF817FC1424669E4C564BD1F0DB64BAF
@@ -70,8 +70,8 @@ actions:
     value: 248675951
     opcode: 0xdc5ddba1
     tx_hashes:
-      - CNk43KWuyBr2MwPCOCSEyziMHstVofON9pDTqdgn1ug=
       - ZBX+RoGhLTVOpYBY/p/H1fPE3mUKJzSf3OxYeNXG0FE=
+      - CNk43KWuyBr2MwPCOCSEyziMHstVofON9pDTqdgn1ug=
     accounts:
       - 0:5E1CD9F57A990F23668EA0902629D169CC55C00D873492310C8DBEC7131B84B1
       - 0:5E2FE8DA99FE64D6A776AB827034A8EA057BD5814794C753FC4A0F1679F5DFD5
@@ -96,27 +96,25 @@ actions:
     amount: null
     value: null
     opcode: null
-    dex_deposit_liquidity_data:
-      amount1: 300000000000
-      amount2: 8832113816529763
-      asset1: null
-      asset2: 0:0AC742B143C47B6C55FC12D94C3200C9D08CA36CF2523A1FB1959707792AC232
-      dex: dedust_v2
-      lp_tokens_minted: 51474597083988
-      target_amount_1: 300000000000
-      target_amount_2: 8832113816529763
-      target_asset_1: null
-      target_asset_2: 0:0AC742B143C47B6C55FC12D94C3200C9D08CA36CF2523A1FB1959707792AC232
-      user_jetton_wallet_1: null
-      user_jetton_wallet_2: 0:F823C9B2F2CBF162F96575A81A95228F913209D48F8BB3649F99051C149552C5
+    data:
+      legs:
+        - amount: 300000000000
+          target_amount: 300000000000
+        - amount: 8832113816529763
+          asset: 0:0AC742B143C47B6C55FC12D94C3200C9D08CA36CF2523A1FB1959707792AC232
+          target_amount: 8832113816529763
+          target_asset: 0:0AC742B143C47B6C55FC12D94C3200C9D08CA36CF2523A1FB1959707792AC232
+          user_jetton_wallet: 0:F823C9B2F2CBF162F96575A81A95228F913209D48F8BB3649F99051C149552C5
+      protocol: dedust_v2
+      tokens_minted: 51474597083988
       vault_excesses: []
     tx_hashes:
+      - ZmxsFjYsHqPDUouPjWIZHrPExhYisMFjIGBG320OY5U=
       - 6J3E4ArfEQDnlAmQ8kjEZ8ziMCgWkKu7WNEbYi+raQE=
       - CNk43KWuyBr2MwPCOCSEyziMHstVofON9pDTqdgn1ug=
       - P5ypVWmHx5SzkWoVWLBsWpNIAsN2iIr5fm1PqUPa7xM=
       - SRQBwF6IROBLXcrKpgVZO5x5MWghztPZE/QKwtm4jMc=
       - ZBX+RoGhLTVOpYBY/p/H1fPE3mUKJzSf3OxYeNXG0FE=
-      - ZmxsFjYsHqPDUouPjWIZHrPExhYisMFjIGBG320OY5U=
       - bzB3/C+hRBDXlGPbEA+nEemZ/RS0zBcGyN4MI/jb4Z0=
       - jECRtOZgx8Pvh5+9c2gNVG1rDDuqBA8ICPUOca8RdCc=
       - ltzMJI+j9HvTepwSvOGkYSW+XvmnJ7wcdrya0A/HWYU=
