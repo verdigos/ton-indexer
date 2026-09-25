@@ -40,7 +40,7 @@ A DEX contract that holds Reserves of one Pair and trades them along one Curve. 
 _Avoid_: pair, liquidity pool contract
 
 **Curve**:
-The invariant a Pool trades along: _volatile_ (constant product) or _stable_.
+The invariant a Pool trades along: _volatile_ (constant product), _stable_ (a StableSwap or Solidly curve) or _weighted_ (constant product with unequal weights).
 _Avoid_: pool type, formula
 
 **Reserves**:
