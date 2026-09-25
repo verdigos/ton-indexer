@@ -3,7 +3,7 @@
 #include "MsgParse.h"
 
 #include "AbiBridge.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "parse/PSlice.h"
 #include "parse/Parsers.h"
 
@@ -14,6 +14,7 @@
 #include "vm/excno.hpp"
 
 #include <exception>
+#include <new>
 
 #include <cstdio>
 #include <filesystem>
@@ -49,6 +50,12 @@ std::vector<std::string> duplicate_parser_keys(const ParserSources &sources) {
 const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
   static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
       {"ChangeDnsRecordMessage", parse_change_dns},
+      {"EvaaSupplyUserHdr", parse_evaa_supply_user_hdr},
+      {"EvaaUserOp", parse_evaa_user_op},
+      {"TgBTCBurnEvent", parse_tgbtc_burn_event},
+      {"TgBTCNewKeyEvent", parse_tgbtc_new_key_event},
+      {"TgBTCDkgCompletedEvent", parse_tgbtc_dkg_completed_event},
+      {"TgBTCMintEvent", parse_tgbtc_mint_event},
       {"VestingSendMessage", parse_vesting_send_message},
   };
   return rows;
@@ -124,6 +131,8 @@ td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref
     return td::Status::Error("parse threw: vm virtualization error");
   } catch (const vm::VmNoGas &) {
     return td::Status::Error("parse threw: out of gas");
+  } catch (const std::bad_alloc &) {
+    throw;
   } catch (const std::exception &e) {
     return td::Status::Error(PSLICE() << "parse threw: " << e.what());
   }

@@ -20,10 +20,10 @@ td::RefInt256 refint_u64(unsigned long long v);
 
 // Load an address; advances `cs`. Error fails the whole message parse, or
 // the enclosing try downgrades it. Intentional.
-td::Result<Value> load_address_py(vm::CellSlice &cs);
+td::Result<Value> load_address_value(vm::CellSlice &cs);
 
 // Load coins; len nibble 0 yields 0. Advances `cs`.
-td::Result<td::RefInt256> load_coins_py(vm::CellSlice &cs);
+td::Result<td::RefInt256> load_var_uint16(vm::CellSlice &cs);
 
 // `cs` is the bit cursor; `refs`/`off` hold the ref list separately because
 // copy()/to_cell() do not always agree with CellSlice's own ref cursor.
@@ -54,7 +54,7 @@ td::Result<vm::CellSlice> open_ref_cell(const td::Ref<vm::Cell> &c);
 // StateInit: split_depth:(Maybe (## 5)) special:(Maybe TickTock)
 // code/data/library:(Maybe ^Cell). Only the cursor matters, but every field
 // is walked because any of them can fail the parse. Intentional.
-td::Status skip_state_init_py(vm::CellSlice &cs);
+td::Status skip_state_init(vm::CellSlice &cs);
 
 // After the StateInit prefix, skip the code maybe-ref and return the required
 // data cell.

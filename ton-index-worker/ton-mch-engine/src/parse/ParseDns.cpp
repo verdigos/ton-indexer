@@ -108,7 +108,7 @@ td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body) {
     auto schema = static_cast<unsigned>(vs.fetch_ulong(16));
     Value::Fields vf;
     if (schema == 0xba93) {
-      TRY_RESULT(addr, load_address_py(vs));
+      TRY_RESULT(addr, load_address_value(vs));
       TRY_RESULT(acc, account_id_of(std::move(addr)));
       vf.emplace_back("schema", Value::make_str("DNSNextResolver"));
       vf.emplace_back("address", std::move(acc));
@@ -121,7 +121,7 @@ td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body) {
       vf.emplace_back("address", Value::make_bytes(std::move(adnl)));
       vf.emplace_back("flags", Value::make_int64(static_cast<std::int64_t>(vs.fetch_ulong(8))));
     } else if (schema == 0x9fd3) {
-      TRY_RESULT(addr, load_address_py(vs));
+      TRY_RESULT(addr, load_address_value(vs));
       TRY_RESULT(acc, account_id_of(std::move(addr)));
       if (!vs.have(8)) {
         return td::Status::Error("dns: smc flags underflow");

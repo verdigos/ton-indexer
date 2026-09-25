@@ -42,10 +42,10 @@ td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
     return td::Status::Error("vesting: not int_msg_info");
   }
   ms.advance(3);
-  TRY_RESULT(src, load_address_py(ms));
+  TRY_RESULT(src, load_address_value(ms));
   (void)src;
-  TRY_RESULT(dest, load_address_py(ms));
-  TRY_RESULT(grams, load_coins_py(ms));
+  TRY_RESULT(dest, load_address_value(ms));
+  TRY_RESULT(grams, load_var_uint16(ms));
   if (!ms.have(1)) {
     return td::Status::Error("vesting: extra dict underflow");
   }
@@ -55,9 +55,9 @@ td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
     }
     ms.fetch_ref();
   }
-  TRY_RESULT(ihr_fee, load_coins_py(ms));
+  TRY_RESULT(ihr_fee, load_var_uint16(ms));
   (void)ihr_fee;
-  TRY_RESULT(fwd_fee, load_coins_py(ms));
+  TRY_RESULT(fwd_fee, load_var_uint16(ms));
   (void)fwd_fee;
   if (!ms.have(64 + 32)) {
     return td::Status::Error("vesting: lt/at underflow");

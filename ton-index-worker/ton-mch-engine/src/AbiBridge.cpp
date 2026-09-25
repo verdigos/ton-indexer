@@ -5,6 +5,7 @@
 #include "AbiProjection.h"
 #include "AbiTryFirst.h"
 #include "parse/Parsers.h"
+#include "parse/PSlice.h"
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
@@ -16,7 +17,7 @@
 #include "dedust_v2_gen.h"
 #include "dns_gen.h"
 #include "evaa_gen.h"
-#include "evaa_supply_forward_gen.h"
+#include "evaa_forward_gen.h"
 #include "jetton_gen.h"
 #include "jvault_gen.h"
 #include "jvault_payload_gen.h"
@@ -269,40 +270,22 @@ Value abi_value_to_mch(const AbiValue &v) {
 
 namespace {
 
-td::Result<Value> abi_parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &body) {
+template <class T>
+td::Result<Value> abi_parse_evaa_liquidate_master_exact(const td::Ref<vm::Cell> &body) {
   if (body.is_null()) {
     return td::Status::Error("abi bridge: null body cell");
   }
   bool special = false;
-  [[maybe_unused]] vm::CellSlice checked_slice = vm::load_cell_slice_special(body, special);
+  vm::CellSlice cs = vm::load_cell_slice_special(body, special);
   if (special) {
     return td::Status::Error("abi bridge: exotic cell not supported");
   }
-
-  auto match = try_parse_first<evaa::EvaaWithdrawLockedExcess,
-                               evaa::EvaaWithdrawNotCollateralizedExcess,
-                               evaa::EvaaWithdrawMissingPricesExcess,
-                               evaa::EvaaWithdrawExecutionCrashed>(body);
-  if (match && std::holds_alternative<evaa::EvaaWithdrawLockedExcess>(*match)) {
-    return Value::make_obj({{"opcode", Value::make_int64(0x21e6)},
-                            {"reason", Value::make_str("withdraw_locked_excess")}});
+  TRY_RESULT(parsed, T::from_slice(cs));
+  if (cs.size() != 0) {
+    return td::Status::Error("abi bridge: EVAA liquidation master has trailing inline bits");
   }
-  if (match &&
-      std::holds_alternative<evaa::EvaaWithdrawNotCollateralizedExcess>(*match)) {
-    return Value::make_obj(
-        {{"opcode", Value::make_int64(0x21e7)},
-         {"reason", Value::make_str("withdraw_not_collateralized_excess")}});
-  }
-  if (match && std::holds_alternative<evaa::EvaaWithdrawMissingPricesExcess>(*match)) {
-    return Value::make_obj(
-        {{"opcode", Value::make_int64(0x21e8)},
-         {"reason", Value::make_str("withdraw_missing_prices_excess")}});
-  }
-  if (match && std::holds_alternative<evaa::EvaaWithdrawExecutionCrashed>(*match)) {
-    return Value::make_obj({{"opcode", Value::make_int64(0x21ec)},
-                            {"reason", Value::make_str("withdraw_execution_crashed")}});
-  }
-  return td::Status::Error("evaa fail excess: unknown opcode");
+  TRY_RESULT(av, parsed.to_abi_value());
+  return abi_value_to_mch(av);
 }
 
 td::Result<Value> abi_parse_layerzero_oapp_execute_callback(
@@ -388,7 +371,7 @@ td::Result<Value> abi_parse_jetton_internal_transfer(const td::Ref<vm::Cell> &bo
 
 // Flatten the generated nested mint value into the classifier's flat public
 // field shape.
-td::Result<Value> abi_parse_minter_mint_legacy_shape(const td::Ref<vm::Cell> &body) {
+td::Result<Value> abi_parse_minter_mint_flat_shape(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(parsed,
              abi_parse_body<ton_abi::gen::jetton::MinterJettonMint>(body));
   const Value *query_id = parsed.field("query_id");
@@ -481,6 +464,57 @@ td::Result<Value> abi_parse_conditional_query_id(const td::Ref<vm::Cell> &body) 
   return Value::make_obj({{"query_id", Value::null()}});
 }
 
+// Remaining bits after forward_amount are Either Cell ^Cell; absent tail
+// leaves forward_payload null. custom_payload is Maybe ^Cell.
+td::Result<Value> abi_parse_nft_transfer(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64)) {
+    return td::Status::Error("nft_transfer: header underflow");
+  }
+  cs.advance(32);
+  td::RefInt256 query_id = refint_u64(cs.fetch_ulong(64));
+  TRY_RESULT(new_owner, load_address_value(cs));
+  TRY_RESULT(response_destination, load_address_value(cs));
+  td::Ref<vm::Cell> cp;
+  if (!cs.fetch_maybe_ref(cp)) {
+    return td::Status::Error("nft_transfer: bad custom_payload");
+  }
+  Value custom_payload = Value::null();
+  if (cp.not_null()) {
+    TRY_RESULT(cp_boc, td_boc_serialize_crc(cp));
+    custom_payload = Value::make_bytes(std::move(cp_boc));
+  }
+  TRY_RESULT(forward_amount, load_var_uint16(cs));
+  Value forward_payload = Value::null();
+  if (cs.size() > 0) {
+    bool is_right = cs.fetch_ulong(1) != 0;
+    td::Ref<vm::Cell> fp_cell;
+    if (is_right) {
+      if (cs.size_refs() == 0) {
+        return td::Status::Error("nft_transfer: forward_payload ref missing");
+      }
+      fp_cell = cs.fetch_ref();
+    } else {
+      PSlice ps;
+      ps.cs = cs;
+      ps.refs = ctx.all_refs;
+      ps.off = 0;
+      TRY_RESULT_ASSIGN(fp_cell, pslice_to_cell(ps));
+    }
+    TRY_RESULT(fp_boc, td_boc_serialize_crc(fp_cell));
+    forward_payload = Value::make_bytes(std::move(fp_boc));
+  }
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(std::move(query_id)));
+  f.emplace_back("new_owner", std::move(new_owner));
+  f.emplace_back("response_destination", std::move(response_destination));
+  f.emplace_back("custom_payload", std::move(custom_payload));
+  f.emplace_back("forward_amount", Value::make_int(std::move(forward_amount)));
+  f.emplace_back("forward_payload", std::move(forward_payload));
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
@@ -491,7 +525,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
   namespace dedust_v2 = ton_abi::gen::dedust_v2;
   namespace dns = ton_abi::gen::dns;
   namespace evaa = ton_abi::gen::evaa;
-  namespace evaa_forward = ton_abi::gen::evaa_supply_forward;
+  namespace evaa_forward = ton_abi::gen::evaa_forward;
   namespace jetton = ton_abi::gen::jetton;
   namespace jvault = ton_abi::gen::jvault;
   namespace jvault_payload = ton_abi::gen::jvault_payload;
@@ -514,7 +548,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"JettonBurn", &abi_parse_body<jetton::JettonBurn>},
       {"JettonNotify", &abi_parse_body<jetton::JettonNotify>},
       {"JettonMint", &abi_parse_body<jetton::JettonMint>},
-      {"MinterJettonMint", &abi_parse_minter_mint_legacy_shape},
+      {"MinterJettonMint", &abi_parse_minter_mint_flat_shape},
       {"MultisigNewOrder", &abi_parse_body<multisig::MultisigNewOrder>},
       {"MultisigInitOrder", &abi_parse_body<multisig::MultisigInitOrder>},
       {"MultisigApprove", &abi_parse_body<multisig::MultisigApprove>},
@@ -530,10 +564,13 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"StonfiV2ProvideLiquidity", &abi_parse_body<stonfi::StonfiV2ProvideLiquidity>},
       {"StonfiPaymentRequest", &abi_parse_body<stonfi::StonfiPaymentRequest>},
       {"StonfiSwapMessage", &abi_parse_body<stonfi::StonfiSwapMessage>},
+      {"StonfiV2SwapPayloadTag", &abi_parse_body<stonfi::StonfiV2SwapPayloadTag>},
       {"StonfiV2PayTo", &abi_parse_body<stonfi::StonfiV2PayTo>},
       {"DedustPayoutFromPool", &abi_parse_body<dedust::DedustPayoutFromPool>},
       {"DedustSwapNotification", &abi_parse_body<dedust::DedustSwapNotification>},
       {"DedustDepositLiquidityToPool", &abi_parse_body<dedust::DedustDepositLiquidityToPool>},
+      {"DedustDepositLiquidityNative", &abi_parse_body<dedust::DedustDepositLiquidityNative>},
+      {"DedustDepositLiquidityJetton", &abi_parse_body<dedust::DedustDepositLiquidityJetton>},
       {"DedustV2PayNative", &abi_parse_body<dedust_v2::DedustV2PayNative>},
       {"DedustV2PayJetton", &abi_parse_body<dedust_v2::DedustV2PayJetton>},
       {"DedustV2SwapEvent", &abi_parse_body<dedust_v2::DedustV2SwapEvent>},
@@ -547,6 +584,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"DedustV2DepositPayload", &abi_parse_body<dedust_v2::DedustV2DepositPayload>},
       {"CoffeeCreateVault", &abi_parse_body<coffee::CoffeeCreateVault>},
       {"CoffeeSwapEvent", &abi_parse_body<coffee::CoffeeSwapEvent>},
+      {"CoffeeSwapNative", &abi_parse_body<coffee::CoffeeSwapNative>},
+      {"CoffeePayoutInternal", &abi_parse_body<coffee::CoffeePayoutInternal>},
       {"CoffeeCreateLiquidityDepositoryRequest",
        &abi_parse_body<coffee::CoffeeCreateLiquidityDepositoryRequest>},
       {"CoffeeDepositLiquiditySuccessfulEvent",
@@ -564,8 +603,13 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"EvaaSupplySuccess", &abi_parse_body<evaa::EvaaSupplySuccess>},
       {"EvaaWithdrawMaster", &abi_parse_body<evaa::EvaaWithdrawMaster>},
       {"EvaaWithdrawCollateralized", &abi_parse_body<evaa::EvaaWithdrawCollateralized>},
-      {"EvaaWithdrawFailExcess", &abi_parse_evaa_withdraw_fail_excess},
       {"EvaaSupplyJettonForward", &abi_parse_body<evaa_forward::EvaaSupplyJettonForward>},
+      {"EvaaLiquidateMaster", &abi_parse_evaa_liquidate_master_exact<evaa::EvaaLiquidateMaster>},
+      {"EvaaLiquidateMasterV7",
+       &abi_parse_evaa_liquidate_master_exact<evaa::EvaaLiquidateMasterV7>},
+      {"EvaaLiquidateSatisfied", &abi_parse_body<evaa::EvaaLiquidateSatisfied>},
+      {"EvaaLiquidateUnsatisfied", &abi_parse_body<evaa::EvaaLiquidateUnsatisfied>},
+      {"EvaaLiquidateJettonForward", &abi_parse_body<evaa_forward::EvaaLiquidateJettonForward>},
       {"LayerZeroOappExecuteCallback", &abi_parse_layerzero_oapp_execute_callback},
       {"LayerzeroChannelSendCallback", &abi_parse_layerzero_channel_send_callback},
       {"ChannelCommitPacket", &abi_parse_layerzero_channel_commit_packet},
@@ -585,9 +629,20 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"ToncoPoolV3Burn", &abi_parse_body<tonco::ToncoPoolV3Burn>},
       {"ToncoRouterV3CreatePool", &abi_parse_body<tonco::ToncoRouterV3CreatePool>},
       {"ToncoPoolV3Init", &abi_parse_body<tonco::ToncoPoolV3Init>},
+      {"ToncoRouterV3PayTo", &abi_parse_body<tonco::ToncoRouterV3PayTo>},
+      {"ToncoAccountV3AddLiquidity",
+       &abi_parse_body<tonco::ToncoAccountV3AddLiquidity>},
       {"TeleitemStartAuction", &abi_parse_body<teleitem::TeleitemStartAuction>},
+      {"SaleV1", &abi_parse_body<nft_sale::SaleV1>},
+      {"SaleLegacy", &abi_parse_body<nft_sale::SaleLegacy>},
+      {"SaleV4r1", &abi_parse_body<nft_sale::SaleV4r1>},
+      {"AuctionV1", &abi_parse_body<nft_sale::AuctionV1>},
+      {"AuctionV3r2", &abi_parse_body<nft_sale::AuctionV3r2>},
+      {"AuctionV3r3", &abi_parse_body<nft_sale::AuctionV3r3>},
+      {"AuctionV4r1", &abi_parse_body<nft_sale::AuctionV4r1>},
       {"NftOwnershipAssignedPrevOwner",
        &abi_parse_body<nft_sale::NftOwnershipAssignedPrevOwner>},
+      {"NftTransfer", &abi_parse_nft_transfer},
       {"SaleUpdateMessage", &abi_parse_body<nft_sale::SaleUpdateMessage>},
       {"NftReportStaticData", &abi_parse_body<nft_sale::NftReportStaticData>},
       {"TONStakersNftBurnNotification",
