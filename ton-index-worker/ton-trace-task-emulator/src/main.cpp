@@ -9,6 +9,9 @@
 #include "DbScanner.h"
 #include "TraceTaskScheduler.h"
 #include "TaskResultInserter.h"
+#include "GenMatchers.h"
+
+#include <algorithm>
 
 
 int main(int argc, char *argv[]) {
@@ -23,6 +26,9 @@ int main(int argc, char *argv[]) {
   td::uint32 threads = 7;
   std::string redis_dsn = "tcp://127.0.0.1:6379";
   std::string redis_queue_name = "emulatorqueue";
+  bool mch_disable = false;
+  bool mch_no_tier2 = false;
+  int mch_workers = 1;
   
   td::OptionParser p;
   p.set_description("Emulate TON traces");
@@ -62,6 +68,25 @@ int main(int argc, char *argv[]) {
     redis_queue_name = fname.str();
   });
 
+  p.add_option('\0', "mch-disable", "Disable in-process MCH classification", [&]() {
+    mch_disable = true;
+  });
+
+  p.add_option('\0', "mch-no-tier2", "Disable celldb tier-2 lookups (tier-1-only classification)", [&]() {
+    mch_no_tier2 = true;
+  });
+
+  p.add_checked_option('\0', "mch-workers", "MCH classifier workers (default: 1)", [&](td::Slice value) {
+    int v;
+    try {
+      v = std::stoi(value.str());
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --mch-workers: not a number");
+    }
+    mch_workers = std::clamp(v, 1, 64);
+    return td::Status::OK();
+  });
+
   auto S = p.run(argc, argv);
   if (S.is_error()) {
     LOG(ERROR) << "failed to parse options: " << S.move_as_error();
@@ -86,6 +111,22 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
+  mch::EmuClassifierConfig mch_classifier_config;
+  mch_classifier_config.workers = mch_workers;
+  if (mch_disable) {
+    LOG(WARNING) << "MCH classification DISABLED (--mch-disable): with_actions tasks get no actions";
+  } else {
+    auto r_prep = mch::make_engine_prep();
+    if (r_prep.is_error()) {
+      LOG(FATAL) << "MCH engine prep failed: " << r_prep.move_as_error();
+    }
+    mch_classifier_config.prep = r_prep.move_as_ok();
+    mch_classifier_config.tier2 = !mch_no_tier2;
+    LOG(INFO) << "MCH classification ENABLED (artifact sha " << mch::gen_matchers_ir_source_sha()
+              << "), celldb tier-2 " << (mch_classifier_config.tier2 ? "ON" : "OFF")
+              << " workers=" << mch_classifier_config.workers;
+  }
+
   td::actor::Scheduler scheduler({threads});
   td::actor::ActorOwn<DbScanner> db_scanner;
   td::actor::ActorOwn<ITaskResultInserter> insert_manager;
@@ -93,7 +134,8 @@ int main(int argc, char *argv[]) {
   scheduler.run_in_context([&] { 
     db_scanner = td::actor::create_actor<DbScanner>("scanner", db_root, dbs_secondary, working_dir, 0.5);
     insert_manager = td::actor::create_actor<RedisTaskResultInsertManager>("OnDemandRedisInsertManager", redis_dsn);
-    td::actor::create_actor<TraceTaskScheduler>("integritychecker", db_scanner.get(), insert_manager.get(), redis_dsn, redis_queue_name, working_dir).release();
+    td::actor::create_actor<TraceTaskScheduler>("integritychecker", db_scanner.get(), insert_manager.get(), redis_dsn, redis_queue_name, working_dir,
+                                                  std::move(mch_classifier_config)).release();
   });
   
   scheduler.run();

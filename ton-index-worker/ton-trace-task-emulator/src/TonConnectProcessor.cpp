@@ -94,6 +94,7 @@ void TonConnectProcessor::got_account_state(schema::AccountState account_state) 
   trace_task.ignore_chksig = true;
   trace_task.detect_interfaces = tonconnect_task_.detect_interfaces;
   trace_task.include_code_data = tonconnect_task_.include_code_data;
+  trace_task.with_actions = tonconnect_task_.with_actions;
   trace_task.mc_block_seqno = tonconnect_task_.mc_block_seqno;
 
   LOG(INFO) << "Successfully converted TonConnect task " << tonconnect_task_.id << " to regular TraceTask";

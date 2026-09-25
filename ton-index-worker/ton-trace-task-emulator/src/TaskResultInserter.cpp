@@ -122,6 +122,15 @@ public:
                 transaction_.hset("result_" + result_.task_id, addr_raw, buffer.str());
             }
 
+            if (result_.actions) {
+                if (result_.actions->is_ok()) {
+                    transaction_.hset("result_" + result_.task_id, "actions", result_.actions->ok());
+                } else {
+                    transaction_.set("classifier_error_" + result_.task_id, result_.actions->error().message().str());
+                    transaction_.expire("classifier_error_" + result_.task_id, 60);
+                }
+            }
+
             transaction_.expire("result_" + result_.task_id, 60);
 
             transaction_.publish(result_channel, "success");

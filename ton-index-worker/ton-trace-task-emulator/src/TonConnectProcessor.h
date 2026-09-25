@@ -20,22 +20,24 @@ struct TonConnectTraceTask {
   std::string from;
   std::optional<uint64_t> valid_until;
   std::vector<TonConnectMessage> messages;
-  bool detect_interfaces;
-  bool include_code_data;
+  bool detect_interfaces = false;
+  bool include_code_data = false;
+  bool with_actions = false;
   std::optional<uint32_t> mc_block_seqno;
 
-  MSGPACK_DEFINE(id, from, valid_until, messages, detect_interfaces, include_code_data, mc_block_seqno);
+  MSGPACK_DEFINE(id, from, valid_until, messages, detect_interfaces, include_code_data, with_actions, mc_block_seqno);
 };
 
 struct TraceTask {
   std::string id;
   std::string boc;
-  bool ignore_chksig;
-  bool detect_interfaces;
-  bool include_code_data;
+  bool ignore_chksig = false;
+  bool detect_interfaces = false;
+  bool include_code_data = false;
+  bool with_actions = false;
   std::optional<uint32_t> mc_block_seqno;
 
-  MSGPACK_DEFINE(id, boc, ignore_chksig, detect_interfaces, include_code_data, mc_block_seqno);
+  MSGPACK_DEFINE(id, boc, ignore_chksig, detect_interfaces, include_code_data, with_actions, mc_block_seqno);
 };
 
 struct TaskEnvelope {

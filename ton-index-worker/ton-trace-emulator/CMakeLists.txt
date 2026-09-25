@@ -153,3 +153,5 @@ target_link_libraries(
         msgpack-cxx
         td-test-main
 )
+
+add_test(NAME ton_trace_processor COMMAND test-ton-trace-processor)

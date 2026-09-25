@@ -836,7 +836,8 @@ void fill_classification_measurement(const mch::EmuClassifyResult& result, const
   }
 
   measurement->set_otel_attribute("ton.trace.classification.outcome", classification_outcome_name(result.outcome));
-  measurement->set_otel_attribute("ton.trace.classification.failed", result.failure);
+  measurement->set_otel_attribute("ton.trace.classification.failed",
+                                  result.outcome != mch::EmuClassifyOutcome::classified);
   measurement->set_otel_attribute("ton.trace.classification.used_fallback", result.used_fallback);
   measurement->set_otel_attribute("ton.trace.classification.queue_us", result.queue_us);
   measurement->set_otel_attribute("ton.trace.classification.duration_us", result.classify_us);

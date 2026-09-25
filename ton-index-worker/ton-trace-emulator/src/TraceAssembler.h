@@ -35,8 +35,8 @@ struct ActiveTrace {
   TraceState nodes;
   ActionState actions;
   TraceMetadata metadata;
-  std::shared_ptr<const mch::ParsedBlockLookupSource::InterfaceMap> classifier_interfaces =
-      std::make_shared<const mch::ParsedBlockLookupSource::InterfaceMap>();
+  std::shared_ptr<const mch::TieredLookupSource::InterfaceMap> classifier_interfaces =
+      std::make_shared<const mch::TieredLookupSource::InterfaceMap>();
   std::uint64_t update_seq{0};
   std::optional<std::string> root_account;
   FinalityState finality{FinalityState::Emulated};

@@ -436,6 +436,7 @@ void TraceEmulatorScheduler::commit_finalized_block(
       if (measurement) {
         measurement->set_otel_attribute("ton.trace_state.update_fragments_count",
                                         static_cast<std::int64_t>(update.size()));
+        measurement->start_otel_child_span("insert_trace");
       }
       auto P = td::PromiseCreator::lambda(
           [SelfId = actor_id(this), seqno, trace_root_tx_hash, measurement](td::Result<td::Unit> result) mutable {
