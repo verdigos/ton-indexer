@@ -1,0 +1,1 @@
+Shared `.mch` files contain reusable opcode, predicate, rule, and function declarations. Matcher specs load them with `import "lib/name.mch"`; only declarations marked `export` become visible in the importing file. Library files are imported; `specs/manifest.yaml` lists matcher names in registration order.

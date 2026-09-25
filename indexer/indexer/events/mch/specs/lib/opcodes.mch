@@ -1,0 +1,25 @@
+# Shared opcodes cover auction, NFT, Coffee, DeDust, jetton, PTon, Stonfi, and TONCO matcher flows.
+export opcode AuctionFillUp = 0x370fec51
+export opcode NftOwnershipAssigned = 0x05138d91
+export opcode CoffeeDeploy = 0xc0ffee22
+export opcode CoffeeDepositLiquiditySuccessfulEvent = 0xc0ffee33
+export opcode CoffeeNotification = 0xc0ffee36
+export opcode CoffeePayout = 0xc0ffee32
+export opcode CoffeePayoutInternal = 0xc0ffee21
+export opcode DedustPayout = 0x474f86cf
+export opcode DedustPayoutFromPool = 0xad4eb6f5
+export opcode DedustSwap = 0xea06185d
+export opcode DedustSwapExternal = 0x61ee542d
+export opcode DedustSwapNotification = 0x9c610de3
+export opcode DedustSwapPeer = 0x72aca8aa
+export opcode DedustV2PayNative = 0xa5a7cbf8
+export opcode PayoutMessage = 0x3216ca09
+export opcode JettonBurn = 0x595f07bc
+export opcode JettonBurnNotification = 0x7bdd97de
+export opcode JettonInternalTransfer = 0x178d4519
+export opcode JettonMint = 0x642b7d07
+export opcode JettonNotify = 0x7362d09c
+export opcode JettonTransfer = 0x0f8a7ea5
+export opcode PTonTransfer = 0x01f3835d
+export opcode StonfiV2PayTo = 0x657b54f5
+export opcode ToncoRouterV3PayTo = 0xa1daa96d

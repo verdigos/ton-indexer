@@ -1,37 +1,8 @@
-# EVAA withdrawal matcher corresponding to EvaaWithdrawBlockMatcher.
-#
-# Differences from EvaaWithdrawBlockMatcher:
-# - EVAA user-contract messages prefix the 32-bit opcode with a variable-length
-#   header (version coins + maybe upgrade-info ref + 2 bits), so a plain `op`
-#   node cannot see the opcode. Legacy uses EvaaContractWithHeaderMatcher
-#   (test_self override); here those three nodes are `pred` nodes backed by
-#   host predicates (evaa_user_withdraw_*) with exactly the legacy test logic.
-#   Inline predicates cannot replace them because they require body parsing.
-# - The EVAA service-comment ton_transfer tests the parsed comment inline.
-# - Legacy's withdraw_fail_on_user_excesses GenericMatcher (opcode-set
-#   membership over 4 error opcodes) is an exclusive alternative of the four
-#   concrete `op` nodes sharing one capture (@fail_excess); same block matched,
-#   same consumed set, and only the winning branch binds.
-# - `^` mirrors legacy's ExclusiveOrMatcher use. As an edge target the
-#   exclusivity gate is try_build-inert, so branch order is
-#   first-match-wins exactly like legacy.
-#
-# Capture -> legacy label map:
-#   @master        (anchor)                      | @user      withdraw_on_user
-#   @coll_ok       withdraw_collateralized_success
-#   @jetton_payout jetton_payout                 | @ton_payout ton_payout
-#   @coll_fail     withdraw_collateralized_fail
-#   @fail_excess   withdraw_fail_on_user_excesses
-# (withdraw_success / withdraw_fail_no_funds / withdraw_no_funds_excess are
-# structural-only in the legacy build — no captures needed.)
-#
-# Captures are kept for pattern fidelity but the builder works off the
-# consumed set (Match._mch_consumed): the compiled path's positional capture
-# walker picks an alternative branch by its HEAD test, and @coll_ok/@coll_fail
-# share the head `op EvaaWithdrawCollateralized`, so on fail traces it binds
-# the wrong one (the v2 IR engine binds during the walk and is unaffected).
-# Same situation as stonfi_v2_swap.mch / dedust_swap.mch.
+# Matches EVAA native and jetton supplies, collateral withdrawals, and liquidations.
 
+import "lib/leg.mch"
+
+opcode EvaaSupplyMaster                    = 0x1
 opcode EvaaSupplySuccess                   = 0x11a
 opcode EvaaSupplyFail                      = 0x11f
 opcode EvaaWithdrawMaster                  = 0x2
@@ -48,120 +19,159 @@ opcode EvaaLiquidateUnsatisfied            = 0x31f
 opcode EvaaLiquidateSuccessReport          = 0x311d
 opcode EvaaLiquidateFail                   = 0x311f
 
-predicate evaa_user_withdraw_user
-predicate evaa_user_withdraw_success
-predicate evaa_user_withdraw_fail
-predicate evaa_supply_anchor
-predicate evaa_user_supply
-predicate evaa_liquidate_anchor
-predicate evaa_user_liquidate
-predicate evaa_liquidate_success_header
-predicate evaa_bounced_call
+rule evaa_note = btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
+rule liq_finish = xor { op EvaaLiquidateSuccessReport; op EvaaLiquidateFail; btype jetton_transfer }
+fn evaa_op(b) = (parse? b as EvaaUserOp).op
+fn evaa_refund_reason(code) = (
+    "liquidate_asset_transaction_fees" if code == 0x30e9 else
+    "master_liquidating_too_much" if code == 0x30f1 else
+    "user_withdraw_in_progress" if code == 0x31f0 else
+    "not_liquidatable" if code == 0x31f2 else
+    "min_collateral_not_satisfied" if code == 0x31f3 else
+    "user_not_enough_collateral" if code == 0x31f4 else
+    "user_liquidating_too_much" if code == 0x31f5 else
+    "master_not_enough_liquidity" if code == 0x31f6 else
+    "liquidation_prices_missing" if code == 0x31f7 else
+    "liquidation_execution_crashed" if code == 0x31fe else null
+)
+fn evaa_liquidate_fail(immediate, refund, unsatisfied) = (
+    "immediate_rejection" if immediate != null else
+    evaa_refund_reason(refund.msg.opcode) if refund != null else
+    (evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied.body != null else
+    "liquidation_error" if unsatisfied != null else
+    "master_not_enough_liquidity"
+)
+fn evaa_withdraw_reason(code) = (
+    "withdraw_locked_excess" if code == 0x21e6 else
+    "withdraw_not_collateralized_excess" if code == 0x21e7 else
+    "withdraw_missing_prices_excess" if code == 0x21e8 else
+    "withdraw_execution_crashed" if code == 0x21ec else null
+)
 
-# EVAA supply matcher corresponding to EvaaSupplyBlockMatcher.
-#
-# HYBRID: declarative pattern, one host fn for the build. The shape is small and
-# fully structural, but almost every field of the product is entangled with the
-# TON-vs-jetton discriminator, so the build stays in
-# build_evaa_supply_core — which the legacy matcher also calls, so the two
-# cannot drift.
-#
-# ANCHOR. Supply has TWO wire forms: a plain 0x1 supply_master call (TON), or a
-# jetton transfer whose FORWARD PAYLOAD is a supply_master. A single spec entry
-# can only have one head, and `btype`/`op` cannot see inside a forward payload,
-# so `pred evaa_supply_anchor` covers both exactly as the legacy test_self does
-# (nft_mint.mch's `pred single_contract_deploy` is the same construct). Note the
-# legacy test uses isinstance(JettonTransferBlock), which is dead under the IR
-# engine — the predicate tests btype on both sides instead.
-#
-# `pred evaa_user_supply` is the same variable-header problem the three withdraw
-# predicates have: the user contract prefixes its 32-bit opcode with version
-# coins + a maybe upgrade-info ref + 2 bits, so a plain `op` node cannot see it.
-#
-# The outcome alternative is legacy's OrMatcher order verbatim (success, fail,
-# jetton refund). The three heads are distinct, but the success branch carries a
-# child, so the compiler leaves it an or-node — which is what legacy runs too.
-# The optional ton_transfer under the success arm is the shared
-# evaa_action_comment_matcher, also used by the withdraw matcher below.
-#
-# ORDERING. The 0x1 anchor opcode is claimed by no other spec (grepped over
-# specs/), and the jetton arm binds a prebuilt `btype
-# jetton_transfer`, so the default priority 100 — behind the priority-90 jetton
-# specs — is what this needs, matching legacy (jetton matchers 16-19, evaa
-# supply 54).
+rule evaa_supply_flow =
+    btype call_contract @user where (evaa_op(.) == 0x11)
+      -> or {
+             op EvaaSupplySuccess @success as EvaaSupplySuccess
+               -> maybe $evaa_note
+             op EvaaSupplyFail
+             btype jetton_transfer @refund
+         }
+
+rule evaa_liquidate_flow =
+    or {
+        btype call_contract @user where (evaa_op(.) == 0x31)
+          -> or {
+                 op EvaaLiquidateSatisfied @satisfied_success as EvaaLiquidateSatisfied
+                   -> { btype call_contract where (evaa_op(.) == 0x311a)
+                          -> maybe $evaa_note
+                        $liq_finish }
+                 op EvaaLiquidateSatisfied
+                   -> { op EvaaLiquidateFail
+                        $liq_finish }
+                 op EvaaLiquidateUnsatisfied @unsatisfied as EvaaLiquidateUnsatisfied
+                   -> $liq_finish
+             }
+        xor {
+            btype call_contract @immediate where (.msg.bounced)
+            btype jetton_transfer @immediate
+        }
+    }
+
+# EVAA refunds carry the error code as their opcode.
+rule evaa_liquidate_refund_leg =
+    btype call_contract @refund where (evaa_refund_reason(.msg.opcode) != null)
+
+rule evaa_liquidate_refund =
+    or {
+        btype call_contract @user where (evaa_op(.) == 0x31)
+          -> op [EvaaLiquidateSatisfied, EvaaLiquidateUnsatisfied]
+          -> $evaa_liquidate_refund_leg
+        $evaa_liquidate_refund_leg
+    }
 
 matcher evaa_supply {
-    produces EvaaSupplyBlock
-    entry    @master
+    produces evaa_supply
 
-    pred evaa_supply_anchor @master
-      -> pred evaa_user_supply @user
-        -> ( op EvaaSupplySuccess @success
-               -> maybe btype ton_transfer where (.comment == "EVAA liquidation." or .comment == "EVAA supply." or .comment == "EVAA withdraw.")
-           | op EvaaSupplyFail @fail
-           | btype jetton_transfer @refund )
+    op EvaaSupplyMaster @master -> $evaa_supply_flow
 
-    let supply_fwd = (try parse master.data.forward_payload as EvaaSupplyJettonForward) if master.btype == "jetton_transfer" else null
-    reject when master.btype == "jetton_transfer" and supply_fwd == null
-    let r = evaa_supply_data(consumed, supply_fwd.recipient_address)
-    reject when r == null
+    let mb = parse? master as EvaaSupplyMaster
+    parse user as EvaaSupplyUserHdr
+    reject when mb == null or user.body == null
+    reject when success != null and success.body == null
+    let l = leg(master)
+    let recipient = account(mb.recipient_address) ?? addr_none()
     out {
-        sender:                  r.sender
-        recipient:               r.recipient
-        recipient_contract:      r.recipient_contract
-        amount:                  r.amount
-        is_success:              r.is_success
-        is_ton:                  r.is_ton
-        asset_id:                r.asset_id
-        sender_jetton_wallet:    r.sender_jetton_wallet
-        recipient_jetton_wallet: r.recipient_jetton_wallet
-        master_jetton_wallet:    r.master_jetton_wallet
-        master:                  r.master
-        asset:                   r.asset
+        sender:                  l.source
+        recipient:               recipient
+        recipient_contract:      user.msg.destination
+        amount:                  success.body.amount_supplied if success != null else mb.supply_amount
+        is_success:              success != null
+        is_ton:                  true
+        asset_id:                user.body.asset_id
+        sender_jetton_wallet:    l.source_wallet
+        recipient_jetton_wallet: null
+        master_jetton_wallet:    l.destination_wallet
+        master:                  l.destination
+        asset:                   l.asset
+    }
+}
+
+matcher evaa_supply_jetton {
+    produces evaa_supply
+
+    btype jetton_transfer @master where (.payload_opcode == 0x1) -> $evaa_supply_flow
+
+    let fwd = parse? master.data.forward_payload as EvaaSupplyJettonForward
+    parse user as EvaaSupplyUserHdr
+    reject when fwd == null or user.body == null
+    reject when success != null and success.body == null
+    let l = leg(master)
+    let recipient = account(fwd.recipient_address) ?? addr_none()
+    out {
+        sender:                  l.source
+        recipient:               recipient
+        recipient_contract:      user.msg.destination
+        amount:                  success.body.amount_supplied if success != null else l.amount.value
+        is_success:              success != null
+        is_ton:                  false
+        asset_id:                user.body.asset_id
+        sender_jetton_wallet:    l.source_wallet
+        recipient_jetton_wallet: l.source_wallet if l.source == recipient else (refund.data.receiver_wallet if refund != null and refund.data.sender_wallet == l.destination_wallet else null)
+        master_jetton_wallet:    l.destination_wallet
+        master:                  l.destination
+        asset:                   l.asset
     }
 }
 
 matcher evaa_withdraw {
-    produces EvaaWithdrawBlock
-    entry    @master
+    produces evaa_withdraw
 
-    op EvaaWithdrawMaster @master
-      -> pred evaa_user_withdraw_user @user
-      -> ( op EvaaWithdrawCollateralized @coll_ok
-             -> { ( btype jetton_transfer @jetton_payout
-                  ^ op EvaaWithdrawSuccess @ton_payout
-                      -> maybe btype ton_transfer where (.comment == "EVAA liquidation." or .comment == "EVAA supply." or .comment == "EVAA withdraw.") )
-                  pred evaa_user_withdraw_success -> btype ton_transfer }
-         ^ op EvaaWithdrawCollateralized @coll_fail
-             -> pred evaa_user_withdraw_fail
-             -> op EvaaWithdrawNoFundsExcess
-         ^ ( op EvaaWithdrawLockedExcess @fail_excess
-           ^ op EvaaWithdrawNotCollateralizedExcess @fail_excess
-           ^ op EvaaWithdrawMissingPricesExcess @fail_excess
-           ^ op EvaaWithdrawExecutionCrashed @fail_excess ) )
+    op EvaaWithdrawMaster @master as EvaaWithdrawMaster
+      -> btype call_contract @user where (evaa_op(.) == 0x21)
+      -> or {
+             op EvaaWithdrawCollateralized @coll_ok as EvaaWithdrawCollateralized
+               -> { xor {
+                        btype jetton_transfer @jetton_payout
+                        op EvaaWithdrawSuccess @ton_payout
+                          -> maybe $evaa_note
+                    }
+                    btype call_contract where (evaa_op(.) == 0x211a) -> btype ton_transfer }
+             op EvaaWithdrawCollateralized @coll_fail
+               -> btype call_contract where (evaa_op(.) == 0x211f)
+               -> op EvaaWithdrawNoFundsExcess
+             op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess
+         }
 
-    # Declarative build, field-for-field with build_evaa_withdraw_core.
-    # The IR engine binds @coll_ok / @coll_fail / @fail_excess per the winning
-    # exclusive branch (only the compiled path mis-bound the shared-head
-    # @coll_ok/@coll_fail are not captured), so `coll_ok != null` is the
-    # success test.
-    # exactly like the core's `if withdraw_collateralized_success:` branch.
-    parse master     as EvaaWithdrawMaster
-    parse coll_ok    as EvaaWithdrawCollateralized     # null on the fail branches
-    parse fail_excess as EvaaWithdrawFailExcess         # null unless a user-contract error fired
     let is_ton  = master.body.asset_id == 0x1A4219FE5E60D63AF2A3CC7DCE6FEC69B45C6B5718497A6148E7C232AC87BD8A
     let success = coll_ok != null
-    # Legacy `return None` guards: a collateralized-success outcome must carry the
-    # matching payout leg; a match with no outcome group is impossible structurally
-    # but the last guard mirrors the core's trailing `return None`.
     reject when success and is_ton and ton_payout == null
     reject when success and not is_ton and jetton_payout == null
     reject when coll_ok == null and coll_fail == null and fail_excess == null
     out {
-        owner:                   account(master.msg.source)
-        owner_contract:          account(user.msg.destination)
+        owner:                   master.msg.source
+        owner_contract:          user.msg.destination
         recipient:               account(master.body.recipient_address)
-        master:                  account(master.msg.destination)
+        master:                  master.msg.destination
         asset_id:                master.body.asset_id
         is_ton:                  is_ton
         is_success:              success
@@ -169,48 +179,57 @@ matcher evaa_withdraw {
         asset:                   (ton_asset() if is_ton else jetton_payout.data.asset) if success else null
         recipient_jetton_wallet: account(jetton_payout.data.receiver_wallet) if (success and not is_ton) else null
         master_jetton_wallet:    account(jetton_payout.data.sender_wallet) if (success and not is_ton) else null
-        fail_reason:             null if success else ("withdraw_no_funds_excess" if coll_fail != null else fail_excess.body.reason)
+        fail_reason:             null if success else ("withdraw_no_funds_excess" if coll_fail != null else evaa_withdraw_reason(fail_excess.msg.opcode))
     }
 }
 
-# EVAA liquidation — the legacy structure verbatim. In particular, the two
-# satisfied arms share 0x311, but only the success arm applies the variable
-# user header before testing 0x311a; the fail arm tests plain 0x311f.
 matcher evaa_liquidate {
     produces evaa_liquidate
-    entry    @master
 
-    pred evaa_liquidate_anchor @master
-      -> ( pred evaa_user_liquidate @user
-             -> ( op EvaaLiquidateSatisfied @satisfied_success
-                    -> { pred evaa_liquidate_success_header
-                           -> maybe btype ton_transfer where (.comment == "EVAA liquidation." or .comment == "EVAA supply." or .comment == "EVAA withdraw.")
-                         ( op EvaaLiquidateSuccessReport @finish
-                         ^ op EvaaLiquidateFail @finish
-                         ^ btype jetton_transfer @finish ) }
-                ^ op EvaaLiquidateSatisfied @satisfied_fail
-                    -> { op EvaaLiquidateFail
-                         ( op EvaaLiquidateSuccessReport @finish
-                         ^ op EvaaLiquidateFail @finish
-                         ^ btype jetton_transfer @finish ) }
-                ^ op EvaaLiquidateUnsatisfied @unsatisfied
-                    -> ( op EvaaLiquidateSuccessReport @finish
-                       ^ op EvaaLiquidateFail @finish
-                       ^ btype jetton_transfer @finish ) )
-           ^ ( pred evaa_bounced_call @immediate
-             ^ btype jetton_transfer @immediate ) )
+    btype jetton_transfer @master where (.payload_opcode == 0x3)
+      -> $evaa_liquidate_flow
 
-    let r = evaa_liquidate_data(consumed)
-    reject when r == null
+    let m = parse? master.data.forward_payload as EvaaLiquidateJettonForward
+    let success = satisfied_success != null
+    let s = satisfied_success.body.info.ref
+    let l = leg(master)
+    reject when m == null or (success and satisfied_success.body == null)
     out {
-        liquidator:          r.liquidator
-        borrower:            r.borrower
-        borrower_contract:   r.borrower_contract
-        collateral_asset_id: r.collateral_asset_id
-        collateral_amount:   r.collateral_amount
-        is_success:           r.is_success
-        fail_reason:          r.fail_reason
-        debt_amount:          r.debt_amount
-        debt_asset_id:        r.debt_asset_id
+        liquidator:          l.source
+        borrower:            account(satisfied_success.body.owner_address if success else m.borrower_address) ?? addr_none()
+        borrower_contract:   user.msg.destination
+        collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
+        collateral_amount:   s.collateral_reward if success else 0
+        is_success:          success
+        fail_reason:         null if success else evaa_liquidate_fail(immediate, null, unsatisfied)
+        debt_amount:         s.liquidatable_amount if success else l.amount.value
+    }
+}
+
+matcher evaa_liquidate_ton {
+    produces evaa_liquidate
+
+    op EvaaLiquidateMaster @master as EvaaLiquidateMaster
+      -> or { $evaa_liquidate_flow; $evaa_liquidate_refund }
+
+    let success = satisfied_success != null
+    let s = satisfied_success.body.info.ref
+    let v7 = parse? master as EvaaLiquidateMasterV7
+    # A parsed v7 body is accepted only with zero trailing inline bits and a matching sender.
+    reject when v7 != null and account(v7.liquidator_address) != master.msg.source
+    reject when v7 == null and master.body == null
+    reject when success and satisfied_success.body == null
+    let m = v7 if v7 != null else master.body
+    # EvaaLiquidateMaster carries borrower_address for both outcomes; the ABI does not
+    # equate it with the success reply's owner_address.
+    out {
+        liquidator:          master.msg.source
+        borrower:            account(m.borrower_address) ?? addr_none()
+        borrower_contract:   user.msg.destination
+        collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
+        collateral_amount:   s.collateral_reward if success else 0
+        is_success:          success
+        fail_reason:         null if success else evaa_liquidate_fail(immediate, refund, unsatisfied)
+        debt_amount:         s.liquidatable_amount if success else m.liquidate_incoming_amount
     }
 }

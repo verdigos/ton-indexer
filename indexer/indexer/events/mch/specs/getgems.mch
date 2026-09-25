@@ -1,21 +1,16 @@
-# GetGems purchases consume the NFT and its direct seller payout. Finish/stop
-# purchases peek the sale parent and sibling payout, which the shaper absorbs.
-
-# The two arms are independent; a mixed tree can bind both, with the sibling
-# selected for output while the matching child remains consumed.
+# GetGems purchases cover direct seller payouts and finish or stop payout siblings.
 
 matcher getgems_nft_purchase {
-    produces NftPurchaseBlock
+    produces nft_purchase
     shape    getgems_proxy_insert
-    entry    @nft
 
-    btype nft_transfer @nft where (.is_purchase and .marketplace == "getgems")
-      -> { maybe btype ton_transfer @payout where (.destination == nft.data.real_prev_owner) }
-      <- maybe peek btype ton_transfer where (.comment == "finish" or .comment == "stop")
-           -> { maybe peek btype ton_transfer @sib_payout where (.destination == nft.data.real_prev_owner) }
+    btype nft_transfer @nft where (.is_purchase) {
+        -> { maybe btype ton_transfer @payout where (.destination == nft.data.real_prev_owner) }
+        <- maybe peek btype ton_transfer where (.comment in ["finish", "stop"]) -> { maybe peek btype ton_transfer @sib_payout where (.destination == nft.data.real_prev_owner) }
+    }
 
-    let seller_payout = sib_payout ?? payout
-    reject when seller_payout == null
+    # The sibling payout takes precedence when both payout forms match.
+    require seller_payout = sib_payout ?? payout
     out {
         nft_address:              nft.data.nft.address
         collection_address:       nft.data.nft.collection.address
@@ -33,7 +28,6 @@ matcher getgems_nft_purchase {
         payout_comment:           seller_payout.data.comment
         price:                    nft.data.price
         real_prev_owner:          nft.data.real_prev_owner
-        marketplace:              nft.data.marketplace
         marketplace_address:      nft.data.marketplace_address
     }
 }
