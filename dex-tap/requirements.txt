@@ -1,0 +1,4 @@
+pytoniq-core==0.1.40
+pytvm==0.0.14
+clickhouse-connect==0.8.18
+pytest
