@@ -4,6 +4,8 @@
 #include "AbiBridge.h"
 #include "AbiProjection.h"
 #include "AbiTryFirst.h"
+#include "BlockTree.h"
+#include "GenBuilds.h"
 #include "MsgParse.h"
 #include "Value.h"
 #include "parse/PSlice.h"
@@ -18,12 +20,16 @@
 #include "jetton_wallet_contract_gen.h"
 #include "lots_of_wrappers_gen.h"
 #include "dedust_v2_gen.h"  // DeDust V2 production pair
+#include "evaa_gen.h"
 
 #include "common/refint.h"
+#include "td/utils/base64.h"
 #include "vm/boc.h"
 #include "vm/cells/CellBuilder.h"
 #include "vm/cellslice.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -91,6 +97,10 @@ td::Result<td::Ref<vm::Cell>> store_abi_value(const T &value) {
   vm::CellBuilder cb;
   TRY_STATUS(value.store(cb));
   return cb.finalize();
+}
+
+td::Ref<vm::CellSlice> zero_bits(std::size_t count) {
+  return vm::load_cell_slice_ref(vm::CellBuilder().store_zeroes(count).finalize());
 }
 
 td::Result<td::Ref<vm::Cell>> inline_jetton_transfer(
@@ -496,6 +506,94 @@ void test_abi_rows_dispatch() {
   }
 }
 
+void test_evaa_unsatisfied_reasons() {
+  namespace e = ton_abi::gen::evaa;
+
+  auto info = e::EvaaLiquidateUnsatisfiedInfo::create(
+      {0, td::make_refint(0), 0, empty_cell(), 0, 0x30e9, zero_bits(64)});
+  auto info_cell = store_abi_value(info);
+  check("evaa/unsatisfied_fee/info_store", info_cell.is_ok());
+  if (info_cell.is_error()) return;
+  auto unsatisfied = store_abi_value(e::EvaaLiquidateUnsatisfied::create(
+      {zero_bits(64), test_addr(), test_addr(), zero_bits(256),
+       {std::make_shared<e::EvaaLiquidateUnsatisfiedInfo>(info), info_cell.ok()}}));
+  auto master = store_abi_value(e::EvaaLiquidateMaster::create(
+      {zero_bits(64), test_addr(), td::make_refint(1), zero_bits(64), zero_bits(2), 1}));
+  check("evaa/unsatisfied_fee/body_store", master.is_ok() && unsatisfied.is_ok());
+  if (master.is_error() || unsatisfied.is_error()) return;
+
+  Message master_msg;
+  Message user_msg;
+  Message unsatisfied_msg;
+  EventNode master_node;
+  EventNode user_node;
+  EventNode unsatisfied_node;
+  Block master_block;
+  Block user_block;
+  Block unsatisfied_block;
+  const auto attach = [](Block &block, EventNode &node, Message &msg,
+                         const td::Ref<vm::Cell> &body) {
+    auto boc = td_boc_serialize(body);
+    if (boc.is_error()) return false;
+    msg.content = MsgContent{"", td::base64_encode(td::Slice(boc.ok()))};
+    node.msg = &msg;
+    block.event_nodes = {&node};
+    block.btype = "call_contract";
+    return true;
+  };
+  master_msg.source = kTestAddrCanon;
+  user_msg.destination = kTestAddrCanon;
+  bool attached = attach(master_block, master_node, master_msg, master.ok()) &&
+                  attach(user_block, user_node, user_msg, empty_cell()) &&
+                  attach(unsatisfied_block, unsatisfied_node, unsatisfied_msg, unsatisfied.ok());
+  check("evaa/unsatisfied_fee/body_attach", attached);
+  if (!attached) return;
+
+  std::array<Value, 6> slots{Value::make_block(&master_block),
+                             Value::make_block(&user_block),
+                             Value::null(),
+                             Value::make_block(&unsatisfied_block),
+                             Value::null(),
+                             Value::null()};
+  BuildEnv env;
+  env.anchor = &master_block;
+  env.slots = slots.data();
+  env.n_slots = slots.size();
+  const auto &builds = gen_builds_ir();
+  const auto it = std::find_if(builds.begin(), builds.end(), [](const GenBuild &build) {
+    return std::string(build.name) == "evaa_liquidate_ton";
+  });
+  check("evaa/unsatisfied_fee/build_registered", it != builds.end());
+  if (it == builds.end()) return;
+
+  auto outcome = it->fn(env);
+  check("evaa/unsatisfied_fee/reason",
+        !outcome.is_rejected &&
+            fld(outcome.data, "fail_reason") &&
+            fld(outcome.data, "fail_reason")->t == VType::Str &&
+            fld(outcome.data, "fail_reason")->str == "liquidate_asset_transaction_fees");
+
+  auto unsatisfied_slice = vm::load_cell_slice(unsatisfied.ok());
+  unsatisfied_slice.fetch_ref();
+  vm::CellBuilder truncated;
+  bool truncated_stored = truncated.append_cellslice_bool(unsatisfied_slice) &&
+                          truncated.store_ref_bool(empty_cell());
+  check("evaa/unsatisfied_truncated/body_store", truncated_stored);
+  if (!truncated_stored) return;
+  auto truncated_body = truncated.finalize();
+  check("evaa/unsatisfied_truncated/body_unparseable",
+        parse_message_body("EvaaLiquidateUnsatisfied", truncated_body).is_error());
+  check("evaa/unsatisfied_truncated/body_attach",
+        attach(unsatisfied_block, unsatisfied_node, unsatisfied_msg, truncated_body));
+
+  outcome = it->fn(env);
+  check("evaa/unsatisfied_truncated/reason",
+        !outcome.is_rejected &&
+            fld(outcome.data, "fail_reason") &&
+            fld(outcome.data, "fail_reason")->t == VType::Str &&
+            fld(outcome.data, "fail_reason")->str == "liquidation_error");
+}
+
 // DeDust swap notification: Cell<DedustSwapInfo> preserves both the decoded
 // payload and the exact raw child cell through generated load + registry parse.
 void test_dedust_swap_notification_cellof() {
@@ -642,6 +740,7 @@ int run_abi_bridge_test() {
   test_dedust_v2_claim_reward();
   test_registry_policy();
   test_abi_rows_dispatch();
+  test_evaa_unsatisfied_reasons();
   std::printf("ABI-BRIDGE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

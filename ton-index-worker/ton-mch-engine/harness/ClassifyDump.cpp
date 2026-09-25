@@ -1,6 +1,8 @@
-#include "Classify.h"
+#include "ClassifyDump.h"
 
 #include "ActionBuild.h"
+#include "ActionJson.h"
+#include "ActionPayload.h"
 #include "BlockTree.h"
 #include "BuildDriver.h"
 #include "ClassifyCore.h"
@@ -12,10 +14,13 @@
 #include "fixtures/Render.h"
 #include "GenMatchers.h"
 #include "MsgParse.h"
+#include "RedisActionSerialize.h"
+#include "emu/EmuTypes.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/crypto.h"
+#include "td/utils/misc.h"
 
 #include "common/refint.h"
 
@@ -39,9 +44,7 @@ namespace mch {
 
 namespace {
 
-// Render + print a collected CoreAction from its FINAL (post-pass) state. The
-// aux/flows strings (fire-time) are rendered HERE from the core's raw block/
-// flow lists. The core stays rendering-agnostic.
+// Render + print a collected CoreAction from its final post-pass state.
 void emit_action(const CoreAction &a) {
   std::vector<std::string> ck;
   for (Block *cb : a.produced->children_blocks) ck.push_back(block_key(cb));
@@ -53,19 +56,11 @@ void emit_action(const CoreAction &a) {
   }
   consumed_s += "]";
 
-  std::string aux_s = "[";
-  for (std::size_t i = 0; i < a.aux.size(); i++) {
-    if (i) aux_s += ",";
-    aux_s += block_key(a.aux[i]);
-  }
-  aux_s += "]";
-
   std::printf("ACTION %s anchor=%s btype=%s failed=%d broken=%d data=%s "
-              "consumed=%s auto=%s\n",
+              "consumed=%s\n",
               a.matcher_name.c_str(), block_key(a.anchor).c_str(), a.produced->btype.c_str(),
               a.produced->failed ? 1 : 0, a.produced->broken ? 1 : 0,
-              render_value(a.produced->data).c_str(), consumed_s.c_str(),
-              aux_s.c_str());
+              render_value(a.produced->data).c_str(), consumed_s.c_str());
 }
 
 }  // namespace
@@ -79,8 +74,8 @@ std::string render_action(const Action &a, const std::string &matcher, const std
   auto scalar = [&](const char *k, const std::string &text) {
     out += std::string("    ") + k + ": " + text + "\n";
   };
-  auto strings = [&](const char *k, std::vector<std::string> v) {
-    std::sort(v.begin(), v.end());
+  auto strings = [&](const char *k, std::vector<std::string> v, bool sorted = true) {
+    if (sorted) std::sort(v.begin(), v.end());
     if (v.empty()) {
       scalar(k, "[]");
       return;
@@ -98,8 +93,9 @@ std::string render_action(const Action &a, const std::string &matcher, const std
                                         "asset2", "asset2_secondary", "amount", "value"};
   std::map<std::string, const Value *> fields;
 #define MCH_COLLECT_FIELD(name) fields.emplace(#name, &a.name);
-  MCH_ACTION_VALUE_FIELDS(MCH_COLLECT_FIELD)
+  MCH_ACTION_COLUMNS(MCH_COLLECT_FIELD)
 #undef MCH_COLLECT_FIELD
+  fields.emplace("data", &a.data);
   for (const char *k : kAlways) {
     render_yaml_field(k, *fields.at(k), 4, out);
     fields.erase(k);
@@ -117,7 +113,7 @@ std::string render_action(const Action &a, const std::string &matcher, const std
   for (const auto &kv : fields) {  // composites + extra, sorted, present only
     if (!kv.second->is_null()) render_yaml_field(kv.first, *kv.second, 4, out);
   }
-  strings("tx_hashes", a.tx_hashes);
+  strings("tx_hashes", a.tx_hashes, false);
   strings("accounts", a.accounts);
   scalar("start_lt", std::to_string(a.start_lt));
   scalar("end_lt", std::to_string(a.end_lt));
@@ -180,11 +176,18 @@ std::string fixture_header(const std::string &trace_id, const FixtureMeta *meta)
 int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory, const std::string &output_dir,
-             const std::string &fixtures_manifest) {
-  const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
+             const std::string &fixtures_manifest,
+             const std::vector<CompiledMatcher> *injected_matchers,
+             const ClassifySetup *injected_setup) {
+  const std::vector<CompiledMatcher> &matchers =
+      injected_matchers != nullptr ? *injected_matchers : gen_matchers_ir();
   warn_missing_artifact_parsers(matchers);
-  ClassifySetup setup = prepare_classify(matchers);
-  if (setup.table_missing || setup.fn_missing) {
+  ClassifySetup generated_setup;
+  if (injected_setup == nullptr) {
+    generated_setup = prepare_classify(matchers);
+  }
+  const ClassifySetup &setup = injected_setup != nullptr ? *injected_setup : generated_setup;
+  if (!setup.error.empty()) {
     std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;
   }
@@ -261,7 +264,7 @@ int run_dump(const std::vector<std::string> &paths,
     }
     std::shared_ptr<LookupSource> src =
         lookup_factory ? lookup_factory(ctx)
-                       : std::make_shared<FixtureLookupSource>(&ctx.trace.interfaces);
+                       : std::make_shared<FixtureLookupSource>(&ctx.trace.interfaces, &ctx.trace.code_hashes);
     ClassifyResult res = classify_trace(ctx, matchers, setup, *src);
     if (res.failure) {
       // Per-trace exception boundary: regular actions discarded, the failure
@@ -293,7 +296,7 @@ int run_dump(const std::vector<std::string> &paths,
       }
       for (const ActionRow &r : res.action_rows) {
         Action act;
-        if (!build_action(r, act)) continue;  // btype outside ported set
+        if (!build_action(r, act)) continue;  // btype outside the supported set
         auto matcher = matcher_names.find(r.block);
         const std::string matcher_name =
             matcher != matcher_names.end() ? *matcher->second : std::string("-");
@@ -326,6 +329,80 @@ int run_actions(const std::vector<std::string> &paths, const std::string &output
                 const std::string &fixtures_manifest) {
   return run_dump(paths, /*actions_mode=*/true, load_trace_context, {}, output_dir,
                   fixtures_manifest);
+}
+
+int run_action_payload_dump(const std::vector<std::string> &paths, const std::string &output_path) {
+  namespace fs = std::filesystem;
+  std::error_code output_error;
+  const auto parent = fs::path(output_path).parent_path();
+  if (!parent.empty()) fs::create_directories(parent, output_error);
+  if (output_error) {
+    std::fprintf(stderr, "cannot create payload fixture directory %s: %s\n",
+                 parent.string().c_str(), output_error.message().c_str());
+    return 2;
+  }
+  std::ofstream output(output_path, std::ios::binary);
+  if (!output) {
+    std::fprintf(stderr, "cannot open payload fixture output %s\n", output_path.c_str());
+    return 2;
+  }
+  const auto &matchers = gen_matchers_ir();
+  const auto setup = prepare_classify(matchers);
+  if (!setup.error.empty()) {
+    std::fprintf(stderr, "%s\n", setup.error.c_str());
+    return 2;
+  }
+  std::vector<std::string> fixtures;
+  for (const auto &path : paths) {
+    std::error_code error;
+    if (fs::is_directory(path, error)) {
+      std::vector<std::string> names;
+      for (const auto &entry : fs::directory_iterator(path)) {
+        if (entry.path().extension() == ".lz4") names.push_back(entry.path().string());
+      }
+      std::sort(names.begin(), names.end());
+      fixtures.insert(fixtures.end(), names.begin(), names.end());
+    } else {
+      fixtures.push_back(path);
+    }
+  }
+  for (const auto &fixture : fixtures) {
+    auto loaded = load_trace_context(fixture);
+    if (loaded.is_error()) {
+      std::fprintf(stderr, "cannot load %s: %s\n", fixture.c_str(), loaded.error().message().c_str());
+      return 2;
+    }
+    auto ctx = loaded.move_as_ok();
+    FixtureLookupSource source(&ctx.trace.interfaces, &ctx.trace.code_hashes);
+    auto result = classify_trace(ctx, matchers, setup, source);
+    std::vector<Action> actions;
+    const auto &rows = result.failure ? result.fallback_rows : result.action_rows;
+    for (const auto &row : rows) {
+      Action action;
+      if (build_action(row, action)) actions.push_back(std::move(action));
+    }
+    if (!result.failure && result.unknown_trace) actions.push_back(create_unknown_action(ctx.trace));
+
+    EmuTraceView view;
+    view.trace_id = ctx.trace.trace_id;
+    view.nodes.resize(1);
+    view.nodes.front().finality = EmuFinality::finalized;
+    for (const auto &action : actions) {
+      const auto payload = action_payload_bytes(action);
+      const auto wire = serialize_redis_actions({action}, view);
+      td::JsonBuilder builder;
+      {
+        auto line = builder.enter_object();
+        line("fixture_id", fs::path(fixture).stem().string());
+        line("action_id", action.action_id)("type", action.type);
+        line("data", td::JsonRaw(action_data_json(action)));
+        line("payload_hex", td::hex_encode(payload));
+        line("wire_hex", td::hex_encode(wire));
+      }
+      output << builder.string_builder().as_cslice().str() << '\n';
+    }
+  }
+  return 0;
 }
 
 }  // namespace mch
