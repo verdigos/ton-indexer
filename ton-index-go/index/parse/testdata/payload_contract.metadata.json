@@ -1,28 +1,28 @@
 {
-  "api_bytes": 4354882,
-  "api_reference": "generated with HEAD Go reader",
-  "api_sha256": "a960b834b1667961774ac8aa63d0e8de4b549ea88ec34cdbf001b93c8c314a1d",
-  "engine_binary_mtime_utc": "2026-09-24T19:37:18.108788+00:00",
-  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-e824480b-764880d.jsonl -T indexer/tests/traces",
+  "api_bytes": 4352652,
+  "api_reference": "_analysis-scratch/payload-wave/regen/preserve-reference.jsonl",
+  "api_sha256": "caa7c2c166e6b19e71a1216efa9249c2d0b4ff46b907c68b57e9baa2ed00dfd4",
+  "engine_binary_mtime_utc": "2026-09-24T23:35:47.545278+00:00",
+  "export_command": "build/devtools-bin/ton-mch-dev-engine --action-payload-out _analysis-scratch/payload-wave/baseline/payload-6241daf5-401e51e.jsonl -T indexer/tests/traces",
   "generator": "devtools/bk-tools/generate_baseline.py",
-  "generator_command": "python3 devtools/bk-tools/generate_baseline.py --create-head-api",
+  "generator_command": "python3 devtools/bk-tools/generate_baseline.py --preserve-api-from _analysis-scratch/payload-wave/regen/preserve-reference.jsonl",
   "golden_files": 294,
-  "golden_set_sha256": "17dae4e4b9f010c975fbe356f547cdf06b3e63ddc82ac443de60f7a066fa74ed",
-  "gzip_bytes": 804572,
-  "gzip_sha256": "c46f6242426abd41004602ab6ceec83521f237d5a622e4cf4a2eb68f655e8e3d",
-  "main_sha": "e824480b",
-  "overlay_sha": "764880d",
-  "payload_bytes": 2848961,
-  "payload_sha256": "bd302047c8b57fbd6253ed83978e3af7227a6499a78d2545a48803a44e7e2441",
-  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-e824480b-764880d.jsonl ../_analysis-scratch/payload-wave/baseline/api-e824480b-764880d.jsonl",
+  "golden_set_sha256": "0b3f5dd4fcb67ce7e320117a7979431330bed263624ea2736105e88d8dd658d1",
+  "gzip_bytes": 804601,
+  "gzip_sha256": "72424488412fad9c268d4358250cb96178ec63ffbf6d32a49a7843e414c3adf8",
+  "main_sha": "6241daf5",
+  "overlay_sha": "401e51e",
+  "payload_bytes": 2847817,
+  "payload_sha256": "825cea2440a5ffb260464955c981760060ce81dbebddd3c00a21dd1e52537750",
+  "render_command": "GOCACHE=../build/go-cache GOPROXY=off go run ../devtools/bk-tools/render_payload_api.go ../_analysis-scratch/payload-wave/baseline/payload-6241daf5-401e51e.jsonl ../_analysis-scratch/payload-wave/baseline/api-6241daf5-401e51e.jsonl ../_analysis-scratch/payload-wave/regen/preserve-reference.jsonl",
   "render_cwd": "ton-index-go",
   "repo_data": "ton-index-go/index/parse/testdata/payload_contract.jsonl.gz",
   "repo_metadata": "ton-index-go/index/parse/testdata/payload_contract.metadata.json",
-  "rows": 1220,
+  "rows": 1218,
   "rows_by_type": {
     "auction_bid": 3,
     "auction_outbid": 2,
-    "call_contract": 594,
+    "call_contract": 591,
     "change_dns": 5,
     "change_wallet_key": 2,
     "cocoon_client_change_secret_hash": 1,
@@ -59,7 +59,7 @@
     "gasless_request": 6,
     "jetton_burn": 4,
     "jetton_mint": 10,
-    "jetton_swap": 52,
+    "jetton_swap": 53,
     "jetton_transfer": 68,
     "jvault_claim": 1,
     "jvault_stake": 5,
@@ -114,9 +114,9 @@
       "rows": 2
     },
     "call_contract": {
-      "bytes": 1481465,
-      "gzip_bytes": 247688,
-      "rows": 594
+      "bytes": 1474082,
+      "gzip_bytes": 246521,
+      "rows": 591
     },
     "change_dns": {
       "bytes": 17747,
@@ -299,9 +299,9 @@
       "rows": 10
     },
     "jetton_swap": {
-      "bytes": 429196,
-      "gzip_bytes": 108332,
-      "rows": 52
+      "bytes": 434309,
+      "gzip_bytes": 109252,
+      "rows": 53
     },
     "jetton_transfer": {
       "bytes": 501082,
@@ -484,8 +484,8 @@
       "rows": 81
     },
     "tonco_deploy_pool": {
-      "bytes": 23985,
-      "gzip_bytes": 5110,
+      "bytes": 24025,
+      "gzip_bytes": 5113,
       "rows": 5
     },
     "unknown": {

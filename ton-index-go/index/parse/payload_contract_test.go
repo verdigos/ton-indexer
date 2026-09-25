@@ -14,7 +14,7 @@ import (
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 )
 
-const contractRows = 1220
+const contractRows = 1218
 
 var contractPath = flag.String("payload-contract-file", "testdata/payload_contract.jsonl.gz", "API contract baseline")
 
