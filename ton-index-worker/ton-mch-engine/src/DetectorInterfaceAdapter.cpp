@@ -148,15 +148,11 @@ schema::MultisigOrderData to_schema(const MultisigOrder::Result &r) {
   return v;
 }
 
-void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const schema::AccountState &state) {
-  td::Bits256 code_hash;
-  if (state.code_hash) {
-    code_hash = *state.code_hash;
-  } else if (state.code.not_null()) {
-    code_hash = td::Bits256{state.code->get_hash().bits()};
-  } else {
-    return;
-  }
+schema::TelemintData to_schema(const TelemintContract::Result &r) {
+  return schema::TelemintData{.address = r.address};
+}
+
+void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const td::Bits256 &code_hash) {
   if (auto *v = std::get_if<schema::NFTItemDataV2>(&iface)) {
     v->code_hash = code_hash;
   } else if (auto *v = std::get_if<schema::GetGemsNftFixPriceSaleData>(&iface)) {
@@ -165,6 +161,14 @@ void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const schema::Accou
     v->code_hash = code_hash;
   } else if (auto *v = std::get_if<schema::GetGemsNftAuctionData>(&iface)) {
     v->code_hash = code_hash;
+  }
+}
+
+void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const schema::AccountState &state) {
+  if (state.code_hash) {
+    set_nft_code_hash(iface, *state.code_hash);
+  } else if (state.code.not_null()) {
+    set_nft_code_hash(iface, td::Bits256{state.code->get_hash().bits()});
   }
 }
 

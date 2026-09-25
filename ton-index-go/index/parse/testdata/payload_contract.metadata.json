@@ -1,15 +1,15 @@
 {
-  "api_bytes": 4375326,
-  "api_sha256": "e9bc88e7bc3f13dd8fe8a725f7cac087444e47599f96c5329da6484973603f76",
-  "engine_binary_sha256": "1aaee13e46564b5f08d317ea1ba3ce4c9ca71dd78151f37fb8b77da0c05d0136",
-  "golden_files": 296,
-  "golden_set_sha256": "c46265213b90eca0087e7843b346223baecf298634277cc8424e9d2b0cc6667a",
-  "gzip_bytes": 808500,
-  "gzip_sha256": "57f34b7af88854fe1e1cb786b92c0f7c8822055a3220b0b832804de4fe3fb6d5",
-  "main_sha": "b5836eee",
-  "payload_bytes": 2865147,
-  "payload_sha256": "d51adf2120cd4a53b54309cec65bcd342aec0c4242177a421034c2af18f05f65",
-  "rows": 1224,
+  "api_bytes": 4391630,
+  "api_sha256": "88af9a679ea62920fba61322366876a13b9588f8052632e4ec4227eafc1cbb7a",
+  "engine_binary_sha256": "a371a91b80430bbd8c381b6beb3e1632f85ddb5a47ec76753cb201b333102f37",
+  "golden_files": 297,
+  "golden_set_sha256": "d1dccce89609efa0222ad51c610b3be13889528a73201230f9eaac8911b91b39",
+  "gzip_bytes": 812073,
+  "gzip_sha256": "6bde4f714c6ab5295aeb2d92afe5ac8d747409b12ab9119a78510fbdb9dce1cd",
+  "main_sha": "9036569b",
+  "payload_bytes": 2875492,
+  "payload_sha256": "d145ae00cdd0e77a6f4d59e9970e6511dcde8320f70c33b39e13fdc714a827f3",
+  "rows": 1229,
   "rows_by_type": {
     "auction_bid": 3,
     "auction_outbid": 2,
@@ -35,11 +35,11 @@
     "coffee_staking_claim_rewards": 2,
     "coffee_staking_deposit": 2,
     "coffee_staking_withdraw": 1,
-    "contract_deploy": 110,
+    "contract_deploy": 114,
     "dedust_v2_claim_fees": 5,
     "dedust_v2_claim_reward": 3,
     "delete_dns": 1,
-    "dex_deposit_liquidity": 39,
+    "dex_deposit_liquidity": 40,
     "dex_withdraw_liquidity": 17,
     "dns_purchase": 9,
     "dns_release": 5,
@@ -216,9 +216,9 @@
       "rows": 1
     },
     "contract_deploy": {
-      "bytes": 267369,
-      "gzip_bytes": 66342,
-      "rows": 110
+      "bytes": 277141,
+      "gzip_bytes": 68413,
+      "rows": 114
     },
     "dedust_v2_claim_fees": {
       "bytes": 27094,
@@ -236,9 +236,9 @@
       "rows": 1
     },
     "dex_deposit_liquidity": {
-      "bytes": 256348,
-      "gzip_bytes": 77082,
-      "rows": 39
+      "bytes": 262880,
+      "gzip_bytes": 79668,
+      "rows": 40
     },
     "dex_withdraw_liquidity": {
       "bytes": 106566,

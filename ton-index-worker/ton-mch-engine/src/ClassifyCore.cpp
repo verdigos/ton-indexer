@@ -38,25 +38,21 @@ bool outcomes_allow_replacement(const BlockClassification &bc) {
   });
 }
 
-std::vector<Block *> gather_blocks(Block *root) {
-  std::vector<Block *> out;
-  std::unordered_set<Block *> seen;
-  std::deque<Block *> queue{root};
-  while (!queue.empty()) {
-    Block *cur = queue.front();
-    queue.pop_front();
-    if (!seen.insert(cur).second) {
-      continue;
-    }
-    out.push_back(cur);
-    std::vector<Block *> next = cur->next_blocks;
-    std::stable_sort(next.begin(), next.end(),
-                     [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
-    for (Block *block : next) {
-      queue.push_back(block);
-    }
+std::string exception_message(std::exception_ptr error) {
+  if (!error) return "unknown exception";
+  try {
+    std::rethrow_exception(error);
+  } catch (const vm::VmError &e) {
+    return e.get_msg();
+  } catch (const vm::VmNoGas &e) {
+    return e.get_msg();
+  } catch (const vm::VmVirtError &e) {
+    return e.get_msg();
+  } catch (const std::exception &e) {
+    return e.what();
+  } catch (...) {
+    return "unknown exception";
   }
-  return out;
 }
 
 namespace {
@@ -68,26 +64,13 @@ Block *wrap_root(BlockArena &arena, Block *root) {
 }
 
 std::pair<std::string, FailureCategory> exception_failure(std::exception_ptr error,
-                                                          bool lookup_infra,
-                                                          bool prefix_exception) {
-  try {
-    std::rethrow_exception(error);
-  } catch (const vm::VmError &e) {
-    return {std::string("vm exception: ") + e.get_msg(), FailureCategory::engine_fault};
-  } catch (const vm::VmNoGas &e) {
-    return {std::string("vm exception: ") + e.get_msg(), FailureCategory::engine_fault};
-  } catch (const vm::VmVirtError &e) {
-    return {std::string("vm exception: ") + e.get_msg(), FailureCategory::engine_fault};
-  } catch (const std::exception &e) {
-    std::string reason = prefix_exception ? std::string("exception: ") + e.what() : e.what();
-    const auto category = lookup_infra &&
-                                  reason.find("two-phase lookup did not converge") != std::string::npos
-                              ? FailureCategory::lookup_infra_fail
-                              : FailureCategory::engine_fault;
-    return {std::move(reason), category};
-  } catch (...) {
-    return {"unknown exception", FailureCategory::engine_fault};
-  }
+                                                          bool lookup_infra) {
+  std::string reason = exception_message(error);
+  const auto category = lookup_infra &&
+                                reason.find("two-phase lookup did not converge") != std::string::npos
+                            ? FailureCategory::lookup_infra_fail
+                            : FailureCategory::engine_fault;
+  return {std::move(reason), category};
 }
 
 // The flat spine list in canonical BFS order: `root` plus everything reachable
@@ -195,9 +178,8 @@ bool try_build(const CompiledMatcher &m, const BuildFn &fn, Block *block,
 }
 
 // Promote marker blocks of one btype (contract_deploy, gasless_request) nested
-// in children to the top-level spine. The index loop must see appends (it
-// re-scans the promoted markers). A no-op for the classify/actions dump, which
-// never walks the spine.
+// in children to the top-level spine so serialization includes them. The index
+// loop must see appends because it re-scans promoted markers.
 void unwind_markers(std::vector<Block *> &blocks, const char *btype) {
   std::set<Block *> visited;
   for (std::size_t i = 0; i < blocks.size(); i++) {  // index loop: sees appends
@@ -545,7 +527,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // a leaf no matcher consumed emits a basic row.
     result.action_rows = serialize_rows(spine, "");
   } catch (...) {
-    auto [reason, category] = exception_failure(std::current_exception(), true, false);
+    auto [reason, category] = exception_failure(std::current_exception(), true);
     result.failure = true;
     result.failure_reason = std::move(reason);
     result.failure_category = category;
@@ -595,10 +577,9 @@ SchemaClassifyResult classify_schema_trace(
     for (const ActionRow &row : core) {
       Action action;
       if (!build_action(row, action)) {
-        result.unsupported_action_rows++;
         continue;
       }
-      result.scrubbed += scrub_arena_refs(action);
+      (void)scrub_arena_refs(action);
       // Only payload validation is isolated per action. Engine faults still
       // reach the trace-level handler below.
       try {
@@ -614,12 +595,6 @@ SchemaClassifyResult classify_schema_trace(
       result.rows.push_back(std::move(action));
     }
 
-    // Collect all fired matchers, including absorbed matches.
-    std::set<std::string> names;
-    for (const CoreAction &action : classified.actions) {
-      names.insert(action.matcher_name);
-    }
-    result.matcher_names.assign(names.begin(), names.end());
     if (classified.unknown_trace ||
         (!classified.failure && result.rows.empty() && result.skipped_payload_actions > 0)) {
       result.rows.push_back(create_unknown_action(ctx.trace));
@@ -631,13 +606,12 @@ SchemaClassifyResult classify_schema_trace(
     completed = true;
   } catch (...) {
     result.outcome = TraceOutcome::terminal_failure_empty;
-    auto [reason, category] = exception_failure(std::current_exception(), false, true);
+    auto [reason, category] = exception_failure(std::current_exception(), false);
     result.failure_reason = std::move(reason);
     result.failure_category = category;
   }
   if (!completed) {
     result.rows.clear();
-    result.matcher_names.clear();
     result.unknown_row = false;
   }
   return result;

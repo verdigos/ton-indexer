@@ -16,6 +16,7 @@ schema::DedustPoolData to_schema(const DedustPoolDetector::Result &r);
 schema::NominatorPoolData to_schema(const NominatorPoolContract::Result &r);
 schema::GetGemsNftFixPriceSaleV4Data to_schema(const GetGemsNftFixPriceSaleV4::Result &r);
 schema::MultisigOrderData to_schema(const MultisigOrder::Result &r);
+schema::TelemintData to_schema(const TelemintContract::Result &r);
 
 // No detector Result carries a code hash, but the NFT shapes need one: the
 // GetGems sale/auction version tables key on it and the DNS-item test reads it.
@@ -23,5 +24,6 @@ schema::MultisigOrderData to_schema(const MultisigOrder::Result &r);
 // leaves every other variant untouched; an account without code stays zero,
 // which renders as null (a miss) rather than a wrong version string.
 void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const schema::AccountState &state);
+void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const td::Bits256 &code_hash);
 
 }  // namespace mch

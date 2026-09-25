@@ -80,5 +80,6 @@ class BatchRunner : public td::actor::Actor {
   std::uint64_t total_actions_emitted_{0};
   std::uint64_t skipped_payload_actions_{0};
   mch::TieredLookupSource::LookupStats lookup_stats_;
+  mch::Tier2Stats tier2_stats_;
   std::vector<std::string> failed_trace_keys_;
 };

@@ -41,7 +41,7 @@ class TieredLookupSource : public LookupSource {
   // (tier2_hits / (tier1_hits + tier2_hits)). Does not affect fetch() results.
   struct LookupStats {
     std::size_t tier1_hits{0};  // served from account_interfaces_ (in-block)
-    std::size_t tier2_hits{0};  // served from the tier-2 fallback (DB/kvrocks / fixture)
+    std::size_t tier2_hits{0};  // served from the cell-db fallback
     // Tier-2 hit attribution per lookup kind. Only served kinds get an entry,
     // and the values sum to `tier2_hits` exactly.
     std::map<std::string, std::size_t> tier2_hits_by_kind;
@@ -50,6 +50,19 @@ class TieredLookupSource : public LookupSource {
     // gap (a kind with no tier-1 source) from a real resolution failure. Only
     // missed kinds get an entry, and the values sum to `misses` exactly.
     std::map<std::string, std::size_t> misses_by_kind;
+
+    LookupStats &operator+=(const LookupStats &other) {
+      tier1_hits += other.tier1_hits;
+      tier2_hits += other.tier2_hits;
+      misses += other.misses;
+      for (const auto &[kind, count] : other.tier2_hits_by_kind) {
+        tier2_hits_by_kind[kind] += count;
+      }
+      for (const auto &[kind, count] : other.misses_by_kind) {
+        misses_by_kind[kind] += count;
+      }
+      return *this;
+    }
   };
   const LookupStats &stats() const { return stats_; }
 

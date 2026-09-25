@@ -19,6 +19,12 @@ namespace mch {
 struct Tier2Stats {
   std::size_t fetched{0};    // celldb account reads issued
   std::size_t memo_hits{0};  // repeat (kind, address) served from the memo
+
+  Tier2Stats &operator+=(const Tier2Stats &other) {
+    fetched += other.fetched;
+    memo_hits += other.memo_hits;
+    return *this;
+  }
 };
 
 class CelldbTier2Lookup {

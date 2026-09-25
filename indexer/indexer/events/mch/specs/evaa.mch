@@ -66,7 +66,7 @@ rule evaa_liquidate_flow =
 
 # EVAA refunds carry the error code as their opcode.
 rule evaa_liquidate_refund_leg =
-    btype call_contract @refund where (.msg.opcode in [0x30e9, 0x30f1, 0x31f0, 0x31f2, 0x31f3, 0x31f4, 0x31f5, 0x31f6, 0x31f7, 0x31fe])
+    btype call_contract @refund where (evaa_refund_reason(.msg.opcode) != null)
 
 rule evaa_liquidate_refund =
     or {
@@ -188,7 +188,7 @@ matcher evaa_liquidate {
         collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
         collateral_amount:   s.collateral_reward if success else 0
         is_success:          success
-        fail_reason:         null if success else ("immediate_rejection" if immediate != null else ((unsatisfied.body.reason ?? "liquidation_error") if unsatisfied != null else "master_not_enough_liquidity"))
+        fail_reason:         null if success else ("immediate_rejection" if immediate != null else ((evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied != null else "master_not_enough_liquidity"))
         debt_amount:         s.liquidatable_amount if success else l.amount.value
     }
 }
@@ -214,7 +214,7 @@ matcher evaa_liquidate_ton {
         collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
         collateral_amount:   s.collateral_reward if success else 0
         is_success:          success
-        fail_reason:         null if success else ("immediate_rejection" if immediate != null else (evaa_refund_reason(refund.msg.opcode) if refund != null else ((unsatisfied.body.reason ?? "liquidation_error") if unsatisfied != null else "master_not_enough_liquidity")))
+        fail_reason:         null if success else ("immediate_rejection" if immediate != null else (evaa_refund_reason(refund.msg.opcode) if refund != null else ((evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied != null else "master_not_enough_liquidity")))
         debt_amount:         s.liquidatable_amount if success else m.liquidate_incoming_amount
     }
 }

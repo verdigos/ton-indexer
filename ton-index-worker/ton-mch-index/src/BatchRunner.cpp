@@ -18,24 +18,6 @@
 #include <sstream>
 #include <utility>
 
-namespace {
-
-const char *category_name(mch::FailureCategory category) {
-  switch (category) {
-    case mch::FailureCategory::none:
-      return "none";
-    case mch::FailureCategory::lookup_infra_fail:
-      return "lookup_infra_fail";
-    case mch::FailureCategory::engine_fault:
-      return "engine_fault";
-    case mch::FailureCategory::malformed_trace:
-      return "malformed_trace";
-  }
-  return "?";
-}
-
-}  // namespace
-
 BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
                          td::actor::ActorId<ParseManager> parse_manager,
                          td::actor::ActorId<TraceAssembler> trace_assembler,
@@ -227,26 +209,17 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   auto run = mch::classify(*prep_, trace_key, txs, tier1_map,
                            tier2_enabled_ ? &view.shard_states : nullptr, view.config);
   auto &classified = run.classified;
-  const auto &stats = run.lookup_stats;
-  lookup_stats_.tier1_hits += stats.tier1_hits;
-  lookup_stats_.tier2_hits += stats.tier2_hits;
-  for (const auto &[kind, count] : stats.tier2_hits_by_kind) {
-    lookup_stats_.tier2_hits_by_kind[kind] += count;
-  }
-  lookup_stats_.misses += stats.misses;
-  for (const auto &[kind, count] : stats.misses_by_kind) {
-    lookup_stats_.misses_by_kind[kind] += count;
-  }
+  lookup_stats_ += run.lookup_stats;
+  tier2_stats_ += run.tier2_stats;
 
   ++classification_outcomes_[classified.outcome];
   skipped_payload_actions_ += classified.skipped_payload_actions;
   LOG(DEBUG) << "trace=" << trace_key << " outcome=" << mch::trace_outcome_name(classified.outcome);
-  if (classified.outcome == mch::TraceOutcome::fallback ||
-      classified.outcome == mch::TraceOutcome::terminal_failure_empty) {
+  if (mch::is_failure_outcome(classified.outcome)) {
     ++classification_failures_by_category_[classified.failure_category];
     failed_trace_keys_.push_back(trace_key);
     LOG(WARNING) << "trace=" << trace_key << " " << mch::trace_outcome_name(classified.outcome)
-                 << " (" << category_name(classified.failure_category)
+                 << " (" << mch::failure_category_name(classified.failure_category)
                  << "): " << classified.failure_reason;
     return;
   }
@@ -294,32 +267,11 @@ void BatchRunner::finish() {
   const auto range_seqnos = static_cast<std::uint64_t>(seqno_to_) - seqno_from_ + 1;
   const auto pending_at_eof = payloads_by_trace_.size();
 
-  std::string tier2_hits_by_kind;
-  for (const auto &[kind, count] : lookup_stats_.tier2_hits_by_kind) {
-    if (!tier2_hits_by_kind.empty()) {
-      tier2_hits_by_kind += ",";
-    }
-    tier2_hits_by_kind += kind + "=" + std::to_string(count);
-  }
-
-  std::string misses_by_kind;
-  for (const auto &[kind, count] : lookup_stats_.misses_by_kind) {
-    if (!misses_by_kind.empty()) {
-      misses_by_kind += ",";
-    }
-    misses_by_kind += kind + "=" + std::to_string(count);
-  }
-
-  auto failures = [this](mch::FailureCategory category) {
-    auto it = classification_failures_by_category_.find(category);
-    return it == classification_failures_by_category_.end() ? 0 : it->second;
-  };
-
-  std::string outcomes;
-  for (const auto &[outcome, count] : classification_outcomes_) {
-    if (!outcomes.empty()) outcomes += ",";
-    outcomes += std::string(mch::trace_outcome_name(outcome)) + "=" + std::to_string(count);
-  }
+  const std::string tier2_hits_by_kind = mch::format_counts(lookup_stats_.tier2_hits_by_kind);
+  const std::string misses_by_kind = mch::format_counts(lookup_stats_.misses_by_kind);
+  const std::string outcomes = mch::format_counts(classification_outcomes_, mch::trace_outcome_name);
+  const std::string failures =
+      mch::format_counts(classification_failures_by_category_, mch::failure_category_name);
 
   std::ostringstream summary;
   summary << "ton-mch-index stats: seqnos read prewarm=" << prewarm_seqnos << " range=" << range_seqnos
@@ -328,16 +280,15 @@ void BatchRunner::finish() {
           << " complete-out-of-range=" << complete_out_of_range_ << " tick-tock-skipped=" << tick_tock_skipped_ << " pending-at-eof=" << pending_at_eof
           << " broken=" << broken_ << "; peak accumulator size=" << peak_accumulator_size_
           << "; outcomes{" << outcomes << "}"
-          << " failures{none=" << failures(mch::FailureCategory::none)
-          << ",lookup_infra_fail=" << failures(mch::FailureCategory::lookup_infra_fail)
-          << ",engine_fault=" << failures(mch::FailureCategory::engine_fault)
-          << ",malformed_trace=" << failures(mch::FailureCategory::malformed_trace) << "}"
+          << " failures{" << failures << "}"
           << "; actions emitted=" << total_actions_emitted_
           << "; skipped payload actions=" << skipped_payload_actions_
           << "; lookups{tier1_hits=" << lookup_stats_.tier1_hits
           << ",tier2_hits=" << lookup_stats_.tier2_hits << ",misses=" << lookup_stats_.misses
           << ",misses_by_kind={" << misses_by_kind << "}}"
-          << ";tier2_by_kind={" << tier2_hits_by_kind << "}";
+          << ";tier2_by_kind={" << tier2_hits_by_kind << "}"
+          << ";tier2{fetched=" << tier2_stats_.fetched
+          << ",memo_hits=" << tier2_stats_.memo_hits << "}";
   const double wall = now_s() - run_started_;
   const double other = wall - (t_fetch_ + t_parse_ + t_assemble_ + t_interfaces_ + t_classify_);
   char perf[512];

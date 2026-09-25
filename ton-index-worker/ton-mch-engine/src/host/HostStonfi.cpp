@@ -43,6 +43,7 @@ constexpr std::uint32_t kV2Swap = 0x6664de2a;       // swap request call
 constexpr std::uint32_t kV2PayTo = 0x657b54f5;      // pay_to call
 constexpr std::uint32_t kV2CrossSwapB = 0x69cf1a5b;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
+constexpr std::uint32_t kStonfiV2ProvideLiquidity = 0x37c096df;
 // Only used to say, in a [mch-reject] reason, whether an absent out leg was a
 // jetton transfer that never became a jetton_transfer BLOCK (its own matcher
 // rejects on a missing wallet interface) rather than an absent message.
@@ -710,9 +711,7 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
 namespace {
 
-// Stonfi v2 liquidity pairing. ZERO corpus coverage: the `< 2 legs` guard
-// returns immediately for every trace. KEEP; exercising it needs a 2-leg
-// fixture the corpus does not have yet.
+// Pair STON.fi v2 liquidity legs produced by the same provide-liquidity call.
 bool is_stonfi_v2_leg(const Block *b) {
   if (b->btype != mch::btype::kDexDepositLiquidity) return false;
   Value dex = pp_field(b->data, "dex");
@@ -721,7 +720,7 @@ bool is_stonfi_v2_leg(const Block *b) {
 std::pair<int, std::int64_t> stonfi_v2_fire_order(const Block *b) {
   const Block *anchor = nullptr;
   for (Block *c : b->children_blocks) {
-    if (c->opcode && *c->opcode == 0x37c096dfu) { anchor = c; break; }
+    if (c->opcode && *c->opcode == kStonfiV2ProvideLiquidity) { anchor = c; break; }
   }
   int depth = 0;
   for (const Block *cur = anchor; cur != nullptr && cur->previous_block != nullptr;
@@ -760,7 +759,7 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
   for (Block *b : blocks) {
     if (is_stonfi_v2_leg(b)) deposits.push_back(b);
   }
-  if (deposits.size() < 2) return;  // corpus always returns here
+  if (deposits.size() < 2) return;
   std::stable_sort(deposits.begin(), deposits.end(), [](const Block *a, const Block *b) {
     return stonfi_v2_fire_order(a) < stonfi_v2_fire_order(b);
   });

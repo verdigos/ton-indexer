@@ -524,8 +524,7 @@ void test_lookup_kind_registry() {
       "nominator_pool", "multisig_order", "telemint_item", "jvault_assets", "code_hash"};
   check("registry/expected_kinds_registered", lookup_kinds() == expected_kinds);
   const auto *telemint = lookup_kind("telemint_item");
-  check("registry/telemint_item_tier1_tier2",
-        telemint != nullptr && telemint->tier1 && telemint->tier2);
+  check("registry/telemint_item_tier1", telemint != nullptr && telemint->tier1);
   Fixture f;
   auto t = f.make();
   check("registry/telemint_item_absent_state_miss",

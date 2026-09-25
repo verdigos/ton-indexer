@@ -1573,6 +1573,12 @@
    "name": "Election deposit, low amount",
    "slug": "election-deposit-low-amount",
    "note": "Low-sized successful election deposit from signed window 9"
+  },
+  "YPIq9bxFdW5tY9O4K9HOPpWUZ-Wc7VKrQgMo3NRbxXQ=": {
+   "group": "stonfi-v2-swaps",
+   "name": "Stonfi v2 paired liquidity deposit",
+   "slug": "stonfi-v2-provide-real-paired",
+   "note": "Two deposit legs from one external message merge into one liquidity action"
   }
  }
 }

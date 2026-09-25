@@ -4,8 +4,6 @@
 #include "EmuTraceConvert.h"
 #include "RedisActionSerialize.h"
 
-#include "vm/excno.hpp"  // vm::VmError is not a std::exception.
-
 #include "td/utils/logging.h"
 
 #include <algorithm>
@@ -19,16 +17,6 @@ namespace {
 
 constexpr double kStatsIntervalSec = 10.0;
 constexpr std::size_t kMaxSeenTraces = 65536;
-
-const char *category_name(FailureCategory c) {
-  switch (c) {
-    case FailureCategory::none: return "none";
-    case FailureCategory::lookup_infra_fail: return "lookup_infra_fail";
-    case FailureCategory::engine_fault: return "engine_fault";
-    case FailureCategory::malformed_trace: return "malformed_trace";
-  }
-  return "?";
-}
 
 void record_phase_exception(EmuClassifierStats &stats, EmuClassifyResult &res,
                             const std::string &message, bool past_conversion) {
@@ -113,7 +101,6 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
     stats_.tx_limit_exceeded++;
   }
 
-  // Catch VM fault types explicitly because they do not derive from std::exception.
   // Every path reaches the single response below.
   bool past_conversion = false;
   try {
@@ -134,12 +121,10 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       auto run = mch::classify(*cfg_.prep, view.trace_id, txs, *view.interfaces,
                                cfg_.tier2 ? &view.shard_states : nullptr, view.config);
       auto &classified = run.classified;
-      res.failure = classified.outcome == TraceOutcome::fallback ||
-                    classified.outcome == TraceOutcome::terminal_failure_empty;
+      res.failure = is_failure_outcome(classified.outcome);
       res.failure_reason = std::move(classified.failure_reason);
       res.failure_category = classified.failure_category;
       res.used_fallback = classified.outcome == TraceOutcome::fallback;
-      res.unsupported_action_rows += classified.unsupported_action_rows;
       res.skipped_payload_actions = classified.skipped_payload_actions;
       res.lookup_stats = std::move(run.lookup_stats);
       res.tier2_stats = run.tier2_stats;
@@ -177,22 +162,9 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       if (res.used_fallback) {
         stats_.fallback_actions += classified.rows.size();
       }
-      stats_.unsupported_action_rows += res.unsupported_action_rows;
       stats_.skipped_payload_actions += res.skipped_payload_actions;
-      stats_.lookups.tier1_hits += res.lookup_stats.tier1_hits;
-      stats_.lookups.tier2_hits += res.lookup_stats.tier2_hits;
-      stats_.lookups.misses += res.lookup_stats.misses;
-      for (const auto &[kind, n] : res.lookup_stats.misses_by_kind) {
-        stats_.lookups.misses_by_kind[kind] += n;
-      }
-      stats_.tier2.fetched += res.tier2_stats.fetched;
-      stats_.tier2.memo_hits += res.tier2_stats.memo_hits;
-      if (classified.scrubbed > 0) {
-        stats_.arena_refs_scrubbed += classified.scrubbed;
-        LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
-                     << " scrubbed " << classified.scrubbed
-                     << " arena block reference(s) out of the action rows";
-      }
+      stats_.lookups += res.lookup_stats;
+      stats_.tier2 += res.tier2_stats;
       if (res.failure) {
         stats_.failed++;
         stats_.by_category[res.failure_category]++;
@@ -201,7 +173,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         res.payload.state = "fallback";
         LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                      << " FAILED ("
-                     << category_name(res.failure_category) << "): " << res.failure_reason;
+                     << failure_category_name(res.failure_category) << "): " << res.failure_reason;
       } else {
         stats_.classified++;
         res.outcome = EmuClassifyOutcome::classified;
@@ -212,37 +184,17 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
           LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                        << " classified with skipped payload actions: " << res.failure_reason;
         }
-        std::string names;
-        for (const std::string &n : classified.matcher_names) {
-          if (!names.empty()) names += ",";
-          names += n;
-        }
         LOG(DEBUG) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                    << " txs=" << txs.size()
                    << " actions=" << res.payload.action_count
-                   << " serialize_us=" << res.serialize_us << " matchers=[" << names << "]";
+                   << " serialize_us=" << res.serialize_us;
       }
     }
-  } catch (const vm::VmError &e) {
-    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
-    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
-                 << " EXCEPTION (vm): " << e.get_msg();
-  } catch (const vm::VmNoGas &e) {
-    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
-    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
-                 << " EXCEPTION (vm): " << e.get_msg();
-  } catch (const vm::VmVirtError &e) {
-    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
-    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
-                 << " EXCEPTION (vm): " << e.get_msg();
-  } catch (const std::exception &e) {
-    record_phase_exception(stats_, res, std::string("exception: ") + e.what(), past_conversion);
-    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
-                 << " EXCEPTION: " << e.what();
   } catch (...) {
-    record_phase_exception(stats_, res, "unknown exception", past_conversion);
+    const std::string message = exception_message(std::current_exception());
+    record_phase_exception(stats_, res, message, past_conversion);
     LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
-                 << " EXCEPTION";
+                 << " EXCEPTION: " << message;
   }
 
   res.classify_us = emu_now_us() - started_us;
@@ -260,18 +212,11 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
 }
 
 void EmuClassifierActor::alarm() {
-  std::string cats;
-  for (const auto &[cat, n] : stats_.by_category) {
-    if (!cats.empty()) cats += ",";
-    cats += std::string(category_name(cat)) + "=" + std::to_string(n);
-  }
+  const std::string cats = format_counts(stats_.by_category, failure_category_name);
   // Per-kind miss attribution: the total alone cannot separate a kind with no
   // source (an expected gap) from a real resolution failure.
-  std::string miss_kinds;
-  for (const auto &[kind, n] : stats_.lookups.misses_by_kind) {
-    if (!miss_kinds.empty()) miss_kinds += ",";
-    miss_kinds += kind + "=" + std::to_string(n);
-  }
+  const std::string miss_kinds = format_counts(stats_.lookups.misses_by_kind);
+  const std::string tier2_hit_kinds = format_counts(stats_.lookups.tier2_hits_by_kind);
   std::size_t resolved = stats_.lookups.tier1_hits + stats_.lookups.tier2_hits;
   LOG(INFO) << "[mch-emu-w" << worker_index_ << "] emissions=" << stats_.emissions << " (+"
             << (stats_.emissions - prev_.emissions) << ")"
@@ -282,9 +227,7 @@ void EmuClassifierActor::alarm() {
             << " tx_limit_exceeded=" << stats_.tx_limit_exceeded
             << " actions=" << stats_.actions << " (+" << (stats_.actions - prev_.actions) << ")"
             << " fallback_actions=" << stats_.fallback_actions
-            << " unsupported_action_rows=" << stats_.unsupported_action_rows
             << " skipped_payload_actions=" << stats_.skipped_payload_actions
-            << " arena_refs_scrubbed=" << stats_.arena_refs_scrubbed
             << " finality{emulated=" << stats_.by_finality[0]
             << " confirmed=" << stats_.by_finality[1]
             << " finalized=" << stats_.by_finality[2] << "}"
@@ -292,6 +235,7 @@ void EmuClassifierActor::alarm() {
             << " lookups{tier1=" << stats_.lookups.tier1_hits
             << " tier2=" << stats_.lookups.tier2_hits << " miss=" << stats_.lookups.misses
             << " miss_by_kind={" << miss_kinds << "}"
+            << " tier2_hit_by_kind={" << tier2_hit_kinds << "}"
             << " tier2_rate=" << (resolved ? (100 * stats_.lookups.tier2_hits / resolved) : 0)
             << "%}"
             << " tier2{fetched=" << stats_.tier2.fetched

@@ -1,5 +1,6 @@
 #include "CelldbTier2Lookup.h"
 
+#include "ClassifyCore.h"
 #include "DetectorInterfaceAdapter.h"
 #include "JvaultLookup.h"
 #include "LookupKinds.h"
@@ -13,7 +14,6 @@
 
 #include "td/utils/base64.h"
 #include "td/utils/logging.h"
-#include "vm/excno.hpp"
 
 #include <exception>
 #include <new>
@@ -63,21 +63,9 @@ const schema::AccountState *CelldbTier2Lookup::account(const block::StdAddress &
     }
   } catch (const std::bad_alloc &) {
     throw;
-  } catch (const vm::VmError &e) {
-    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
-                 << " status=exception: " << e.get_msg();
-  } catch (const vm::VmNoGas &e) {
-    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
-                 << " status=exception: " << e.get_msg();
-  } catch (const vm::VmVirtError &e) {
-    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
-                 << " status=exception: " << e.get_msg();
-  } catch (const std::exception &e) {
-    LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
-                 << " status=exception: " << e.what();
   } catch (...) {
     LOG(WARNING) << "Tier-2 account lookup failed: address=" << raw_address(addr)
-                 << " status=unknown exception";
+                 << " status=exception: " << exception_message(std::current_exception());
   }
   auto [pos, _] = account_memo_.emplace(addr, std::move(state));
   return pos->second ? &*pos->second : nullptr;
@@ -104,10 +92,9 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
     return to_schema(r.move_as_ok());
   };
 
-  // The kind table is the one registry; a kind missing from it, or one tier 2
-  // does not serve, is a miss.
+  // The kind table is the one registry; a kind missing from it is a miss.
   const LookupKind *row = lookup_kind(kind);
-  if (row == nullptr || !row->tier2) {
+  if (row == nullptr) {
     return Value::null();
   }
   if (row->handler == LookupHandler::JvaultAssets) {
@@ -157,7 +144,7 @@ Value CelldbTier2Lookup::resolve(const std::string &kind, const block::StdAddres
                    ? telemint_detector_(addr, st->code, st->data, config_)
                    : TelemintContract::detect(addr, st->code, st->data, config_);
       if (r.is_ok()) {
-        iface = schema::TelemintData{.address = r.move_as_ok().address};
+        iface = to_schema(r.move_as_ok());
       } else {
         log_detector_error(r.error());
       }
@@ -263,25 +250,10 @@ Value CelldbTier2Lookup::fetch(const std::string &kind, const std::vector<Value>
     v = resolve(kind, addr);
   } catch (const std::bad_alloc &) {
     throw;
-  } catch (const vm::VmError &e) {
-    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
-                 << " address=" << raw_address(addr) << " status=exception: " << e.get_msg();
-    v = Value::null();
-  } catch (const vm::VmNoGas &e) {
-    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
-                 << " address=" << raw_address(addr) << " status=exception: " << e.get_msg();
-    v = Value::null();
-  } catch (const vm::VmVirtError &e) {
-    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
-                 << " address=" << raw_address(addr) << " status=exception: " << e.get_msg();
-    v = Value::null();
-  } catch (const std::exception &e) {
-    LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
-                 << " address=" << raw_address(addr) << " status=exception: " << e.what();
-    v = Value::null();
   } catch (...) {
     LOG(WARNING) << "Tier-2 detector lookup failed: kind=" << kind
-                 << " address=" << raw_address(addr) << " status=unknown exception";
+                 << " address=" << raw_address(addr) << " status=exception: "
+                 << exception_message(std::current_exception());
     v = Value::null();
   }
   value_memo_.emplace(key, v);

@@ -20,10 +20,8 @@ const std::map<std::string, LookupHandler> kInterfaceHandlers = [] {
   return handlers;
 }();
 
-// StdAddress -> the canonical uppercase raw "wc:HEX" string the fixtures store
-// and normalize_raw_address produces (SchemaTraceLoader normalises tx accounts
-// the same way). Interface addresses render as Str (VType::Str), matching
-// FixtureLookupSource's iface_obj which copies the fixture's raw string verbatim.
+// StdAddress -> the canonical uppercase raw "wc:HEX" string used by lookup values.
+// Interface addresses render as Str (VType::Str).
 Value addr_str(const block::StdAddress &a) {
   std::string raw = convert::to_raw_address(a);
   return Value::make_str(canonicalize_or_passthrough(raw));
@@ -80,7 +78,7 @@ Value TieredLookupSource::iface_value(const std::string &kind,
   switch (handler->second) {
     case LookupHandler::JettonWallet:
       if (const auto *jw = std::get_if<schema::JettonWalletDataV2>(&iface)) {
-        // FixtureLookupSource shape: Obj{balance, address, owner, jetton}.
+        // Obj{balance, address, owner, jetton}.
         Value::Fields f;
         f.emplace_back("balance", jw->balance.is_null() ? Value::null()
                                                         : Value::make_int(jw->balance));
@@ -106,11 +104,11 @@ Value TieredLookupSource::iface_value(const std::string &kind,
         return Value::make_obj(std::move(f));
       }
       break;
-    case LookupHandler::NftSale:
+    case LookupHandler::NftSale: {
       // Two GetGems sale variants share the fields the nft host fns read
       // (marketplace_address / nft_address / full_price / nft_owner_address /
       // code_hash).
-      if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleData>(&iface)) {
+      const auto sale_value = [](const auto &s) {
         Value::Fields f;
         f.emplace_back("marketplace_address", addr_str(s->marketplace_address));
         f.emplace_back("nft_address", addr_str(s->nft_address));
@@ -119,18 +117,15 @@ Value TieredLookupSource::iface_value(const std::string &kind,
         f.emplace_back("nft_owner_address", addr_str_opt(s->nft_owner_address));
         f.emplace_back("code_hash", code_hash_str(s->code_hash));
         return Value::make_obj(std::move(f));
+      };
+      if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleData>(&iface)) {
+        return sale_value(s);
       }
       if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleV4Data>(&iface)) {
-        Value::Fields f;
-        f.emplace_back("marketplace_address", addr_str(s->marketplace_address));
-        f.emplace_back("nft_address", addr_str(s->nft_address));
-        f.emplace_back("full_price",
-                       s->full_price.is_null() ? Value::null() : Value::make_int(s->full_price));
-        f.emplace_back("nft_owner_address", addr_str_opt(s->nft_owner_address));
-        f.emplace_back("code_hash", code_hash_str(s->code_hash));
-        return Value::make_obj(std::move(f));
+        return sale_value(s);
       }
       break;
+    }
     case LookupHandler::NftAuction:
       if (const auto *a = std::get_if<schema::GetGemsNftAuctionData>(&iface)) {
         // Obj{mp_addr, nft_addr, last_bid, nft_owner, code_hash}.
@@ -158,10 +153,7 @@ Value TieredLookupSource::iface_value(const std::string &kind,
       break;
     case LookupHandler::NominatorPool:
       if (const auto *p = std::get_if<schema::NominatorPoolData>(&iface)) {
-        // Obj{address}. The whole semantics is set membership: the one spec
-        // that reads this lookup rejects on null and never touches a field
-        // (ir/mch_ir.json nominator_pool_withdraw), which is also why Python's
-        // registered fn just hands back the account's interfaces dict.
+        // Obj{address}; callers use the lookup as a membership check.
         Value::Fields f;
         f.emplace_back("address", addr_str(p->address));
         return Value::make_obj(std::move(f));
@@ -194,8 +186,7 @@ Value TieredLookupSource::iface_value(const std::string &kind,
 
 std::optional<Value> TieredLookupSource::tier1(const std::string &kind,
                                                     const std::string &addr) const {
-  // Tier-1 does not serve code_hash; tier-2 reads the code at the completing block.
-  if (kind == "code_hash") return std::nullopt;
+  if (kInterfaceHandlers.find(kind) == kInterfaceHandlers.end()) return std::nullopt;
   if (account_interfaces_ == nullptr) {
     return std::nullopt;
   }
@@ -217,9 +208,7 @@ std::optional<Value> TieredLookupSource::tier1(const std::string &kind,
 }
 
 Value TieredLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
-  // FixtureLookupSource agreement guard: every registered lookup passes exactly one
-  // address, Str, or the Account a `.data` address field yields (same raw
-  // uppercase text); anything else is a null result on both sources.
+  // Every registered lookup accepts one address argument; malformed input is a null result.
   if (args.size() != 1 ||
       !(args[0].t == VType::Str ||
         (args[0].t == VType::Account && !args[0].addr_none))) {

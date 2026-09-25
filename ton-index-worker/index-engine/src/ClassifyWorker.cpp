@@ -27,12 +27,8 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
                              &states, job.block->mc_block_.config_);
     auto &r = run.classified;
     TraceClassificationResult result{std::move(job.input.trace), r.outcome, std::move(r.rows), std::move(r.failure_reason), false, std::move(r.rescue)};
-    result.tier1_hits = run.lookup_stats.tier1_hits;
-    result.tier2_hits = run.lookup_stats.tier2_hits;
-    result.lookup_misses = run.lookup_stats.misses;
-    result.lookup_misses_by_kind = std::move(run.lookup_stats.misses_by_kind);
-    result.tier2_fetched = run.tier2_stats.fetched;
-    result.tier2_memo_hits = run.tier2_stats.memo_hits;
+    result.lookups = std::move(run.lookup_stats);
+    result.tier2 = run.tier2_stats;
     result.skipped_payload_actions = r.skipped_payload_actions;
     const double seconds = timer.elapsed();
     result.slow = seconds > policy_.slow_job_threshold_s;

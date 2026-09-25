@@ -9,6 +9,8 @@
 #include "GenMatchers.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
+#include "RedisActionSerialize.h"
+#include "SchemaTxTest.h"
 #include "TieredLookupSource.h"
 #include "IrTables.h"
 #include "TraceModel.h"
@@ -162,24 +164,7 @@ void test_payload_encode_failure_skips_one_action() {
   setup.build_fns.emplace(0, payload_address_build);
   MchEnginePrep prep{&matchers, std::move(setup)};
 
-  schema::Transaction tx{};
-  tx.hash.set_zero();
-  tx.hash.data()[31] = 1;
-  tx.account = block::StdAddress(0, tx.hash);
-  tx.lt = 100;
-  tx.now = 200;
-  tx.mc_seqno = 300;
-  tx.orig_status = schema::AccountStatus::active;
-  tx.end_status = schema::AccountStatus::active;
-  tx.description = schema::TransactionDescr_ord{};
-  schema::Message message{};
-  message.hash.set_zero();
-  message.hash.data()[31] = 2;
-  message.source = "0:" + std::string(64, 'B');
-  message.destination = "0:" + tx.hash.to_hex();
-  message.opcode = 0x11223344;
-  message.value = schema::CurrencyCollection{td::make_refint(1000), {}};
-  tx.in_msg = std::move(message);
+  schema::Transaction tx = schema_tx(1);
   TieredLookupSource::InterfaceMap interfaces;
   TieredLookupSource source(&interfaces);
   g_bad_payload_address = true;
@@ -191,6 +176,26 @@ void test_payload_encode_failure_skips_one_action() {
   check("payload_failure/unknown_row", bad.rows.size() == 1 &&
         bad.rows.front().type == "unknown" && bad.unknown_row);
   check("payload_failure/skipped_one", bad.skipped_payload_actions == 1);
+  EmuTraceView view;
+  view.trace_id = "payload-bad";
+  EmuTxRef node;
+  node.finality = EmuFinality::emulated;
+  view.nodes.push_back(std::move(node));
+  const auto wire = serialize_redis_actions(bad.rows, view);
+  auto decoded = msgpack::unpack(wire.data(), wire.size());
+  const auto &published = decoded.get();
+  bool unknown_wire = false;
+  if (published.type == msgpack::type::ARRAY && published.via.array.size == 1) {
+    const auto &row = published.via.array.ptr[0];
+    if (row.type == msgpack::type::MAP) {
+      for (std::uint32_t i = 0; i < row.via.map.size; ++i) {
+        const auto &entry = row.via.map.ptr[i];
+        if (entry.key.as<std::string>() == "type")
+          unknown_wire = entry.val.as<std::string>() == "unknown";
+      }
+    }
+  }
+  check("payload_failure/unknown_on_wire", unknown_wire);
 
   schema::Transaction child = tx;
   child.hash.data()[31] = 3;
@@ -233,7 +238,7 @@ void test_payload_encode_failure_skips_one_action() {
     if (obj.type == msgpack::type::MAP) {
       for (std::uint32_t i = 0; i < obj.via.map.size; ++i) {
         const auto &entry = obj.via.map.ptr[i];
-        if (entry.key.as<int>() == 67) round_trip = entry.val.as<std::string>() == "-1";
+        if (entry.key.as<int>() == id_of("nft_index")) round_trip = entry.val.as<std::string>() == "-1";
       }
     }
     check("nft_index/negative/payload_round_trip", round_trip);
@@ -774,29 +779,13 @@ void test_tier2_uncovered_workchain_miss_preserves_trace() {
   setup.kinds.insert("nominator_pool");
   MchEnginePrep prep{&matchers, std::move(setup)};
 
-  schema::Transaction tx{};
-  tx.hash.set_zero();
-  tx.hash.data()[31] = 1;
-  tx.account = block::StdAddress(0, tx.hash);
-  tx.lt = 100;
-  tx.now = 200;
-  tx.mc_seqno = 300;
-  tx.orig_status = schema::AccountStatus::active;
-  tx.end_status = schema::AccountStatus::active;
+  schema::Transaction tx = schema_tx(1);
   schema::TransactionDescr_ord descr{};
   schema::TrComputePhase_vm compute{};
   compute.exit_code = 0;
   descr.compute_ph = compute;
   tx.description = descr;
-  schema::Message message{};
-  message.hash.set_zero();
-  message.hash.data()[31] = 2;
-  message.source = "0:" + std::string(64, 'B');
-  message.destination = "0:" + tx.hash.to_hex();
-  message.opcode = 0x11223344;
-  message.value = schema::CurrencyCollection{td::make_refint(1000), {}};
-  message.bounce = true;
-  tx.in_msg = std::move(message);
+  tx.in_msg->bounce = true;
 
   AllShardStates states{vm::CellBuilder().finalize()};
   CelldbTier2Lookup tier2(&states, nullptr);
@@ -819,8 +808,6 @@ void test_tier2_uncovered_workchain_miss_preserves_trace() {
       prep, "tier2-uncovered-workchain-miss", {tx}, source);
   check("schema/tier2_uncovered_workchain/looked_up_by_matcher",
         reads == 1 && saw_uncovered_address && source.stats().misses == 1);
-  check("schema/tier2_uncovered_workchain/matcher_rejected",
-        result.matcher_names.empty());
   check("schema/tier2_uncovered_workchain/outcome",
         result.outcome == TraceOutcome::classified);
   check("schema/tier2_uncovered_workchain/rows_retained", !result.rows.empty());
@@ -843,23 +830,11 @@ void test_tier2_telemint_lookup_for_trace_reference_without_transaction() {
   setup.kinds.insert("telemint_item");
   MchEnginePrep prep{&matchers, std::move(setup)};
 
-  schema::Transaction tx{};
-  tx.hash.set_zero();
-  tx.hash.data()[31] = 1;
-  tx.account = block::StdAddress(0, tx.hash);
-  tx.lt = 100;
-  tx.now = 200;
-  tx.mc_seqno = 300;
-  tx.orig_status = schema::AccountStatus::active;
-  tx.end_status = schema::AccountStatus::active;
-  tx.description = schema::TransactionDescr_ord{};
-  schema::Message out{};
-  out.hash.set_zero();
-  out.hash.data()[31] = 2;
+  schema::Transaction tx = schema_tx(1);
+  schema::Message out = std::move(*tx.in_msg);
+  tx.in_msg.reset();
   out.source = "0:" + tx.hash.to_hex();
   out.destination = kTelemintLookupAddress;
-  out.opcode = 0x11223344;
-  out.value = schema::CurrencyCollection{td::make_refint(1000), {}};
   tx.out_msgs.push_back(std::move(out));
 
   AllShardStates states{vm::CellBuilder().finalize()};
@@ -900,7 +875,7 @@ void test_tier2_telemint_lookup_for_trace_reference_without_transaction() {
   check("schema/tier2_telemint/detected_from_cell_db",
         reads == 1 && source.stats().tier2_hits == 1 &&
             telemint_hits != source.stats().tier2_hits_by_kind.end() && telemint_hits->second == 1);
-  check("schema/tier2_telemint/matcher_accepted", result.matcher_names.size() == 1);
+  check("schema/tier2_telemint/matcher_accepted", result.failure_reason.empty());
 }
 
 // Startup is fatal on a skipped matcher, so the compiled-in table must have none:

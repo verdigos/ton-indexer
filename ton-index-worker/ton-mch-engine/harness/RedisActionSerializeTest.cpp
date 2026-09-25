@@ -3,10 +3,8 @@
 
 #include "ActionBuild.h"
 #include "ActionPayload.h"
-#include "ClassifyCore.h"
-#include "EnginePrep.h"
-#include "ExprRuntime.h"
 #include "RedisActionSerialize.h"
+#include "SchemaTxTest.h"
 #include "Value.h"
 #include "emu/EmuTypes.h"
 #include "td/utils/base64.h"
@@ -154,73 +152,6 @@ Action base_action() {
   return action;
 }
 
-CompiledMatcher all_rejected_payload_matcher() {
-  CompiledMatcher matcher;
-  matcher.name = "all-rejected-payload";
-  matcher.artifact_index = 0;
-  matcher.produces = {"jetton_transfer"};
-  matcher.anchor_kind = AnchorKind::BType;
-  matcher.anchor_btypes = {"call_contract"};
-  CompiledNode node;
-  node.kind = NodeKind::BlockType;
-  node.btype = "call_contract";
-  matcher.nodes.push_back(std::move(node));
-  return matcher;
-}
-
-BuildOutcome invalid_payload_build(BuildEnv &) {
-  BuildOutcome out = BuildOutcome::accepted();
-  out.data = Value::make_dict({
-      {"response_address", Value::make_account_raw("bad-address")},
-      {"query_id", Value::make_int64(1)},
-  });
-  return out;
-}
-
-schema::Transaction payload_failure_tx() {
-  schema::Transaction tx{};
-  tx.hash.set_zero();
-  tx.hash.data()[31] = 1;
-  tx.account = block::StdAddress(0, tx.hash);
-  tx.lt = 100;
-  tx.now = 200;
-  tx.mc_seqno = 300;
-  tx.orig_status = schema::AccountStatus::active;
-  tx.end_status = schema::AccountStatus::active;
-  tx.description = schema::TransactionDescr_ord{};
-  schema::Message message{};
-  message.hash.set_zero();
-  message.hash.data()[31] = 2;
-  message.source = kAddrB;
-  message.destination = "0:" + tx.hash.to_hex();
-  message.opcode = 0x11223344;
-  message.value = schema::CurrencyCollection{td::make_refint(1000), {}};
-  tx.in_msg = std::move(message);
-  return tx;
-}
-
-void test_all_payload_rejections_publish_unknown() {
-  std::vector<CompiledMatcher> matchers{all_rejected_payload_matcher()};
-  ClassifySetup setup;
-  setup.included = {0};
-  setup.build_fns.emplace(0, invalid_payload_build);
-  MchEnginePrep prep{&matchers, std::move(setup)};
-  TieredLookupSource::InterfaceMap interfaces;
-  TieredLookupSource source(&interfaces);
-
-  auto classified = classify_schema_trace(
-      prep, kTraceKey, {payload_failure_tx()}, source);
-  Decoded published(serialize_redis_actions(
-      classified.rows, make_view({EmuFinality::emulated})));
-  const auto *row = first_row(published);
-  check("all_rejected_publish/partial_reason", !classified.failure_reason.empty());
-  check("all_rejected_publish/one_action", published.ok() &&
-        published.root().type == msgpack::type::ARRAY &&
-        published.root().via.array.size == 1 && row != nullptr);
-  check("all_rejected_publish/unknown", row != nullptr &&
-        is_str(at(*row, "type"), "unknown"));
-}
-
 void test_empty_actions() {
   Decoded decoded(serialize_redis_actions({}, make_view({EmuFinality::finalized})));
   check("empty/array", decoded.ok() && decoded.root().type == msgpack::type::ARRAY &&
@@ -278,9 +209,9 @@ void test_columns_and_payload() {
   Decoded payload(wire_payload.size() > 1 ? wire_payload.substr(1) : std::string{});
   check("columns/payload_decodes", payload.ok() && payload.root().type == msgpack::type::MAP);
   check("columns/flat_map", payload.root().type == msgpack::type::MAP && payload.root().via.map.size == 3);
-  check("columns/query_id_uint", is_uint(at_id(payload.root(), 89), UINT64_MAX));
-  check("columns/comment", is_str(at_id(payload.root(), 13), "hello"));
-  check("columns/comment_encrypted", is_bool(at_id(payload.root(), 14), false));
+  check("columns/query_id_uint", is_uint(at_id(payload.root(), id_of("query_id")), UINT64_MAX));
+  check("columns/comment", is_str(at_id(payload.root(), id_of("comment")), "hello"));
+  check("columns/comment_encrypted", is_bool(at_id(payload.root(), id_of("comment_encrypted")), false));
 }
 
 void test_tonco_tick_spacing() {
@@ -297,7 +228,7 @@ void test_tonco_tick_spacing() {
       check(label, rows.ok() && rows.root().type == msgpack::type::ARRAY &&
                        rows.root().via.array.size == 1 && payload.ok() &&
                        payload.root().type == msgpack::type::MAP &&
-                       is_integer_text(at_id(payload.root(), 111), spacing));
+                       is_integer_text(at_id(payload.root(), id_of("tick_spacing")), spacing));
     } catch (const std::exception &) {
       check(label, false);
     }
@@ -341,46 +272,46 @@ void test_positional_legs() {
   const auto one_sided = payload(false, true);
   Decoded first_empty(one_sided.substr(1));
   const auto *first_data = &first_empty.root();
-  const auto *first_legs = at_id(*first_data, 44);
+  const auto *first_legs = at_id(*first_data, id_of("legs"));
   const auto *slot_1 = elem(first_legs, 0);
   const auto *slot_2 = elem(first_legs, 1);
   check("legs/first_empty", one_sided.front() == '\x01' && first_empty.ok() &&
                                first_legs != nullptr && first_legs->type == msgpack::type::ARRAY &&
                                first_legs->via.array.size == 2 &&
-                               is_str(at_id(*first_data, 84), "dedust") &&
+                               is_str(at_id(*first_data, id_of("protocol")), "dedust") &&
                                slot_1 != nullptr && slot_1->type == msgpack::type::NIL &&
                                slot_2 != nullptr && slot_2->type == msgpack::type::MAP &&
                                slot_2->via.map.size == 5 &&
-                               at_id(*slot_2, 6)->type == msgpack::type::BIN &&
-                               is_uint(at_id(*slot_2, 2), 456) &&
-                               at_id(*slot_2, 109)->type == msgpack::type::BIN &&
-                               is_uint(at_id(*slot_2, 108), 457) &&
-                               at_id(*slot_2, 118)->type == msgpack::type::BIN);
+                               at_id(*slot_2, id_of("asset"))->type == msgpack::type::BIN &&
+                               is_uint(at_id(*slot_2, id_of("amount")), 456) &&
+                               at_id(*slot_2, id_of("target_asset"))->type == msgpack::type::BIN &&
+                               is_uint(at_id(*slot_2, id_of("target_amount")), 457) &&
+                               at_id(*slot_2, id_of("user_jetton_wallet"))->type == msgpack::type::BIN);
 
   const auto trailing_empty = payload(true, false);
   Decoded second_empty(trailing_empty.substr(1));
-  const auto *second_legs = at_id(second_empty.root(), 44);
+  const auto *second_legs = at_id(second_empty.root(), id_of("legs"));
   const auto *only_leg = elem(second_legs, 0);
   check("legs/trailing_empty", second_empty.ok() && second_legs != nullptr &&
                                   second_legs->type == msgpack::type::ARRAY &&
                                   second_legs->via.array.size == 1 && only_leg != nullptr &&
-                                  is_uint(at_id(*only_leg, 2), 123));
+                                  is_uint(at_id(*only_leg, id_of("amount")), 123));
 
   const auto all_empty = payload(false, false);
   Decoded no_legs(all_empty.substr(1));
-  check("legs/all_empty", no_legs.ok() && at_id(no_legs.root(), 44) == nullptr);
+  check("legs/all_empty", no_legs.ok() && at_id(no_legs.root(), id_of("legs")) == nullptr);
 
   const auto full = payload(true, true);
   Decoded both(full.substr(1));
-  const auto *full_legs = at_id(both.root(), 44);
+  const auto *full_legs = at_id(both.root(), id_of("legs"));
   const auto *full_first = elem(full_legs, 0);
   const auto *full_second = elem(full_legs, 1);
   check("legs/both_filled", both.ok() && full_legs != nullptr &&
                                 full_legs->type == msgpack::type::ARRAY &&
                                 full_legs->via.array.size == 2 &&
                                 full_first != nullptr && full_second != nullptr &&
-                                is_uint(at_id(*full_first, 2), 123) &&
-                                is_uint(at_id(*full_second, 2), 456));
+                                is_uint(at_id(*full_first, id_of("amount")), 123) &&
+                                is_uint(at_id(*full_second, id_of("amount")), 456));
 }
 
 void test_tx_hash_order() {
@@ -555,7 +486,6 @@ std::string wire_fixture_bytes() {
 
 int run_action_msgpack_test() {
   g_fail = 0;
-  test_all_payload_rejections_publish_unknown();
   test_empty_actions();
   test_fixed_envelope();
   test_columns_and_payload();
