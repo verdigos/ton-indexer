@@ -1,8 +1,5 @@
-// Internal host-layer surface: the registered host predicates and fns, one TU
-// per protocol, plus the post-pass spine surgery ClassifyCore runs after the
-// walk. Declared here so HostRegistry.cpp's host_predicates()/host_fns() maps
-// and ClassifyCore.cpp's run_post_processors can reference them across TU
-// boundaries. NOT part of the public HostRegistry.h surface.
+// Internal declarations shared by the host registry, protocol translation units,
+// and post-processors. Keep them out of the public HostRegistry API.
 #pragma once
 
 #include "ExprRuntime.h"

@@ -20,10 +20,8 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// EncodeCompactForTest builds compact payload bytes (codec byte included) from a named
-// map whose values are in the text forms the decoder produces. It is the test-only
-// counterpart of the codec: it reads only the registry tables and shares no code with the
-// decoder. Keys are written in ascending id order, the order the engine's encoder writes.
+// EncodeCompactForTest independently encodes decoder-form values as a codec-1 payload.
+// Its ascending-id key order matches the engine encoder.
 func EncodeCompactForTest(named map[string]interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteByte(actionPayloadCodecMsgpack)

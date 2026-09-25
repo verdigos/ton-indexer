@@ -178,10 +178,9 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
 
 }  // namespace
 
-// Jetton-leg residue plus POSITION_INIT liquidity (nft_mint is a produced
-// block, so the spec cannot parse its body). Notify from children_blocks of
-// a produced jetton_transfer, FUND_ACCOUNT payload check, wallet lookups,
-// and excess pTON→TON. Any parse/nav failure is a Null reject.
+// Parse the produced `nft_mint` POSITION_INIT body, validate the input
+// FUND_ACCOUNT payload, resolve wallet assets, and convert excess pTON to TON.
+// Any parse or navigation failure rejects this action.
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *block = as_block(args[0]);
   if (block == nullptr) {

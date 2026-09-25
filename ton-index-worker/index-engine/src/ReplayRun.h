@@ -1,13 +1,6 @@
-// Parameters of one classification replay run and the policy constants it
-// obeys. A run drives the scanner pipeline over an inclusive seqno window,
-// classifies every trace that completes inside [classify_from, classify_to]
-// and hands rows to the writer chosen by `mode`. Live mode inserts; task mode
-// replaces rows per completion seqno. One controller and one assembler per
-// run; an aborted run is destroyed, never resumed.
-//
-// Root policy is fixed, not configured: any root transaction is admitted,
-// including system accounts; a trace that is a single
-// tick-tock transaction takes `TraceOutcome::skipped_lone_tick_tock`.
+// Live runs insert rows; task runs replace rows by completion seqno.
+// Runs are single-use. All roots are admitted, with lone tick-tock traces
+// reported as skipped_lone_tick_tock.
 #pragma once
 
 #include "crypto/common/bitstring.h"  // td::Bits256

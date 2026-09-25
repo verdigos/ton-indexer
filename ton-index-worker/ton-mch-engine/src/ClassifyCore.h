@@ -40,24 +40,9 @@ enum class FailureCategory {
   malformed_trace,
 };
 
-// Terminal per-trace outcome of the in-indexer classification stage. Exactly
-// one per admitted or rejected trace input. The first three carry rows
-// (possibly zero) and are written; every other outcome only counts.
-// Task replacement accepts persisted outcomes and broken, capped, or lone tick-tock
-// skips. Missing roots and other skips remain ineligible.
-//   classified / fallback / terminal_failure_empty: classify_schema_trace ran
-//     (normal rows / basic-action fallback rows / failure with nothing usable).
-//   skipped_*:            assembly-side rejections, never classified:
-//     missing_root  — no legitimate root transaction;
-//     broken        — the assembler published the trace as broken;
-//     evicted       — payload dropped under memory pressure; never classified;
-//     capped        — transaction count exceeded the per-trace cap;
-//     incomplete    — payload buffer count != assembler node count, or (task mode)
-//                     identity / count / end mismatch against the inventory;
-//     unexpected_trace — (task mode) completed trace absent from the inventory;
-//     lone_tick_tock: the trace is exactly one tick-tock transaction and is
-//                      skipped before matching. Tick-tock roots with
-//                      children are classified normally.
+// Terminal result for each trace input. `skipped_incomplete` also covers task
+// identity, count, or end mismatches; lone tick-tock applies only to one transaction.
+// Broken, capped, and lone-tick-tock skips still permit task replacement.
 enum class TraceOutcome {
   classified,
   fallback,
@@ -225,10 +210,8 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 
-// Engine exceptions become terminal outcomes with no rows. Action construction
-// or payload validation skips only that action and retains a failure reason.
-// Rescue construction precedes classification and may throw on allocation failure.
-// Tier-2 read errors are lookup misses (logged once per address); they never change the outcome.
+// Rescue allocation failures escape. Engine failures return an empty terminal
+// outcome; invalid actions and tier-2 read errors affect only their action or lookup.
 // `prep` is process-lifetime const and shareable across threads.
 // The interface map behind `src` is shareable iff immutable.
 // `src` and its Tier2Hook capture are for one classify call on one thread only.

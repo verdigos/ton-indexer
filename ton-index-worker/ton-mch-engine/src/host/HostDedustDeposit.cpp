@@ -343,10 +343,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
   return rt_ok(Value::make_obj({}));
 }
 
-// --- Post-pass spine surgery: DeDust liquidity pairing ------------------------
-// Runs from ClassifyCore's run_post_processors over the spine, after the walk.
-// Value flows and contract-deployment collection are outside this pipeline.
-// All surgery is throw-safe (no aborts).
+// Pair partial and final DeDust liquidity blocks after the matcher walk.
 
 namespace {
 
@@ -479,10 +476,8 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
   }
 }
 
-// Pair DeDust V2 liquidity blocks by deposit escrow address. Only one asset leg
-// reaches the completing block; the other remains a partial and is folded in.
-// This remains separate from the V1 arithmetic merge because it fills null slots
-// and scans final blocks first, which determines the winner among duplicates.
+// Pair V2 partial and final deposits by escrow address. Fill only the final
+// block's missing asset, wallet, and amount fields, then absorb the partial.
 void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
                                       std::set<Block *> &removed) {
   std::vector<Block *> partials, finals;

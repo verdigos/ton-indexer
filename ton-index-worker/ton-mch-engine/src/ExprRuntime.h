@@ -63,14 +63,9 @@ EvalResult rt_mul(const Value &l, const Value &r);
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args);
 EvalResult rt_builtin_account(const Value &x);
 // Comprehensions
-// Shared cores for `map|find|stable_sort_by(xs as e => body)` /
-// `any|all(xs as e => body)`. `body` is invoked once per element with that
-// element bound; the core owns the null, non-list, empty, and short-circuit
-// semantics for both the interpreter and generated code. A null xs produces
-// null; non-list xs -> fault; empty -> [] (map, sort) / null (find) /
-// false (any) / true (all). Quantifiers and find short-circuit and require a
-// bool body. Sort keys are Int or Amount (lowered to the integer); a null or
-// non-integer key faults.
+// Comprehensions return null for null input and fault on non-lists. `find`,
+// `any`, and `all` require boolean predicates, short-circuit, and return
+// null/false/true for an empty list. Stable sort requires non-null Int or Amount keys.
 using ElementFn = std::function<EvalResult(const Value &)>;
 EvalResult rt_mapc(const Value &xs, const ElementFn &body);
 EvalResult rt_quant(bool is_all, const Value &xs, const ElementFn &body);

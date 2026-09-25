@@ -13,10 +13,8 @@ import (
 
 const actionPayloadCodecMsgpack = 1
 
-// actionDataPrefixes lists the RawAction field prefixes the flat `data` map of a
-// stored type resolves against, in priority order. A key takes the first prefix
-// that owns the field, so a type whose payload mixes families (LayerZero packet
-// plus send/commit fields, NFT transfer plus listing fields) reads one map.
+// actionDataPrefixes orders the RawAction field families searched for each stored type.
+// The first matching prefix wins, allowing one flat payload to populate multiple families.
 var actionDataPrefixes = map[string][]string{
 	"auction_bid":                      {"NFTTransfer"},
 	"auction_outbid":                   {"TonTransfer", "NFTTransfer"},
