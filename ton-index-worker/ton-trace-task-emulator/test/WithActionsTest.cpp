@@ -1,15 +1,23 @@
+#include "EnginePrep.h"
 #include "TonConnectProcessor.h"
-#include "EmuTraceViewBuilder.h"
-#include "crypto/vm/cells/CellBuilder.h"
-#include "crypto/vm/cp0.h"
+#include "emu/EmuClassifierActor.h"
 
+#include "crypto/vm/cp0.h"
+#include "td/actor/actor.h"
+#include "td/utils/base64.h"
+
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <map>
+#include <optional>
 
 namespace {
 
 int failures = 0;
 
-void check(bool ok, const char* what) {
+void check(bool ok, const std::string& what) {
   if (!ok) {
     std::cerr << "FAIL: " << what << std::endl;
     ++failures;
@@ -50,7 +58,7 @@ std::string pack_envelope(bool trace, bool with_actions_key) {
 
 template <class T>
 T decode_task(const std::string& bytes) {
-  msgpack::object_handle oh = msgpack::unpack(bytes.data(), bytes.size());
+  auto oh = msgpack::unpack(bytes.data(), bytes.size());
   TaskEnvelope env;
   oh.get().convert(env);
   T task;
@@ -58,11 +66,220 @@ T decode_task(const std::string& bytes) {
   return task;
 }
 
-std::unique_ptr<TraceNode> make_node(td::uint32 tag) {
-  auto node = std::make_unique<TraceNode>();
-  node->transaction_root = vm::CellBuilder().store_long(tag, 32).finalize();
-  node->mc_block_seqno = 7;
-  return node;
+struct FixtureNode {
+  std::string address, boc;
+  std::uint32_t mc_seqno{};
+  MSGPACK_DEFINE_MAP(address, boc, mc_seqno);
+};
+
+struct FixtureInterface {
+  std::string kind, address, index, collection_address, owner_address, code_hash;
+  std::string mp_addr, nft_addr, nft_owner, last_bid;
+  std::map<std::string, std::string> content;
+  bool init{};
+  MSGPACK_DEFINE_MAP(kind, address, index, collection_address, owner_address, code_hash,
+                     mp_addr, nft_addr, nft_owner, last_bid, content, init);
+};
+
+struct FixtureAction {
+  std::string id, payload_hex, wire_hex;
+  MSGPACK_DEFINE_MAP(id, payload_hex, wire_hex);
+};
+
+struct ActorFixture {
+  std::string trace_id;
+  std::vector<FixtureNode> nodes;
+  std::vector<FixtureInterface> interfaces;
+  std::vector<FixtureAction> actions;
+  MSGPACK_DEFINE_MAP(trace_id, nodes, interfaces, actions);
+};
+
+std::string read_file(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+
+std::string unhex(const std::string& hex) {
+  std::string out;
+  out.reserve(hex.size() / 2);
+  for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
+    out.push_back(static_cast<char>(std::stoi(hex.substr(i, 2), nullptr, 16)));
+  }
+  return out;
+}
+
+block::StdAddress address(const std::string& text) {
+  auto result = block::StdAddress::parse(td::Slice(text));
+  check(result.is_ok(), "fixture address parses: " + text);
+  return result.is_ok() ? result.move_as_ok() : block::StdAddress{};
+}
+
+td::Bits256 bits(const std::string& hex) {
+  td::Bits256 result;
+  result.set_zero();
+  check(hex.empty() || result.from_hex(hex) == 256, "fixture code hash parses");
+  return result;
+}
+
+std::optional<block::StdAddress> optional_address(const std::string& text) {
+  if (text.empty()) return std::nullopt;
+  return address(text);
+}
+
+std::shared_ptr<const mch::TieredLookupSource::InterfaceMap> make_interfaces(
+    const std::vector<FixtureInterface>& rows) {
+  mch::TieredLookupSource::InterfaceMap result;
+  for (const auto& row : rows) {
+    const auto account = address(row.address);
+    if (row.kind == "nft_item") {
+      schema::NFTItemDataV2 nft{};
+      nft.address = account;
+      nft.init = row.init;
+      nft.index = td::string_to_int256(row.index);
+      nft.collection_address = optional_address(row.collection_address);
+      nft.owner_address = optional_address(row.owner_address);
+      nft.content = row.content;
+      nft.code_hash = bits(row.code_hash);
+      result[account].emplace_back(std::move(nft));
+    } else if (row.kind == "nft_auction") {
+      schema::GetGemsNftAuctionData auction{};
+      auction.address = account;
+      auction.mp_addr = address(row.mp_addr);
+      auction.nft_addr = address(row.nft_addr);
+      auction.nft_owner = optional_address(row.nft_owner);
+      auction.last_bid = td::string_to_int256(row.last_bid);
+      auction.code_hash = bits(row.code_hash);
+      result[account].emplace_back(std::move(auction));
+    } else {
+      check(false, "unsupported fixture interface: " + row.kind);
+    }
+  }
+  return std::make_shared<const mch::TieredLookupSource::InterfaceMap>(std::move(result));
+}
+
+ActorFixture load_fixture() {
+  const auto path = std::filesystem::path(__FILE__).parent_path() / "data" / "emu_actor.msgpack";
+  const auto bytes = read_file(path);
+  check(!bytes.empty(), "actor fixture loads");
+  ActorFixture fixture;
+  if (!bytes.empty()) msgpack::unpack(bytes.data(), bytes.size()).get().convert(fixture);
+  return fixture;
+}
+
+const msgpack::object* field(const msgpack::object& map, const std::string& name) {
+  if (map.type != msgpack::type::MAP) return nullptr;
+  for (std::uint32_t i = 0; i < map.via.map.size; ++i) {
+    const auto& item = map.via.map.ptr[i];
+    if (item.key.type == msgpack::type::STR && item.key.as<std::string>() == name) return &item.val;
+  }
+  return nullptr;
+}
+
+void test_real_actor() {
+  auto fixture = load_fixture();
+  if (fixture.nodes.empty()) return;
+
+  mch::EmuTraceView view;
+  view.trace_id = fixture.trace_id;
+  view.interfaces = make_interfaces(fixture.interfaces);
+  for (const auto& node : fixture.nodes) {
+    auto boc = td::base64_decode(node.boc);
+    check(boc.is_ok(), "transaction BOC base64 decodes");
+    if (boc.is_error()) return;
+    view.nodes.push_back({address(node.address),
+                          std::make_shared<const std::string>(boc.move_as_ok()),
+                          node.mc_seqno, mch::EmuFinality::finalized});
+  }
+
+  auto prep = mch::make_engine_prep();
+  check(prep.is_ok(), "engine prep succeeds");
+  if (prep.is_error()) return;
+
+  mch::EmuClassifyResult result;
+  bool answered = false;
+  td::actor::Scheduler scheduler({1});
+  td::actor::ActorOwn<mch::EmuClassifierActor> actor;
+  scheduler.run_in_context([&] {
+    actor = td::actor::create_actor<mch::EmuClassifierActor>(
+        "EmuClassifierActorTest", mch::EmuClassifierConfig{prep.move_as_ok(), 1, false});
+    td::actor::send_closure(
+        actor, &mch::EmuClassifierActor::classify, std::move(view), mch::emu_now_us(),
+        td::PromiseCreator::lambda([&](td::Result<mch::EmuClassifyResult> value) {
+          check(value.is_ok(), "actor returns a result");
+          if (value.is_ok()) result = value.move_as_ok();
+          answered = true;
+          td::actor::SchedulerContext::get().stop();
+        }));
+  });
+  scheduler.run();
+  scheduler.run_in_context([&] { actor.reset(); });
+
+  check(answered, "actor answers exactly once");
+  check(result.outcome == mch::EmuClassifyOutcome::classified, "actor outcome is classified");
+  check(!result.failure, "actor reports no failure");
+  check(result.skipped_payload_actions == 0, "actor skips no payload actions");
+  check(!result.payload.actions_blob.empty(), "actor produced Redis wire bytes");
+  if (result.payload.actions_blob.empty()) return;
+  auto decoded = msgpack::unpack(result.payload.actions_blob.data(), result.payload.actions_blob.size());
+  const auto& rows = decoded.get();
+  check(rows.type == msgpack::type::ARRAY, "actor wire is an action array");
+  if (rows.type == msgpack::type::ARRAY) {
+    check(rows.via.array.size == fixture.actions.size(), "actor action count matches batch golden");
+  }
+  for (const auto& expected : fixture.actions) {
+    bool found = false;
+    if (rows.type == msgpack::type::ARRAY) {
+      for (std::uint32_t i = 0; i < rows.via.array.size; ++i) {
+        const auto& row = rows.via.array.ptr[i];
+        const auto* id = field(row, "action_id");
+        const auto* payload = field(row, "payload");
+        if (id && id->as<std::string>() == expected.id) {
+          found = true;
+          const auto bytes = unhex(expected.payload_hex);
+          const bool payload_matches = payload && payload->type == msgpack::type::BIN &&
+                                       payload->via.bin.size == bytes.size() &&
+                                       std::string(payload->via.bin.ptr, payload->via.bin.size) == bytes;
+          check(payload_matches, "compact payload bytes match for " + expected.id);
+
+          const auto expected_wire = unhex(expected.wire_hex);
+          auto expected_decoded = msgpack::unpack(expected_wire.data(), expected_wire.size());
+          const auto& expected_rows = expected_decoded.get();
+          const msgpack::object* expected_row =
+              expected_rows.type == msgpack::type::ARRAY && expected_rows.via.array.size == 1
+                  ? &expected_rows.via.array.ptr[0]
+                  : nullptr;
+          const auto* type = field(row, "type");
+          const auto* success = field(row, "success");
+          const auto* expected_type = expected_row ? field(*expected_row, "type") : nullptr;
+          const auto* expected_success = expected_row ? field(*expected_row, "success") : nullptr;
+          const bool type_matches = type && expected_type &&
+                                    type->type == msgpack::type::STR &&
+                                    expected_type->type == msgpack::type::STR &&
+                                    type->as<std::string>() == expected_type->as<std::string>();
+          const bool success_matches = success && expected_success &&
+                                       success->type == msgpack::type::BOOLEAN &&
+                                       expected_success->type == msgpack::type::BOOLEAN &&
+                                       success->as<bool>() == expected_success->as<bool>();
+          check(type_matches, "action type matches for " + expected.id);
+          check(success_matches, "action success matches for " + expected.id);
+
+          msgpack::sbuffer wire;
+          msgpack::packer<msgpack::sbuffer> packer(wire);
+          packer.pack_array(1);
+          packer.pack(row);
+          check(std::string(wire.data(), wire.size()) == expected_wire,
+                "Redis wire row matches for " + expected.id);
+          std::cout << "action " << expected.id
+                    << ": type=" << (type_matches ? type->as<std::string>() : "?")
+                    << " success=" << (success_matches && success->as<bool>() ? "true" : "false")
+                    << " payload=" << bytes.size()
+                    << " wire=" << wire.size() << " bytes" << std::endl;
+          break;
+        }
+      }
+    }
+    check(found, "expected action is present: " + expected.id);
+  }
 }
 
 }  // namespace
@@ -75,25 +292,8 @@ int main() {
   check(decode_task<TonConnectTraceTask>(pack_envelope(false, true)).with_actions, "tonconnect task with with_actions key");
   check(!decode_task<TonConnectTraceTask>(pack_envelope(false, false)).with_actions, "tonconnect task without with_actions key");
 
-  Trace trace;
-  trace.root = make_node(1);
-  trace.root->children.push_back(make_node(2));
-  trace.root->children.push_back(make_node(3));
-  auto view_r = build_emu_trace_view(trace);
-  check(view_r.is_ok(), "view builds");
-  if (view_r.is_ok()) {
-    auto view = view_r.move_as_ok();
-    check(view.nodes.size() == 3, "view node count");
-    for (const auto& node : view.nodes) {
-      check(node.tx_boc && !node.tx_boc->empty(), "node tx_boc non-empty");
-      check(node.mc_seqno == 7, "node mc_seqno");
-      check(node.finality == mch::EmuFinality::emulated, "node finality");
-    }
-  }
-
-  if (failures != 0) {
-    return 1;
-  }
+  test_real_actor();
+  if (failures != 0) return 1;
   std::cout << "task_emulator_with_actions: OK" << std::endl;
   return 0;
 }
