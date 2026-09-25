@@ -237,5 +237,6 @@ SchemaClassifyResult classify_schema_trace(
     const std::vector<schema::Transaction> &txs, TieredLookupSource &src);
 
 std::string exception_message(std::exception_ptr error);
+std::string exception_message(std::exception_ptr error, bool prefix_exception);
 
 }  // namespace mch

@@ -57,6 +57,51 @@ EvalResult throwing_test_host(BuildEnv &, const std::vector<Value> &) {
   return EvalResult{false, Value::null(), {}};
 }
 
+std::exception_ptr test_exception(HostThrow kind) {
+  try {
+    BuildEnv env;
+    g_serious_kind = kind;
+    throwing_test_host(env, {});
+  } catch (...) {
+    return std::current_exception();
+  }
+  return {};
+}
+
+void test_exception_message_prefixes() {
+  check("exception_message/vm_prefix",
+        exception_message(test_exception(HostThrow::vm_error), false) ==
+            "vm exception: host vm error");
+  check("exception_message/generic_prefix",
+        exception_message(test_exception(HostThrow::std_error), true) ==
+            "exception: host standard error");
+  check("exception_message/generic_unprefixed",
+        exception_message(test_exception(HostThrow::std_error), false) ==
+            "host standard error");
+}
+
+void test_directional_field_guard() {
+  Block block;
+  block.btype = "tick_tock";
+  Action action;
+  action.destination = Value::make_bool(true);
+  try {
+    build_action(&block, action);
+    check("action_build/directional_guard", false);
+  } catch (const std::runtime_error &error) {
+    check("action_build/directional_guard",
+          std::string(error.what()) ==
+              "action build produced invalid destination for tick_tock");
+  }
+}
+
+void test_tier2_rate_format() {
+  ClassifyStats stats;
+  stats.lookups.tier1_hits = 3;
+  stats.lookups.tier2_hits = 1;
+  check("stats/tier2_rate", stats.format().find("tier2_rate=25%") != std::string::npos);
+}
+
 TraceContext make_host_test_context(const std::string &trace_id) {
   TraceContext ctx;
   ctx.trace.trace_id = trace_id;
@@ -860,6 +905,9 @@ void test_engine_prep_has_no_skips() {
 
 int run_classify_core_test() {
   g_fail = 0;
+  test_exception_message_prefixes();
+  test_directional_field_guard();
+  test_tier2_rate_format();
   test_payload_encode_failure_skips_one_action();
   test_host_fn_exception_is_clean_rejection();
   test_host_fn_error_rejects_attempt_and_next_matcher_runs();

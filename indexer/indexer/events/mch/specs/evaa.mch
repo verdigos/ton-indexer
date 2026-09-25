@@ -37,7 +37,8 @@ fn evaa_refund_reason(code) = (
 fn evaa_liquidate_fail(immediate, refund, unsatisfied) = (
     "immediate_rejection" if immediate != null else
     evaa_refund_reason(refund.msg.opcode) if refund != null else
-    (evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied != null else
+    (evaa_refund_reason(unsatisfied.body.info.ref.error) ?? "unknown") if unsatisfied.body != null else
+    "liquidation_error" if unsatisfied != null else
     "master_not_enough_liquidity"
 )
 fn evaa_withdraw_reason(code) = (

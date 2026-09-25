@@ -506,7 +506,7 @@ void test_abi_rows_dispatch() {
   }
 }
 
-void test_evaa_unsatisfied_fee_reason() {
+void test_evaa_unsatisfied_reasons() {
   namespace e = ton_abi::gen::evaa;
 
   auto info = e::EvaaLiquidateUnsatisfiedInfo::create(
@@ -572,6 +572,26 @@ void test_evaa_unsatisfied_fee_reason() {
             fld(outcome.data, "fail_reason") &&
             fld(outcome.data, "fail_reason")->t == VType::Str &&
             fld(outcome.data, "fail_reason")->str == "liquidate_asset_transaction_fees");
+
+  auto unsatisfied_slice = vm::load_cell_slice(unsatisfied.ok());
+  unsatisfied_slice.fetch_ref();
+  vm::CellBuilder truncated;
+  bool truncated_stored = truncated.append_cellslice_bool(unsatisfied_slice) &&
+                          truncated.store_ref_bool(empty_cell());
+  check("evaa/unsatisfied_truncated/body_store", truncated_stored);
+  if (!truncated_stored) return;
+  auto truncated_body = truncated.finalize();
+  check("evaa/unsatisfied_truncated/body_unparseable",
+        parse_message_body("EvaaLiquidateUnsatisfied", truncated_body).is_error());
+  check("evaa/unsatisfied_truncated/body_attach",
+        attach(unsatisfied_block, unsatisfied_node, unsatisfied_msg, truncated_body));
+
+  outcome = it->fn(env);
+  check("evaa/unsatisfied_truncated/reason",
+        !outcome.is_rejected &&
+            fld(outcome.data, "fail_reason") &&
+            fld(outcome.data, "fail_reason")->t == VType::Str &&
+            fld(outcome.data, "fail_reason")->str == "liquidation_error");
 }
 
 // DeDust swap notification: Cell<DedustSwapInfo> preserves both the decoded
@@ -720,7 +740,7 @@ int run_abi_bridge_test() {
   test_dedust_v2_claim_reward();
   test_registry_policy();
   test_abi_rows_dispatch();
-  test_evaa_unsatisfied_fee_reason();
+  test_evaa_unsatisfied_reasons();
   std::printf("ABI-BRIDGE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

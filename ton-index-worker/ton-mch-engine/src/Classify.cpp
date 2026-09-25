@@ -6,11 +6,15 @@
 namespace mch {
 
 std::string ClassifyStats::format() const {
+  const auto resolved = lookups.tier1_hits + lookups.tier2_hits;
   return "lookups{tier1=" + std::to_string(lookups.tier1_hits) +
          " tier2=" + std::to_string(lookups.tier2_hits) +
          " miss=" + std::to_string(lookups.misses) +
          " miss_by_kind={" + format_counts(lookups.misses_by_kind) + "}" +
-         " tier2_hit_by_kind={" + format_counts(lookups.tier2_hits_by_kind) + "}}" +
+         " tier2_hit_by_kind={" + format_counts(lookups.tier2_hits_by_kind) + "}" +
+         " tier2_rate=" +
+         std::to_string(resolved ? 100 * lookups.tier2_hits / resolved : 0) +
+         "%}" +
          " tier2{fetched=" + std::to_string(tier2.fetched) +
          " memo_hits=" + std::to_string(tier2.memo_hits) + "}";
 }

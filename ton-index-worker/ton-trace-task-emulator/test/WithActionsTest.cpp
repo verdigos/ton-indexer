@@ -1,7 +1,9 @@
 #include "EnginePrep.h"
+#include "EmuTraceViewBuilder.h"
 #include "TonConnectProcessor.h"
 #include "emu/EmuClassifierActor.h"
 
+#include "crypto/vm/cells/CellBuilder.h"
 #include "crypto/vm/cp0.h"
 #include "td/actor/actor.h"
 #include "td/utils/base64.h"
@@ -64,6 +66,13 @@ T decode_task(const std::string& bytes) {
   T task;
   env.task.convert(task);
   return task;
+}
+
+std::unique_ptr<TraceNode> make_node(td::uint32 tag) {
+  auto node = std::make_unique<TraceNode>();
+  node->transaction_root = vm::CellBuilder().store_long(tag, 32).finalize();
+  node->mc_block_seqno = 7;
+  return node;
 }
 
 struct FixtureNode {
@@ -176,6 +185,24 @@ const msgpack::object* field(const msgpack::object& map, const std::string& name
   return nullptr;
 }
 
+void test_view_builder() {
+  Trace trace;
+  trace.root = make_node(1);
+  trace.root->children.push_back(make_node(2));
+  trace.root->children.push_back(make_node(3));
+  auto view_r = build_emu_trace_view(trace);
+  check(view_r.is_ok(), "view builds");
+  if (view_r.is_error()) return;
+
+  auto view = view_r.move_as_ok();
+  check(view.nodes.size() == 3, "view node count");
+  for (const auto& node : view.nodes) {
+    check(node.tx_boc && !node.tx_boc->empty(), "node tx_boc non-empty");
+    check(node.mc_seqno == 7, "node mc_seqno");
+    check(node.finality == mch::EmuFinality::emulated, "node finality");
+  }
+}
+
 void test_real_actor() {
   auto fixture = load_fixture();
   if (fixture.nodes.empty()) return;
@@ -266,6 +293,7 @@ int main() {
   check(decode_task<TonConnectTraceTask>(pack_envelope(false, true)).with_actions, "tonconnect task with with_actions key");
   check(!decode_task<TonConnectTraceTask>(pack_envelope(false, false)).with_actions, "tonconnect task without with_actions key");
 
+  test_view_builder();
   test_real_actor();
   if (failures != 0) return 1;
   std::cout << "task_emulator_with_actions: OK" << std::endl;

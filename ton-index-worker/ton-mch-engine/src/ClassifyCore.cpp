@@ -38,21 +38,32 @@ bool outcomes_allow_replacement(const BlockClassification &bc) {
   });
 }
 
-std::string exception_message(std::exception_ptr error) {
+static std::string exception_message_with_prefixes(std::exception_ptr error,
+                                                   const char *vm_prefix,
+                                                   const char *exception_prefix) {
   if (!error) return "unknown exception";
   try {
     std::rethrow_exception(error);
   } catch (const vm::VmError &e) {
-    return e.get_msg();
+    return std::string(vm_prefix) + e.get_msg();
   } catch (const vm::VmNoGas &e) {
-    return e.get_msg();
+    return std::string(vm_prefix) + e.get_msg();
   } catch (const vm::VmVirtError &e) {
-    return e.get_msg();
+    return std::string(vm_prefix) + e.get_msg();
   } catch (const std::exception &e) {
-    return e.what();
+    return std::string(exception_prefix) + e.what();
   } catch (...) {
     return "unknown exception";
   }
+}
+
+std::string exception_message(std::exception_ptr error) {
+  return exception_message_with_prefixes(error, "", "");
+}
+
+std::string exception_message(std::exception_ptr error, bool prefix_exception) {
+  return exception_message_with_prefixes(error, "vm exception: ",
+                                         prefix_exception ? "exception: " : "");
 }
 
 namespace {
@@ -63,14 +74,15 @@ Block *wrap_root(BlockArena &arena, Block *root) {
   return wrapper;
 }
 
-std::pair<std::string, FailureCategory> exception_failure(std::exception_ptr error) {
+std::pair<std::string, FailureCategory> exception_failure(std::exception_ptr error,
+                                                          bool prefix_exception) {
   try {
     if (error) std::rethrow_exception(error);
   } catch (const LookupNotConverged &e) {
     return {e.what(), FailureCategory::lookup_infra_fail};
   } catch (...) {
   }
-  return {exception_message(error), FailureCategory::engine_fault};
+  return {exception_message(error, prefix_exception), FailureCategory::engine_fault};
 }
 
 // The flat spine list in canonical BFS order: `root` plus everything reachable
@@ -516,7 +528,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // a leaf no matcher consumed emits a basic row.
     result.action_rows = serialize_rows(spine, "");
   } catch (...) {
-    auto [reason, category] = exception_failure(std::current_exception());
+    auto [reason, category] = exception_failure(std::current_exception(), false);
     result.failure = true;
     result.failure_reason = std::move(reason);
     result.failure_category = category;
@@ -595,7 +607,7 @@ SchemaClassifyResult classify_schema_trace(
     completed = true;
   } catch (...) {
     result.outcome = TraceOutcome::terminal_failure_empty;
-    auto [reason, category] = exception_failure(std::current_exception());
+    auto [reason, category] = exception_failure(std::current_exception(), true);
     result.failure_reason = std::move(reason);
     result.failure_category = category;
   }

@@ -1,4 +1,5 @@
 # Reuse an existing key first; a new key needs written justification, then append the next id by hand.
+# Never delete or reuse an id.
 version: 1
 keys:
 - id: 1

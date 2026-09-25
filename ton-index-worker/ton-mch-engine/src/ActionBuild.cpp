@@ -1365,6 +1365,23 @@ static bool build_action_with_id(Block *b, const std::string &action_id, Action 
   a.mc_seqno_end = b->event_nodes.empty() ? 0 : seqmax;
   if (!fill_action(b, a)) return false;
 
+  const std::pair<const char *, const Value *> directional_fields[]{
+      {"source", &a.source},
+      {"source_secondary", &a.source_secondary},
+      {"destination", &a.destination},
+      {"destination_secondary", &a.destination_secondary},
+      {"asset", &a.asset},
+      {"asset_secondary", &a.asset_secondary},
+      {"asset2", &a.asset2},
+      {"asset2_secondary", &a.asset2_secondary},
+  };
+  for (const auto &[name, value] : directional_fields) {
+    if (value->t != VType::Str && value->t != VType::Null) {
+      throw std::runtime_error("action build produced invalid " + std::string(name) +
+                               " for " + b->btype);
+    }
+  }
+
   const std::pair<const char *, const Value *> numeric_fields[]{
       {"amount", &a.amount}, {"value", &a.value}};
   for (const auto &[name, value] : numeric_fields) {
