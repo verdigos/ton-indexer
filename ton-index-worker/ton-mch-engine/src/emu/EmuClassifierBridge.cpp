@@ -1,10 +1,8 @@
 #include "EmuClassifierBridge.h"
 
-#include "EmuInterfaces.h"
+#include "DetectorInterfaceAdapter.h"
 
 #include "TraceEmulator.h"
-
-#include "td/utils/overloaded.h"
 
 #include <utility>
 #include <variant>
@@ -12,8 +10,8 @@
 
 namespace mch {
 
-ParsedBlockLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
-  ParsedBlockLookupSource::InterfaceMap result;
+TieredLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
+  TieredLookupSource::InterfaceMap result;
 
   // Derive NFT code hashes from the detector's account state, preferring the
   // latest emulated state over committed state. Zero means unknown.
@@ -40,37 +38,13 @@ ParsedBlockLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
     std::vector<schema::BlockchainInterfaceV2> adapted;
     const td::Bits256 code_hash = account_code_hash(addr);
     for (const auto &iface : ifaces) {
-      std::visit(
-          td::overloaded(
-              [&](const JettonWalletDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const NftItemDetectorR::Result &r) {
-                auto v = to_v2(r);
-                v.code_hash = code_hash;
-                adapted.push_back(std::move(v));
-              },
-              [&](const GetGemsNftFixPriceSale::Result &r) {
-                auto v = to_v2(r);
-                v.code_hash = code_hash;
-                adapted.push_back(std::move(v));
-              },
-              [&](const GetGemsNftAuction::Result &r) {
-                auto v = to_v2(r);
-                v.code_hash = code_hash;
-                adapted.push_back(std::move(v));
-              },
-              // DeDust and nominator pools resolve in tier 1. nft_sale accepts
-              // either fixed-price-sale variant.
-              [&](const GetGemsNftFixPriceSaleV4::Result &r) {
-                auto v = to_v2(r);
-                v.code_hash = code_hash;
-                adapted.push_back(std::move(v));
-              },
-              [&](const DedustPoolDetector::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const MultisigOrder::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const NominatorPoolContract::Result &r) { adapted.push_back(to_v2(r)); },
-              [](const JettonMasterDetectorR::Result &) {},
-              [](const NftCollectionDetectorR::Result &) {}),
-          iface);
+      std::visit([&](const auto &r) {
+        if constexpr (requires { to_schema(r); }) {
+          schema::BlockchainInterfaceV2 v = to_schema(r);
+          set_nft_code_hash(v, code_hash);
+          adapted.push_back(std::move(v));
+        }
+      }, iface);
     }
     if (!adapted.empty()) {
       result.emplace(addr, std::move(adapted));
