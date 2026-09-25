@@ -1,8 +1,9 @@
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
+#include "ExprRuntime.h"
 #include "MsgParse.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "btypes_gen.h"
 
 #include "td/utils/base64.h"
@@ -91,6 +92,26 @@ Value data_field(const Block *b, const char *name) {
 bool same_account(const Value &a, const Value &b) {
   return a.t == VType::Account && b.t == VType::Account && a.addr_none == b.addr_none &&
          a.str == b.str;
+}
+
+// Post-pass spine helpers, shared by ClassifyCore's row filter and the DeDust
+// and STON.fi liquidity post-processors.
+Value pp_field(const Value &d, const std::string &k) {
+  const Value *v = d.field(k);
+  return v != nullptr ? *v : Value::null();
+}
+void set_field(Value::Fields &fields, const std::string &key, Value value) {
+  for (auto &field : fields) {
+    if (field.first == key) {
+      field.second = std::move(value);
+      return;
+    }
+  }
+  fields.emplace_back(key, std::move(value));
+}
+bool pp_eq(const Value &a, const Value &b) {
+  EvalResult r = rt_eq(a, b);
+  return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
 }
 
 }  // namespace mch

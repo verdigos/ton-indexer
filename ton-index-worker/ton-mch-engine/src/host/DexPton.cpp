@@ -1,4 +1,5 @@
 #include "host/DexPton.h"
+#include "host/HostImpls.h"
 
 #include <algorithm>
 
@@ -8,13 +9,22 @@ const std::vector<std::string> &pton_masters() {
   static const std::vector<std::string> m = {
       "0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C",
       "0:671963027F7F85659AB55B821671688601CDCF1EE674FC7FBBB1A776A18D34A3",
-      "0:949C4C66760C002800E2FA3D8A3CA4E1C90A9373B53AE7472033483BF14CD95E"};
+      "0:949C4C66760C002800E2FA3D8A3CA4E1C90A9373B53AE7472033483BF14CD95E",
+      "0:7019100C8D363F08C3562A1CC178703E54F8E9DAB0FDBC1DEBC1EA46D9CA3979"};
   return m;
 }
 
+// The argument is normalized first, so every spelling the shared address
+// normalizer accepts (raw "wc:HEX" upper or lower) matches a master.
 bool is_pton_master(const std::string &s) {
   const auto &m = pton_masters();
-  return std::find(m.begin(), m.end(), s) != m.end();
+  const std::string canon = canonicalize_or_passthrough(s);
+  return std::find(m.begin(), m.end(), canon) != m.end();
+}
+
+EvalResult is_pton_master(BuildEnv &, const std::vector<Value> &args) {
+  const Value &master = args[0];
+  return rt_ok(Value::make_bool(master.t == VType::Str && is_pton_master(master.str)));
 }
 
 std::optional<std::string> wallet_jetton_master_str(const Value &wallet) {
@@ -33,8 +43,7 @@ Value wallet_jetton_asset(const Value &wallet, bool pton_conversion) {
     // v2/tonco (conversion): missing jetton -> caller-visible Null.
     return pton_conversion ? Value::null() : Value::make_asset_ton();
   }
-  // Preserve the existing exact-spelling pTON check; normalization only
-  // governed the Asset string after this branch.
+  // A TON-proxy master is native TON however the lookup spelled it.
   if (pton_conversion && is_pton_master(jf->str)) {
     return Value::make_asset_ton();
   }

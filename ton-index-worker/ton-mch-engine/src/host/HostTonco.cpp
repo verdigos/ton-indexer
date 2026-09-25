@@ -40,20 +40,40 @@ constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 constexpr const char *kRouterWttonWallet =
     "0:871DA9215B14902166F0EA2A16DB56278D528108377F8158C5F4CCFDFDD22E17";
 
-// jetton_wallet lookup -> Asset (pTON master -> TON), or Null on a miss
+// jetton_wallet lookup -> Asset (TON-proxy master -> TON), or Null on a miss
 // (caller decides fallback).
 Value wallet_asset(BuildEnv &env, const std::string &addr) {
   Value jw = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(addr)});
   return wallet_jetton_asset(jw, /*pton_conversion=*/true);
 }
 
-// Only source_wallet is used from the v3 swap body.
-td::Result<Value> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
+// Source wallet is v2 input_jetton_wallet when the root is fully consumed, else v1 source_wallet.
+struct SwapSource {
+  Value source_wallet;
+  bool v2{false};
+};
+td::Result<SwapSource> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
+  auto r_ctx = open_body(body);
+  if (r_ctx.is_ok()) {
+    vm::CellSlice cs = r_ctx.ok().cs;
+    if (cs.have(32 + 64) && cs.advance(32 + 64) && cs.have(4)) {
+      cs.fetch_ulong(4);  // source_type
+      if (load_address_value(cs).is_ok()) {  // from_user
+        if (load_address_value(cs).is_ok() && cs.have(1)) {  // owner
+          cs.fetch_ulong(1);  // zeroForOne
+          auto r_jw = load_address_value(cs);
+          if (r_jw.is_ok() && cs.size() == 0 && cs.size_refs() == 2) {
+            return SwapSource{r_jw.move_as_ok(), true};
+          }
+        }
+      }
+    }
+  }
   TRY_RESULT(v, parse_message_body("ToncoRouterV3SwapSourceWallet", body));
-  return *v.field("source_wallet");
+  return SwapSource{*v.field("source_wallet"), false};
 }
 
-// PayTo: exit_code + the coinsinfo maybe-ref (amount0/jetton0/amount1/jetton1).
+// PayTo: exit_code + coinsinfo (v1 amount0/jetton0/amount1/jetton1; v2 jetton0/jetton1/amount0/amount1).
 // Conditional swap/burn info cells are unused by the core.
 struct RouterPayTo {
   std::uint32_t exit_code{0};
@@ -61,14 +81,14 @@ struct RouterPayTo {
   Value jetton0, jetton1;          // account or Null
   Value receiver0, receiver1;      // account or Null (withdraw fallback legs only)
 };
-td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
+td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body, bool v2) {
   TRY_RESULT(ctx, open_body(body));
   auto &cs = ctx.cs;
   if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
     return td::Status::Error("v3 pay_to: header underflow");
   }
-  TRY_RESULT(r0, load_address_py(cs));
-  TRY_RESULT(r1, load_address_py(cs));
+  TRY_RESULT(r0, load_address_value(cs));
+  TRY_RESULT(r1, load_address_value(cs));
   if (!cs.have(32 + 64)) {
     return td::Status::Error("v3 pay_to: exit/seqno underflow");
   }
@@ -85,16 +105,23 @@ td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
       return td::Status::Error("v3 pay_to: coinsinfo ref missing");
     }
     TRY_RESULT(ci, open_ref_cell(cs.fetch_ref()));
-    TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
-    TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
-    TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
-    TRY_RESULT_ASSIGN(pt.jetton1, load_address_py(ci));
+    if (v2) {
+      TRY_RESULT_ASSIGN(pt.jetton0, load_address_value(ci));
+      TRY_RESULT_ASSIGN(pt.jetton1, load_address_value(ci));
+      TRY_RESULT_ASSIGN(pt.amount0, load_var_uint16(ci));
+      TRY_RESULT_ASSIGN(pt.amount1, load_var_uint16(ci));
+    } else {
+      TRY_RESULT_ASSIGN(pt.amount0, load_var_uint16(ci));
+      TRY_RESULT_ASSIGN(pt.jetton0, load_address_value(ci));
+      TRY_RESULT_ASSIGN(pt.amount1, load_var_uint16(ci));
+      TRY_RESULT_ASSIGN(pt.jetton1, load_address_value(ci));
+    }
   }
   return pt;
 }
 
-// Walk nested in-transfer payload cells collecting (target_wallet, min_out)
-// pairs. Depth-guarded against unbounded nesting; a bad inner tail is swallowed.
+// Walk the in-transfer payload collecting (target_wallet, min_out) per hop; the
+// next hop's swap payload is the first ref of the payloads cell.
 constexpr int kMaxPayloadDepth = 64;
 void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string, td::RefInt256>> &out,
                              int depth) {
@@ -104,7 +131,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   if (!cs.have(32) || !cs.advance(32)) {
     return;  // opcode
   }
-  auto r_addr = load_address_py(cs);
+  auto r_addr = load_address_value(cs);
   if (r_addr.is_error()) {
     return;
   }
@@ -113,7 +140,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
     return;
   }
   cs.advance(160);  // price_limit_sqrt
-  auto r_min = load_coins_py(cs);
+  auto r_min = load_var_uint16(cs);
   if (r_min.is_error()) {
     return;
   }
@@ -121,20 +148,26 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   if (auto ts = acc_str(target)) {
     out.emplace_back(*ts, or_zero(std::move(min_out)));
   }
-  auto r_rcpt = load_address_py(cs);  // recipient
+  auto r_rcpt = load_address_value(cs);  // recipient
   if (r_rcpt.is_error()) {
     return;
   }
   if (!cs.have(1)) {
     return;
   }
-  if (cs.fetch_ulong(1) && cs.size_refs() > 0) {  // payload maybe-ref
+  if (cs.fetch_ulong(1) && cs.size_refs() > 0) {  // payloads maybe-ref
     try {
-      auto inner = open_ref_cell(cs.fetch_ref());
-      if (inner.is_ok()) {
-        vm::CellSlice ics = inner.move_as_ok();
-        if (ics.have(32) && ics.prefetch_ulong(32) == kV3Swap) {
-          collect_payload_targets(ics, out, depth + 1);
+      auto payloads = open_ref_cell(cs.fetch_ref());
+      if (payloads.is_ok()) {
+        vm::CellSlice pcs = payloads.move_as_ok();
+        if (pcs.size_refs() > 0) {
+          auto inner = open_ref_cell(pcs.fetch_ref());
+          if (inner.is_ok()) {
+            vm::CellSlice ics = inner.move_as_ok();
+            if (ics.have(32) && ics.prefetch_ulong(32) == kV3Swap) {
+              collect_payload_targets(ics, out, depth + 1);
+            }
+          }
         }
       }
     } catch (...) {
@@ -145,105 +178,19 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
 
 }  // namespace
 
-// Any parse/nav failure is a Null reject. Input transfer is read via
-// btype/children_blocks/data, not event_nodes[0].
+// Jetton-leg residue plus POSITION_INIT liquidity (nft_mint is a produced
+// block, so the spec cannot parse its body). Notify from children_blocks of
+// a produced jetton_transfer, FUND_ACCOUNT payload check, wallet lookups,
+// and excess pTON→TON. Any parse/nav failure is a Null reject.
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args) {
-  auto decoded = decode_consumed_or_none(args);
-  if (!decoded) {
-    if (args[0].t == VType::List && !args[0].items->empty()) {
-      return host_reject("empty consumed");
-    }
+  const Block *block = as_block(args[0]);
+  if (block == nullptr) {
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed = std::move(decoded->blocks);
-  const Block *block = consumed.front();
 
   // anchor <- FundAccount <- input transfer.
   const Block *p1 = block->previous_block;
   const Block *input_transfer = p1 != nullptr ? p1->previous_block : nullptr;
-
-  const Block *nft_mint = nullptr;
-  for (const Block *b : consumed) {
-    if (b->btype == mch::btype::kNftMint) {
-      nft_mint = b;
-      break;
-    }
-  }
-  auto r_body = block_body(block);
-  if (r_body.is_error()) {
-    return host_reject("add_liquidity body");
-  }
-  auto r_ctx = open_body(r_body.move_as_ok());
-  if (r_ctx.is_error()) {
-    return host_reject("add_liquidity body open");
-  }
-  auto add_ctx = r_ctx.move_as_ok();
-  auto &acs = add_ctx.cs;
-  if (!acs.have(32 + 64) || !acs.advance(32 + 64)) {
-    return host_reject("add_liquidity header short");
-  }
-  auto r_na0 = load_coins_py(acs);  // new_amount0
-  auto r_na1 = load_coins_py(acs);  // new_amount1
-  auto r_ne0 = load_coins_py(acs);  // new_enough0
-  auto r_ne1 = load_coins_py(acs);  // new_enough1
-  if (r_na0.is_error() || r_na1.is_error() || r_ne0.is_error() || r_ne1.is_error()) {
-    return host_reject("add_liquidity amounts parse");
-  }
-  td::RefInt256 new_amount0 = r_na0.move_as_ok();
-  (void)r_na1;
-  td::RefInt256 new_enough0 = r_ne0.move_as_ok();
-  td::RefInt256 new_enough1 = r_ne1.move_as_ok();
-  if (!acs.have(128 + 24 + 24)) {
-    return host_reject("add_liquidity tail short");
-  }
-  acs.advance(128);  // liquidity
-  std::int64_t tick_lower = acs.fetch_long(24);
-  std::int64_t tick_upper = acs.fetch_long(24);
-  bool is_first = !new_amount0.is_null() && new_amount0->sgn() > 0;
-
-  Value lp_tokens_minted = Value::null();
-  Value nft_index = Value::null();
-  Value nft_address = Value::null();
-  if (nft_mint != nullptr) {
-    auto rb = block_body(nft_mint);
-    if (rb.is_error()) {
-      return host_reject("nft_mint body");
-    }
-    auto rc = open_body(rb.move_as_ok());
-    if (rc.is_error()) {
-      return host_reject("nft_mint body open");
-    }
-    auto pc = rc.move_as_ok();
-    auto &pcs = pc.cs;
-    // opcode(32) query(64) user(addr) liquidity(128) tick_lower(24) tick_upper(24)
-    if (!pcs.have(32 + 64) || !pcs.advance(32 + 64)) {
-      return host_reject("nft_mint header short");
-    }
-    if (load_address_py(pcs).is_error()) {
-      return host_reject("nft_mint user address parse");
-    }
-    if (!pcs.have(128 + 24 + 24)) {
-      return host_reject("nft_mint liquidity/ticks short");
-    }
-    td::RefInt256 liquidity = pcs.fetch_int256(128, false);
-    pcs.advance(24 + 24);  // tick_lower + tick_upper
-    lp_tokens_minted = Value::make_amount(std::move(liquidity));
-    // nft_index lives in the old_fee_cell ref at bit offset 256+256, uint64.
-    if (pcs.size_refs() < 1) {
-      return host_reject("nft_mint fee cell ref missing");
-    }
-    auto rf = open_ref_cell(pcs.fetch_ref());
-    if (rf.is_error()) {
-      return host_reject("nft_mint fee cell open");
-    }
-    auto fcs = rf.move_as_ok();
-    if (!fcs.have(256 + 256 + 64) || !fcs.advance(256 + 256)) {
-      return host_reject("nft_mint index field short");
-    }
-    nft_index = Value::make_int(refint_u64(fcs.fetch_ulong(64)));
-    const Message *nm = block_msg(nft_mint);
-    nft_address = account_from_opt(nm != nullptr ? nm->destination : std::nullopt);
-  }
 
   if (input_transfer == nullptr) {
     return host_reject("no input transfer");
@@ -293,7 +240,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     return host_reject("forward_payload is not fund_account");
   }
   pcs.advance(32);  // opcode
-  auto r_other = load_address_py(pcs);
+  auto r_other = load_address_value(pcs);
   if (r_other.is_error()) {
     return host_reject("fund_account other wallet parse");
   }
@@ -320,113 +267,109 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   // second asset (other wallet): null lookup stays null.
   Value second_asset = wallet_asset(env, other_wallet);
 
-  Value amount_1, asset_1, amount_2, asset_2, sw1, sw2;
-  if (is_first) {
-    amount_1 = sent_amount;
-    asset_1 = first_asset;
-    amount_2 = Value::null();
-    asset_2 = second_asset;
-    sw1 = sender_wallet;
-    sw2 = Value::null();
-  } else {
-    amount_1 = Value::null();
-    asset_1 = second_asset;
-    amount_2 = sent_amount;
-    asset_2 = first_asset;
-    sw1 = Value::null();
-    sw2 = sender_wallet;
-  }
-
   // Excesses are the up-to-two jetton_transfer children of ROUTERV3_PAY_TO.
   // A pTON child makes it a TON excess, else the leg's data.
   std::vector<Value> excesses;
-  {
-    const Block *pay_to = nullptr;
-    for (const Block *b : consumed) {
-      if (is_call_op(b, kV3PayTo)) { pay_to = b; break; }
+  const Block *ex_legs[2] = {as_block(args[1]), as_block(args[2])};
+  for (int i = 0; i < 2; i++) {
+    const Block *b = ex_legs[i];
+    if (b == nullptr || b->btype != mch::btype::kJettonTransfer) continue;
+    const Block *pton = first_call(b->next_blocks, kPTonTransfer);
+    Value ex_amount, ex_asset;
+    if (pton != nullptr) {
+      auto parsed = pton_ton_amount(pton);
+      td::RefInt256 ta = parsed.is_ok() ? parsed.move_as_ok() : td::RefInt256();
+      ex_amount = amount_or_zero(ta);
+      ex_asset = Value::make_asset_ton();
+    } else {
+      ex_amount = data_field(b, "amount");
+      ex_asset = data_field(b, "asset");
     }
-    if (pay_to != nullptr) {
-      int n = 0;
-      for (const Block *b : consumed) {
-        if (n >= 2) break;
-        if (b->btype != mch::btype::kJettonTransfer || b->previous_block != pay_to) continue;
-        n++;
-        const Block *pton = first_call(b->next_blocks, kPTonTransfer);
-        Value ex_amount, ex_asset;
-        if (pton != nullptr) {
-          auto parsed = pton_ton_amount(pton);
-          td::RefInt256 ta = parsed.is_ok() ? parsed.move_as_ok() : td::RefInt256();
-          ex_amount = amount_or_zero(ta);
-          ex_asset = Value::make_asset_ton();
-        } else {
-          ex_amount = data_field(b, "amount");
-          ex_asset = data_field(b, "asset");
-        }
-        excesses.push_back(excess_pair(std::move(ex_asset), std::move(ex_amount)));
-      }
+    excesses.push_back(excess_pair(std::move(ex_asset), std::move(ex_amount)));
+  }
+  // nft_mint.data.address is the minted item; data.index is a JSON float, so
+  // nft_index and liquidity stay on the POSITION_INIT body.
+  Value lp_tokens_minted = Value::null();
+  Value nft_index = Value::null();
+  if (const Block *nft_mint = as_block(args[3]); nft_mint != nullptr) {
+    auto rb = block_body(nft_mint);
+    if (rb.is_error()) {
+      return host_reject("nft_mint body");
     }
+    auto rc = open_body(rb.move_as_ok());
+    if (rc.is_error()) {
+      return host_reject("nft_mint body open");
+    }
+    auto pc = rc.move_as_ok();
+    auto &ics = pc.cs;
+    // opcode(32) query(64) user(addr) liquidity(128) tick_lower(24) tick_upper(24)
+    if (!ics.have(32 + 64) || !ics.advance(32 + 64)) {
+      return host_reject("nft_mint header short");
+    }
+    if (load_address_value(ics).is_error()) {
+      return host_reject("nft_mint user address parse");
+    }
+    if (!ics.have(128 + 24 + 24)) {
+      return host_reject("nft_mint liquidity/ticks short");
+    }
+    lp_tokens_minted = Value::make_amount(ics.fetch_int256(128, false));
+    ics.advance(24 + 24);
+    if (ics.size_refs() < 1) {
+      return host_reject("nft_mint fee cell ref missing");
+    }
+    auto rf = open_ref_cell(ics.fetch_ref());
+    if (rf.is_error()) {
+      return host_reject("nft_mint fee cell open");
+    }
+    auto fcs = rf.move_as_ok();
+    if (!fcs.have(256 + 256 + 64) || !fcs.advance(256 + 256)) {
+      return host_reject("nft_mint index field short");
+    }
+    nft_index = Value::make_int(refint_u64(fcs.fetch_ulong(64)));
   }
 
-  const Message *bm = block_msg(block);
   Value::Fields d;
   d.emplace_back("sender", std::move(sender));
-  d.emplace_back("pool", account_from_opt(bm != nullptr ? bm->source : std::nullopt));
-  d.emplace_back("account_contract",
-                 account_from_opt(bm != nullptr ? bm->destination : std::nullopt));
-  d.emplace_back("position_amount_1", amount_or_zero(new_enough0));
-  d.emplace_back("position_amount_2", amount_or_zero(new_enough1));
-  d.emplace_back("lp_tokens_minted", std::move(lp_tokens_minted));
-  d.emplace_back("tick_lower", Value::make_int64(tick_lower));
-  d.emplace_back("tick_upper", Value::make_int64(tick_upper));
-  d.emplace_back("nft_index", std::move(nft_index));
-  d.emplace_back("nft_address", std::move(nft_address));
-  d.emplace_back("amount_1", std::move(amount_1));
-  d.emplace_back("asset_1", std::move(asset_1));
-  d.emplace_back("sender_wallet_1", std::move(sw1));
-  d.emplace_back("amount_2", std::move(amount_2));
-  d.emplace_back("asset_2", std::move(asset_2));
-  d.emplace_back("sender_wallet_2", std::move(sw2));
+  d.emplace_back("sent_amount", std::move(sent_amount));
+  d.emplace_back("first_asset", std::move(first_asset));
+  d.emplace_back("second_asset", std::move(second_asset));
+  d.emplace_back("sender_wallet", std::move(sender_wallet));
   d.emplace_back("excesses", Value::make_list(std::move(excesses)));
+  d.emplace_back("lp_tokens_minted", std::move(lp_tokens_minted));
+  d.emplace_back("nft_index", std::move(nft_index));
   return rt_ok(Value::make_obj(std::move(d)));
 }
 
-// Payout half of the withdraw build: PayTo body (Maybe ^Cell coinsinfo +
-// exit_code-conditional tails), the jetton-wallet lookup behind a no-transfer
-// leg, and the leg->slot reorder. Any parse/nav failure is a Null reject.
+// Slot↔leg pairing with positional fallback, jetton_wallet classification
+// (TON-proxy masters → TON), and the leg→slot reorder. Decoded PayTo fields and
+// the two optional legs are arguments. Any parse/nav failure is a Null reject.
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args) {
-  auto decoded = decode_consumed_or_none(args);
-  if (!decoded) {
-    if (args[0].t == VType::List && !args[0].items->empty()) {
-      return host_reject("no ROUTERV3_PAY_TO in consumed");
-    }
+  const Block *pay_to = as_block(args[0]);
+  const Value &body = args[1];
+  if (pay_to == nullptr || (body.t != VType::Obj && body.t != VType::Dict)) {
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed = std::move(decoded->blocks);
-  const Block *pay_to = nullptr;
-  for (const Block *b : consumed) {
-    if (is_call_op(b, kV3PayTo)) { pay_to = b; break; }
-  }
-  if (pay_to == nullptr) {
-    return host_reject("no ROUTERV3_PAY_TO in consumed");
-  }
-  auto r_body = block_body(pay_to);
-  if (r_body.is_error()) {
-    return host_reject("pay_to body");
-  }
-  auto r_pt = parse_v3_pay_to(r_body.move_as_ok());
-  if (r_pt.is_error()) {
-    return host_reject("pay_to parse");
-  }
-  RouterPayTo pt = r_pt.move_as_ok();
+
+  const Value *ci = body.field("coinsinfo");
+  const Value *cref = (ci != nullptr && !ci->is_null()) ? ci->field("ref") : nullptr;
+  auto take_coins = [](const Value *o, const char *n) -> td::RefInt256 {
+    const Value *f = o != nullptr ? o->field(n) : nullptr;
+    if (f == nullptr || (f->t != VType::Int && f->t != VType::Amount)) return {};
+    return f->num;
+  };
+  auto take_val = [](const Value *o, const char *n) -> Value {
+    const Value *f = o != nullptr ? o->field(n) : nullptr;
+    return f != nullptr ? *f : Value::null();
+  };
 
   // The two slots the pool declares, in asset0/asset1 order. A slot whose
   // jetton wallet is the router's wTON wallet is nulled (native TON). A slot
   // with no jetton address rejects.
   struct Slot { Value amount, wallet, receiver; };
   Slot slots[2];
-  td::RefInt256 slot_amounts[2] = {pt.amount0, pt.amount1};
-  Value slot_jettons[2] = {pt.jetton0, pt.jetton1};
-  Value slot_receivers[2] = {pt.receiver0, pt.receiver1};
+  td::RefInt256 slot_amounts[2] = {take_coins(cref, "amount0"), take_coins(cref, "amount1")};
+  Value slot_jettons[2] = {take_val(cref, "jetton0"), take_val(cref, "jetton1")};
+  Value slot_receivers[2] = {take_val(&body, "receiver0"), take_val(&body, "receiver1")};
   for (int i = 0; i < 2; i++) {
     auto ws = acc_str(slot_jettons[i]);
     if (!ws) {
@@ -437,17 +380,7 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
     slots[i].receiver = acc_str(slot_receivers[i]) ? slot_receivers[i] : Value::null();
   }
 
-  // The up-to-two jetton_transfer legs hanging off the PayTo, in consumption
-  // order, padded to a fixed arity of two.
-  const Block *legs[2] = {nullptr, nullptr};
-  {
-    int n = 0;
-    for (const Block *b : consumed) {
-      if (n >= 2) break;
-      if (b->btype != mch::btype::kJettonTransfer || b->previous_block != pay_to) continue;
-      legs[n++] = b;
-    }
-  }
+  const Block *legs[2] = {as_block(args[2]), as_block(args[3])};
 
   struct Leg { Value amount, asset, dex_wallet, dex_jetton_wallet, wallet; };
   Leg out_legs[2];
@@ -500,7 +433,6 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
   d.emplace_back("dex_wallet_2", std::move(out_legs[1].dex_wallet));
   d.emplace_back("dex_jetton_wallet_2", std::move(out_legs[1].dex_jetton_wallet));
   d.emplace_back("wallet2", std::move(out_legs[1].wallet));
-  d.emplace_back("failed", Value::make_bool(pt.exit_code != 0 && pt.exit_code != 201));
   return rt_ok(Value::make_obj(std::move(d)));
 }
 
@@ -578,7 +510,7 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
 
 // Jetton legs are read by btype/data; the pTON in-leg from a single-leaf call
 // message. Multi-hop peer_swaps and the failed-swap recursive-payload fallback
-// are supported; the corpus covers only single-hop swaps.
+// are supported.
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   auto decoded = decode_consumed_or_none(args);
   if (!decoded) {
@@ -589,6 +521,14 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   }
   std::vector<const Block *> consumed = std::move(decoded->blocks);
   ToncoParts parts = derive_tonco_parts(consumed);
+  const Block *prev = parts.anchor->previous_block;
+  if (prev != nullptr && prev->btype != mch::btype::kJettonTransfer) {
+    const Message *m = parts.in_transfer != nullptr ? block_msg(parts.in_transfer) : nullptr;
+    auto wallet = m != nullptr ? acc_str(account_from_opt(m->destination)) : std::nullopt;
+    if (!wallet || wallet_asset(env, *wallet).is_null()) {
+      parts.in_transfer = nullptr;
+    }
+  }
 
   auto by_lt = [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; };
   std::vector<const Block *> all_swaps = parts.peer_swaps;
@@ -619,17 +559,18 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     if (r_sbody.is_error()) { ok = false; continue; }
     auto r_sw = parse_v3_swap_source_wallet(r_sbody.move_as_ok());
     if (r_sw.is_error()) { ok = false; continue; }
+    SwapSource sw = r_sw.move_as_ok();
     auto r_pbody = block_body(all_payouts[i]);
     if (r_pbody.is_error()) { ok = false; continue; }
-    auto r_pt = parse_v3_pay_to(r_pbody.move_as_ok());
+    auto r_pt = parse_v3_pay_to(r_pbody.move_as_ok(), sw.v2);
     if (r_pt.is_error()) { ok = false; continue; }
     RouterPayTo pt = r_pt.move_as_ok();
     if (pt.exit_code != 0 && pt.exit_code != 200) ok = false;
-    Value source_wallet = r_sw.move_as_ok();
+    Value source_wallet = std::move(sw.source_wallet);
     std::string key = acc_str(source_wallet).value_or("");
     swap_steps.push_back({source_wallet, pt, all_swaps[i]->min_lt});
     if (jw_asset_map.find(key) == jw_asset_map.end()) {
-      Value asset = wallet_asset(env, key);  // pton -> TON, jetton, or Null on miss
+      Value asset = wallet_asset(env, key);  // TON-proxy -> TON, jetton, or Null on miss
       if (!asset.is_null()) jw_asset_map[key] = asset;
     }
   }
@@ -646,8 +587,13 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     in_source_jw = data_field(in_transfer_block, "sender_wallet");
     in_dest = data_field(in_transfer_block, "receiver");
     in_dest_jw = data_field(in_transfer_block, "receiver_wallet");
+    // forward_payload is a base64 BOC here; one that fails to decode leaves no
+    // in-payload rather than rejecting the swap.
     Value fp = data_field(in_transfer_block, "forward_payload");
-    if (fp.t == VType::Cell && fp.cell.not_null()) in_payload = fp.cell;
+    if (fp.t == VType::Str) {
+      auto r_cell = cell_from_pystr(fp.str);
+      if (r_cell.is_ok()) in_payload = r_cell.move_as_ok();
+    }
   } else {
     const Message *m = block_msg(in_transfer_block);
     if (m == nullptr) return host_reject("in_transfer has no message");
@@ -698,7 +644,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   Value out_source = data_field(out_transfer, "sender");
   Value out_dest = data_field(out_transfer, "receiver");
 
-  // peer_swaps (multi-hop only; empty for single-hop corpus)
+  // peer_swaps from PayTo coinsinfo when there is more than one swap step
   auto payout_assets = [](const RouterPayTo &pt) {
     std::vector<std::pair<td::RefInt256, Value>> a;
     if (!pt.amount0.is_null() && pt.jetton0.t == VType::Account) a.emplace_back(pt.amount0, pt.jetton0);
@@ -740,10 +686,10 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
   }
 
-  // destination asset / min_out (+ failed-swap recursive-payload fallback)
+  // min_out_amount is the payload guard in destination_asset units; failed swaps keep it only when the target asset resolves.
   Value destination_asset = out_asset;
-  Value min_out_amount = out_amount;
-  if (!ok && !swap_steps.empty() && in_payload.not_null()) {
+  Value min_out_amount = Value::null();
+  if (in_payload.not_null()) {
     std::vector<std::pair<std::string, td::RefInt256>> targets;
     try {
       vm::CellSlice cs = vm::load_cell_slice(in_payload);
@@ -751,17 +697,22 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     } catch (...) {
     }
     if (!targets.empty()) {
-      const std::string &twallet = targets.back().first;
-      Value target_asset;
-      auto it = jw_asset_map.find(twallet);
-      if (it != jw_asset_map.end()) target_asset = it->second;
-      if (target_asset.is_null()) {
-        Value ta = wallet_asset(env, twallet);
-        if (!ta.is_null()) target_asset = ta;
-      }
-      if (!target_asset.is_null()) {
-        destination_asset = target_asset;
-        min_out_amount = amount_or_zero(targets.back().second);
+      Value guard = amount_or_zero(targets.back().second);
+      if (ok) {
+        min_out_amount = std::move(guard);
+      } else if (!swap_steps.empty()) {
+        const std::string &twallet = targets.back().first;
+        Value target_asset;
+        auto it = jw_asset_map.find(twallet);
+        if (it != jw_asset_map.end()) target_asset = it->second;
+        if (target_asset.is_null()) {
+          Value ta = wallet_asset(env, twallet);
+          if (!ta.is_null()) target_asset = ta;
+        }
+        if (!target_asset.is_null()) {
+          destination_asset = target_asset;
+          min_out_amount = std::move(guard);
+        }
       }
     }
   }

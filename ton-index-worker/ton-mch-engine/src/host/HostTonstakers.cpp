@@ -3,7 +3,7 @@
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "btypes_gen.h"
 
 #include <cstdint>

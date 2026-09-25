@@ -13,7 +13,7 @@
 namespace mch {
 
 struct Block;     // BlockTree.h
-struct Message;   // TraceLoader.h
+struct Message;   // TraceModel.h
 
 td::Result<td::Ref<vm::Cell>> block_body(const Block *b);
 
@@ -52,5 +52,12 @@ Value data_field(const Block *b, const char *name);
 
 // Equal iff same addr_none state and canonical "wc:HEX" string.
 bool same_account(const Value &a, const Value &b);
+
+// Post-pass spine helpers: a Dict field by name (Null when absent), and the
+// task-level equality the DeDust/STON.fi liquidity post-processors compare
+// assets with.
+Value pp_field(const Value &d, const std::string &k);
+void set_field(Value::Fields &fields, const std::string &key, Value value);
+bool pp_eq(const Value &a, const Value &b);
 
 }  // namespace mch
