@@ -140,10 +140,8 @@ schema::MultisigOrderData to_schema(const MultisigOrder::Result &r) {
   v.approvals_mask = r.approvals_mask;
   v.approvals_num = r.approvals_num;
   v.expiration_date = r.expiration_date;
-  // `order` (the cell the multisig's `get_order_data` returns) is deliberately not
-  // copied: that TVM run reads the shard state this lookup only borrows, so the cell's
-  // children cannot be resolved once that state is gone. Nothing reads it either - the
-  // classifier's `multisig_order` lookup exposes only `signers`.
+// Omit `order`: its child cells cannot outlive the borrowed shard state.
+// The `multisig_order` lookup exposes only `signers`.
   v.signers = r.signers;
   return v;
 }

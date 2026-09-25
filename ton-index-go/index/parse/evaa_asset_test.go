@@ -7,10 +7,8 @@ import (
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 )
 
-// TestParseEvaaAssetId pins the exact asset-id lookup and the network dispatch: the engine
-// writes a full 64-digit lowercase `0x` text and the tables carry that same form, so only
-// an exact hit on the selected network's table resolves. The TON id is a known asset
-// without a master address on either network.
+// TestParseEvaaAssetId requires exact network-specific table keys and treats the TON id
+// as known on both networks without a master address.
 func TestParseEvaaAssetId(t *testing.T) {
 	const (
 		mainnetId     = "0xb387968236197958ca4ac55e9b5be38e688c7631af84c86756431f49a878ef33"

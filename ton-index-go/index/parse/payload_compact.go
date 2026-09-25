@@ -19,16 +19,11 @@ const (
 	compactMaxDepth = 32
 )
 
-// The compact payload (codec byte 1) is ONE msgpack map whose keys are registry ids and
-// whose values are typed by those ids, at every nesting level. decodeCompactPayload turns
-// such a body (everything after the codec byte) into the named map the routing layer and
-// setPayloadValue consume, in the text forms that layer expects: decimal strings for
-// integers, `W:HEX` for addresses, standard padded base64 for BOCs and base64 hashes,
-// 64 lowercase hex digits (with or without the `0x` prefix) for the hash forms, msgpack
-// str and bool as is.
-//
-// An id this table does not know (the engine is newer) has its value skipped and the rest
-// of the action decoded. A key that is not an integer id at all is rejected.
+// decodeCompactPayload decodes a codec-1 msgpack map whose integer registry ids determine
+// value types, including in nested maps. It returns decimal integers, `W:HEX` addresses,
+// padded base64 BOCs and hashes, and lowercase hexadecimal hashes with registry-defined
+// `0x` prefixes; strings and booleans pass through. Unknown ids are skipped, while
+// non-integer keys are rejected.
 func decodeCompactPayload(body []byte) (map[string]interface{}, error) {
 	reader := bytes.NewReader(body)
 	d := &compactDecoder{dec: msgpack.NewDecoder(reader), in: reader}
@@ -43,10 +38,8 @@ func decodeCompactPayload(body []byte) (map[string]interface{}, error) {
 	return values, nil
 }
 
-// compactDecoder walks the body. The msgpack decoder reads straight from `in` (it buffers
-// only a reader that cannot seek back a byte), so `in.Len()` is always the exact number of
-// bytes left, and every declared count or length is checked against it before a map, an
-// array or a byte slice is allocated.
+// compactDecoder shares a seekable bytes.Reader with msgpack.Decoder. This keeps in.Len
+// exact, so declared counts and lengths can be rejected before allocation.
 type compactDecoder struct {
 	dec   *msgpack.Decoder
 	in    *bytes.Reader
@@ -282,10 +275,8 @@ func (d *compactDecoder) lengthPrefixed() ([]byte, error) {
 	return raw, nil
 }
 
-// container decodes an `other` value: a map becomes a record whose keys are translated and
-// whose values are typed by their own key, an array keeps its order with its records
-// translated and its null placeholders kept (the positional `legs` slots), and every
-// scalar passes through unchanged.
+// container recursively decodes nested registry maps and arrays, preserving array order
+// and nil placeholders because their indexes select leg slots. Scalars pass through.
 func (d *compactDecoder) container() (interface{}, error) {
 	code, err := d.dec.PeekCode()
 	if err != nil {

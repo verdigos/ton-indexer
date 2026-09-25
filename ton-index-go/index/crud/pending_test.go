@@ -63,11 +63,8 @@ func compactActionPayload() []byte {
 	return []byte{1, 0x82, 2, 0x07, 13, 0xa5, 'h', 'e', 'l', 'l', 'o'}
 }
 
-// TestFillFromRawDataSkipsUndecodablePayload pins the pending path: one action whose payload
-// cannot be decoded is dropped and logged, the other actions of the same trace are returned
-// and the call reports no error - the behaviour the stored-action readers have. A row without
-// a payload column is undecodable like a malformed one, since the writer emits the payload
-// for every action.
+// TestFillFromRawDataSkipsUndecodablePayload verifies that malformed or missing
+// payloads drop only their actions; the pending trace and its decodable actions remain.
 func TestFillFromRawDataSkipsUndecodablePayload(t *testing.T) {
 	legacy := []byte{1, 0x81, 0xa4, 'd', 'a', 't', 'a', 0x80} // codec 1 + the old wrapped body
 	traceKey, rawData := pendingTraceHSet(t, []interface{}{

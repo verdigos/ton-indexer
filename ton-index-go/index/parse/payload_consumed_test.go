@@ -38,14 +38,9 @@ type consumedFixtureRow struct {
 	Payload   string `json:"payload_hex"`
 }
 
-// TestPayloadConsumedKeys walks every payload key of the frozen baseline (top level,
-// nested leaves and each `legs[i].<member>`, one key per leg slot) and drops it from a
-// decoded RawAction copy: a key is consumed when the API JSON or the collected
-// addresses change without it, or when the collector reads the field it resolved to.
-// Keys that resolve to no RawAction field are unconsumed by construction. A key whose
-// value is an empty list or map is invisible to this test, so it is counted separately
-// instead of failing. Keys whose value is a record list (such as `claimed_rewards`) are
-// checked as one key, the way the decoder assigns them.
+// TestPayloadConsumedKeys removes every top-level, nested, and leg key from decoded baseline
+// actions and requires an API, address-set, or collector-read difference. Empty containers
+// are reported as inconclusive; record lists are checked as one assigned value.
 func TestPayloadConsumedKeys(t *testing.T) {
 	f, err := os.Open("testdata/payload_contract.jsonl.gz")
 	if err != nil {
@@ -310,10 +305,9 @@ func sortedKeys(values map[string]interface{}) []string {
 // one of the collector's reads.
 var sentinelAddress = models.AccountAddress("0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
-// dropPayloadKey removes one decoded payload key from `raw` the way the key's absence
-// would: extra keys leave RawAction.Extra, every other key zeroes the field the decoder
-// resolved for it, and a key with no field changes nothing. It reports whether the
-// collector reads that field.
+// dropPayloadKey simulates an absent key by deleting it from Extra or zeroing its resolved
+// RawAction field. It reports whether the address collector reads that field; unresolved
+// keys make no change.
 func dropPayloadKey(raw *models.RawAction, typeName string, path keyPath) bool {
 	prefixes := actionDataPrefixes[typeName]
 	target := reflect.ValueOf(raw).Elem()

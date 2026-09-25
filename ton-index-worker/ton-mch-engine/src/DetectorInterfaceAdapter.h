@@ -18,11 +18,9 @@ schema::GetGemsNftFixPriceSaleV4Data to_schema(const GetGemsNftFixPriceSaleV4::R
 schema::MultisigOrderData to_schema(const MultisigOrder::Result &r);
 schema::TelemintData to_schema(const TelemintContract::Result &r);
 
-// No detector Result carries a code hash, but the NFT shapes need one: the
-// GetGems sale/auction version tables key on it and the DNS-item test reads it.
-// Fills the four NFT variants from the account state the detector ran on and
-// leaves every other variant untouched; an account without code stays zero,
-// which renders as null (a miss) rather than a wrong version string.
+// Detector results omit code hashes, but GetGems version lookup requires one.
+// Set it on NFT variants only. Missing account code leaves zero, which renders
+// as a lookup miss rather than a wrong version.
 void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const schema::AccountState &state);
 void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const td::Bits256 &code_hash);
 

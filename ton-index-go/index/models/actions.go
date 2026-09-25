@@ -146,7 +146,7 @@ type RawAction struct {
 	VestingSendMessageMessageBoc                         *string
 	VestingAddWhitelistQueryId                           *string
 	VestingAddWhitelistAccountsAdded                     []AccountAddress
-	EvaaSupplySenderJettonWallet                         *AccountAddress // no payload key; kept for the frozen RawAction JSON
+	EvaaSupplySenderJettonWallet                         *AccountAddress
 	EvaaSupplyRecipientJettonWallet                      *AccountAddress
 	EvaaSupplyMasterJettonWallet                         *AccountAddress
 	EvaaSupplyMaster                                     *AccountAddress
@@ -160,8 +160,8 @@ type RawAction struct {
 	EvaaLiquidateFailReason                              *string
 	EvaaLiquidateDebtAmount                              *string
 	EvaaLiquidateAssetId                                 *string
-	JvaultClaimClaimedJettons                            []RawActionJvaultClaimReward // carries claimed_rewards
-	JvaultClaimClaimedAmounts                            []string                     // no payload key; kept for the frozen RawAction JSON
+	JvaultClaimClaimedJettons                            []RawActionAssetAmount
+	JvaultClaimClaimedAmounts                            []string
 	JvaultStakePeriod                                    *int64
 	JvaultStakeMintedStakeJettons                        *string
 	JvaultStakeStakeWallet                               *AccountAddress
@@ -181,7 +181,7 @@ type RawAction struct {
 	CoffeeCreatePoolInitiator2                           *AccountAddress
 	CoffeeCreatePoolProvidedAsset                        *AccountAddress
 	CoffeeCreatePoolLpTokensMinted                       *string
-	CoffeeCreatePoolPoolCreatorContract                  *AccountAddress // no payload key; kept for the frozen RawAction JSON
+	CoffeeCreatePoolPoolCreatorContract                  *AccountAddress
 	CoffeeStakingDepositMintedItemAddress                *AccountAddress
 	CoffeeStakingDepositMintedItemIndex                  *string
 	CoffeeStakingWithdrawNftAddress                      *AccountAddress
@@ -233,9 +233,9 @@ type RawAction struct {
 	CocoonGrantRefundNewTokensUsed            *string
 	CocoonGrantRefundExpectedAddress          *string
 	CocoonClientIncreaseStakeQueryId          *string
-	CocoonClientIncreaseStakeNewStake         *string // no payload key; kept for the frozen RawAction JSON
+	CocoonClientIncreaseStakeNewStake         *string
 	CocoonClientWithdrawQueryId               *string
-	CocoonClientWithdrawWithdrawAmount        *string // no payload key; kept for the frozen RawAction JSON
+	CocoonClientWithdrawWithdrawAmount        *string
 
 	Extra map[string]interface{}
 
@@ -255,9 +255,8 @@ type RawActionVaultExcessEntry struct {
 	Amount *string
 }
 
-// RawActionJvaultClaimReward is one entry of the jvault claim payload's
-// claimed_rewards list; the length-mismatch rule lives in the payload writer.
-type RawActionJvaultClaimReward struct {
+// RawActionAssetAmount is an asset and its amount.
+type RawActionAssetAmount struct {
 	Asset  AccountAddress
 	Amount string
 }

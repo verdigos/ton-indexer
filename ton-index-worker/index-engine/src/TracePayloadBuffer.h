@@ -19,10 +19,8 @@ struct ClassifyInput {
   std::optional<TraceOutcome> skipped;
 };
 
-// Holds the transactions and interface data of every pending trace until the
-// assembler reports the trace terminal, then hands the payload to a classifier
-// worker as one ClassifyInput. Payloads are the only per-trace memory the live
-// run keeps; the RSS budget evicts them, snapshots seed them.
+// Buffers transactions and interface data until a trace becomes terminal, then
+// emits one ClassifyInput. Eviction and snapshot seeds leave sticky skip outcomes.
 class TracePayloadBuffer {
  public:
   explicit TracePayloadBuffer(const ClassifyPolicy &policy) : policy_(policy) {}

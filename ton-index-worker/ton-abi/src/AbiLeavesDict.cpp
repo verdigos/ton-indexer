@@ -7,10 +7,9 @@
 namespace ton_abi {
 namespace {
 
-// A message body carries at most 8192 distinct cells, so a dictionary that
-// yields more logical entries than that can only be a DAG whose forks share a
-// subtree -- k cells encoding 2^k key paths. Stopping at the cap keeps decoding
-// linear in the entries actually storable instead of exponential in key width.
+// A message body contains at most 8192 distinct cells, but a DAG can encode
+// exponentially many key paths by sharing subtrees. Cap logical entries at the
+// physical cell limit so malformed dictionaries cannot force exponential work.
 constexpr std::size_t kMaxDictEntries = 8192;
 
 }  // namespace

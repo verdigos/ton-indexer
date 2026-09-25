@@ -10,10 +10,8 @@
 
 namespace mch {
 
-// The four TON-proxy master addresses (raw "wc:HEX" upper). Both Stonfi v2 and
-// Tonco treat a jetton wallet on one of these masters as a native TON asset.
-// `is_pton_master` normalizes its argument, so any spelling the shared address
-// normalizer accepts (raw "wc:HEX" upper or lower) matches.
+// STON.fi v2 and Tonco treat wallets for these four TON-proxy masters as TON.
+// Matching canonicalizes raw `wc:HEX` addresses, including case.
 const std::vector<std::string> &pton_masters();
 bool is_pton_master(const std::string &s);
 
