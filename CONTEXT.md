@@ -23,6 +23,14 @@ Either TON or a Jetton.
 A decentralized exchange protocol at a specific version, e.g. STON.fi v2 or DeDust v1.
 _Avoid_: exchange, AMM
 
+**DeDust v1**:
+The vault-based DeDust protocol with volatile and stable Pools.
+_Avoid_: DeDust v2 (its name in ton-etl and in the TL-B schemes)
+
+**DeDust v2**:
+The DeDust CPMM protocol without vaults, where Pools hold Assets themselves.
+_Avoid_: DeDust CPMM v3, cpmm_v3
+
 **Pair**:
 An unordered pair of Assets, independent of any DEX. One Pair can have many Pools.
 _Avoid_: market, pool
