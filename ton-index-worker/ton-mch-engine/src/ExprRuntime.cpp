@@ -1,11 +1,13 @@
 #include "ExprRuntime.h"
 
 #include "BlockTree.h"
+#include "parse/PSlice.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/misc.h"
 #include "vm/boc.h"
 #include "vm/cellslice.h"
+#include "vm/excno.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -13,6 +15,59 @@
 namespace mch {
 
 namespace {
+
+// Render MsgParse's "extern:<len>:<hex>" address as "len;hex".
+Value extern_address_string(const std::string &s) {
+  static const std::string kPrefix = "extern:";
+  if (s.compare(0, kPrefix.size(), kPrefix) != 0) {
+    return Value::null();
+  }
+  auto sep = s.find(':', kPrefix.size());
+  if (sep == std::string::npos) {
+    return Value::null();
+  }
+  std::string out = s.substr(kPrefix.size());
+  out[sep - kPrefix.size()] = ';';
+  return Value::make_str(std::move(out));
+}
+
+// Render the ABI addr_extern cell directly, including widths above RefInt256.
+Value extern_address_object(const Value &v) {
+  const Value *bits = v.field("bits");
+  const Value *value = v.field("value");
+  if (v.t != VType::Obj || bits == nullptr || bits->t != VType::Int || bits->num.is_null() ||
+      bits->num->sgn() < 0 || td::cmp(bits->num, td::make_refint(511)) > 0 || value == nullptr ||
+      value->t != VType::Cell || value->cell.is_null()) {
+    return Value::null();
+  }
+
+  int len = static_cast<int>(bits->num->to_long());
+  vm::CellSlice cs;
+  try {
+    cs = vm::load_cell_slice(value->cell);
+  } catch (const vm::VmError &) {
+    return Value::null();
+  } catch (const vm::VmVirtError &) {
+    return Value::null();
+  }
+  if (cs.size() != static_cast<unsigned>(len) || cs.size_refs() != 0) {
+    return Value::null();
+  }
+
+  static const char kHexDigits[] = "0123456789abcdef";
+  std::string hex;
+  hex.reserve(static_cast<std::size_t>(len) / 4 + 1);
+  int head = len % 4;
+  if (head != 0) {
+    hex.push_back(kHexDigits[cs.fetch_ulong(head)]);
+  }
+  for (int rem = len - head; rem > 0; rem -= 4) {
+    hex.push_back(kHexDigits[cs.fetch_ulong(4)]);
+  }
+  std::size_t first = hex.find_first_not_of('0');
+  hex = first == std::string::npos ? std::string("0") : hex.substr(first);
+  return Value::make_str(std::to_string(len) + ";" + hex);
+}
 
 // Present Amount with a null value inside. Float-backed Amounts cannot be
 // constructed, so a null `num` is unambiguous.
@@ -39,9 +94,7 @@ bool asset_eq(const Value &l, const Value &r) {
 }
 
 // Asset == string: case-insensitive compare of the jetton master's raw string.
-// Comparing a TON asset (no jetton master) against any string faults the
-// evaluation — never returns true/false. Intentional.
-// eq_result faults that pair before reaching here.
+// A TON asset has no jetton master, so it equals no string.
 bool asset_eq_str(const Value &asset, const std::string &s) {
   return asset.has_jetton && to_lower(asset.str) == to_lower(s);
 }
@@ -141,11 +194,6 @@ EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {
   if (rt_is_null(l) || rt_is_null(r)) {
     eq = rt_is_null(l) && rt_is_null(r);
   } else {
-    // TON asset (no jetton master) vs string: fault, never true/false.
-    if ((l.t == VType::Asset && !l.has_jetton && r.t == VType::Str) ||
-        (r.t == VType::Asset && !r.has_jetton && l.t == VType::Str)) {
-      return rt_fault("'==' failed: asset has no jetton master string");
-    }
     eq = raw_eq(l, r);
   }
   return rt_ok(Value::make_bool(want_eq ? eq : !eq));
@@ -215,8 +263,7 @@ namespace {
 
 // Block `.msg` envelope as an Obj. Field set is the subset the trace loader
 // decodes; a field the loader does not carry (e.g. fwd_fee) faults. Keep
-// where_exprs to the envelope set below. `exit_code` resolves through the
-// nested `transaction` object (rt_access Obj branch).
+// where_exprs to the envelope set below.
 Value msg_envelope(const Message *m) {
   auto opt_str = [](const std::optional<std::string> &s) {
     return s ? Value::make_str(*s) : Value::null();
@@ -254,6 +301,38 @@ Value msg_envelope(const Message *m) {
   };
   return Value::make_obj(std::move(fs));
 }
+
+// Outgoing-message record: envelope scalars plus body_hash, no transaction.
+Value out_message_record(const Message &m) {
+  auto opt_str = [](const std::optional<std::string> &s) {
+    return s ? Value::make_str(*s) : Value::null();
+  };
+  auto opt_int = [](const std::optional<std::int64_t> &n) {
+    return n ? Value::make_int64(*n) : Value::null();
+  };
+  Value body_hash = Value::null();
+  if (m.content && !m.content->body.empty() && !m.content->hash.empty()) {
+    auto r_raw = td::base64_decode(td::Slice(m.content->hash));
+    if (r_raw.is_ok()) {
+      body_hash = Value::make_bytes(r_raw.move_as_ok());
+    }
+  }
+  Value::Fields fs = {
+      {"source", opt_str(m.source)},
+      {"destination", opt_str(m.destination)},
+      {"value", opt_int(m.value)},
+      {"opcode", opt_int(m.opcode)},
+      {"created_lt", opt_int(m.created_lt)},
+      {"created_at", opt_int(m.created_at)},
+      {"bounce", m.bounce ? Value::make_bool(*m.bounce) : Value::null()},
+      {"bounced", Value::make_bool(m.bounced)},
+      {"msg_hash", Value::make_str(m.msg_hash)},
+      {"direction", Value::make_str(m.direction)},
+      {"body_hash", std::move(body_hash)},
+  };
+  return Value::make_obj(std::move(fs));
+}
+
 
 // Only msg/body/data/failed/broken/btype are defined; `body` always faults
 // in a where context (no prior parse).
@@ -297,17 +376,6 @@ EvalResult rt_access(const Value &obj, const std::string &field) {
     return block_access(obj.block, field);
   }
   if (obj.t == VType::Obj) {
-    if (field == "exit_code") {
-      const Value *tx = obj.field("transaction");
-      if (tx == nullptr) {
-        return rt_fault("`exit_code` is only valid on a message envelope carrying a transaction");
-      }
-      if (tx->t == VType::Obj || tx->t == VType::Dict) {
-        const Value *ec = tx->field("compute_exit_code");
-        return rt_ok(ec != nullptr ? *ec : Value::null());
-      }
-      return rt_ok(Value::null());
-    }
     const Value *fv = obj.field(field);
     if (fv == nullptr) {
       return rt_fault("object has no field '" + field + "'");
@@ -330,9 +398,6 @@ EvalResult rt_access(const Value &obj, const std::string &field) {
       return rt_ok(obj.num.is_null() ? Value::null() : Value::make_int(obj.num));
     }
     return rt_fault("unknown Amount accessor '" + field + "' (expected value)");
-  }
-  if (field == "exit_code") {
-    return rt_fault("`exit_code` is only valid on a message envelope");
   }
   return rt_fault(obj.describe() + " has no attribute '" + field + "'");
 }
@@ -418,7 +483,9 @@ static bool bi_open_cell(const Value &v, vm::CellSlice &out) {
   if (v.t != VType::Cell || v.cell.is_null()) return false;
   try {
     out = vm::load_cell_slice(v.cell);
-  } catch (...) {
+  } catch (const vm::VmError &) {
+    return false;
+  } catch (const vm::VmVirtError &) {
     return false;
   }
   return true;
@@ -575,27 +642,25 @@ EvalResult rt_builtin_last(const Value &x) {
   return rt_ok(xs->empty() ? Value::null() : xs->back());
 }
 
+EvalResult rt_builtin_at(const Value &xs, const Value &i) {
+  if (rt_is_null(xs) || rt_is_null(i)) return rt_ok(Value::null());
+  const std::vector<Value> *list = nullptr;
+  if (!bi_require_list(xs, list)) return rt_fault("at expects a list, got " + xs.describe());
+  if (i.t != VType::Int || i.num.is_null()) {
+    return rt_fault("at index must be an integer, got " + i.describe());
+  }
+  if (i.num->sgn() < 0) return rt_ok(Value::null());
+  if (td::cmp(i.num, td::make_refint(static_cast<std::int64_t>(list->size()))) >= 0) {
+    return rt_ok(Value::null());
+  }
+  return rt_ok((*list)[static_cast<std::size_t>(i.num->to_long())]);
+}
+
 EvalResult rt_builtin_len(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
   if (!bi_require_list(x, xs)) return rt_fault("len expects a list, got " + x.describe());
   return rt_ok(Value::make_int64(static_cast<std::int64_t>(xs->size())));
-}
-
-EvalResult rt_builtin_sum(const Value &x) {
-  if (rt_is_null(x)) return rt_ok(Value::null());
-  const std::vector<Value> *xs = nullptr;
-  if (!bi_require_list(x, xs)) return rt_fault("sum expects a list, got " + x.describe());
-  td::RefInt256 acc = td::make_refint(0);
-  for (const auto &el : *xs) {
-    td::RefInt256 v;
-    std::string err;
-    if (!coerce_int(el, v, err)) {
-      return rt_fault("sum: element is not an integer or Amount (" + el.describe() + ")");
-    }
-    acc += v;
-  }
-  return rt_ok(Value::make_int(std::move(acc)));
 }
 
 EvalResult rt_builtin_zip(const Value &a, const Value &b) {
@@ -636,6 +701,125 @@ EvalResult rt_builtin_contains(const Value &a, const Value &b) {
     return rt_fault("contains expects a string needle, got " + b.describe());
   }
   return rt_ok(Value::make_bool(a.str.find(b.str) != std::string::npos));
+}
+
+EvalResult rt_builtin_get(const Value &record, const Value &key) {
+  if (rt_is_null(record) || rt_is_null(key)) return rt_ok(Value::null());
+  if (key.t != VType::Str) return rt_fault("get key must be a string");
+  if (record.t != VType::Dict && record.t != VType::Obj) {
+    return rt_fault("get expects a dict or object, got " + record.describe());
+  }
+  const Value *value = record.field(key.str);
+  return rt_ok(value != nullptr ? *value : Value::null());
+}
+
+static EvalResult bi_message_envelope(const Value &x) {
+  if (rt_is_null(x) || x.t == VType::Obj) return rt_ok(x);
+  if (x.t == VType::Block) return block_access(x.block, "msg");
+  return rt_fault("expected a block or message envelope, got " + x.describe());
+}
+
+EvalResult rt_builtin_tx_aborted(const Value &x) {
+  EvalResult msg = bi_message_envelope(x);
+  if (msg.faulted) return msg;
+  const Value *tx = msg.value.field("transaction");
+  if (tx == nullptr || rt_is_null(*tx)) return rt_ok(Value::null());
+  EvalResult aborted = rt_access(*tx, "aborted");
+  return aborted.faulted ? aborted : rt_require_bool(aborted.value);
+}
+
+EvalResult rt_builtin_exit_code(const Value &x) {
+  EvalResult msg = bi_message_envelope(x);
+  if (msg.faulted) return msg;
+  const Value *tx = msg.value.field("transaction");
+  if (tx == nullptr || rt_is_null(*tx)) return rt_ok(Value::null());
+  const Value *ec = tx->field("compute_exit_code");
+  return rt_ok(ec != nullptr ? *ec : Value::null());
+}
+
+EvalResult rt_builtin_out_messages(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Block) {
+    return rt_fault("out_messages expects a block, got " + x.describe());
+  }
+  const Block *b = x.block;
+  if (b == nullptr || b->event_nodes.empty() || b->event_nodes.front()->msg == nullptr ||
+      b->event_nodes.front()->msg->tx == nullptr) {
+    return rt_ok(Value::make_list({}));
+  }
+  const Transaction *tx = b->event_nodes.front()->msg->tx;
+  std::vector<Value> out;
+  for (const auto &m : tx->messages) {
+    if (m->direction != "out") continue;
+    out.push_back(out_message_record(*m));
+  }
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
+EvalResult rt_builtin_state_init(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Block) {
+    return rt_fault("state_init expects a block, got " + x.describe());
+  }
+  const Block *b = x.block;
+  if (b == nullptr || b->event_nodes.empty() || b->event_nodes.front()->msg == nullptr ||
+      !b->event_nodes.front()->msg->init_state) {
+    return rt_ok(Value::null());
+  }
+  auto r_raw = td::base64_decode(td::Slice(b->event_nodes.front()->msg->init_state->body));
+  if (r_raw.is_error()) return rt_ok(Value::null());
+  auto r_root = vm::std_boc_deserialize(r_raw.move_as_ok());
+  if (r_root.is_error()) return rt_ok(Value::null());
+  auto r_slice = open_ref_cell(r_root.move_as_ok());
+  if (r_slice.is_error()) return rt_ok(Value::null());
+  vm::CellSlice slice = r_slice.move_as_ok();
+  auto r_data = state_init_data_cell(slice);
+  return rt_ok(r_data.is_ok() ? Value::make_cell(r_data.move_as_ok()) : Value::null());
+}
+
+EvalResult rt_builtin_uint_hex(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Int || x.num.is_null() || x.num->sgn() < 0) {
+    return rt_fault("uint_hex expects a nonnegative integer");
+  }
+  return rt_ok(Value::make_str(td::hex_string(x.num, false)));
+}
+
+EvalResult rt_builtin_txid_le_hex(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  unsigned char le[32] = {0};
+  if (x.t != VType::Int || x.num.is_null() || x.num->sgn() < 0 ||
+      !x.num->export_bytes_lsb(le, 32, /*sgnd=*/false)) {
+    return rt_fault("txid_le_hex expects an unsigned 256-bit integer");
+  }
+  static const char *hexd = "0123456789abcdef";
+  std::string out(64, '0');
+  for (int i = 0; i < 32; i++) {
+    out[2 * i] = hexd[le[i] >> 4];
+    out[2 * i + 1] = hexd[le[i] & 0xF];
+  }
+  return rt_ok(Value::make_str(std::move(out)));
+}
+
+EvalResult rt_builtin_ext_addr_str(const Value &a) {
+  if (rt_is_null(a)) return rt_ok(Value::null());
+  if (a.t == VType::Account) {
+    return rt_ok(a.addr_none ? Value::null() : Value::make_str(a.str));
+  }
+  Value rendered;
+  if (a.t == VType::Str) rendered = extern_address_string(a.str);
+  if (a.t == VType::Obj) rendered = extern_address_object(a);
+  if (rt_is_null(rendered)) return rt_fault("ext_addr_str expects an address");
+  return rt_ok(std::move(rendered));
+}
+
+EvalResult rt_builtin_addr_hash_hex(const Value &a) {
+  if (rt_is_null(a)) return rt_ok(Value::null());
+  if (a.t != VType::Account) return rt_fault("addr_hash_hex expects an account");
+  if (a.addr_none) return rt_ok(Value::null());
+  std::string hash = to_lower(a.str.substr(a.str.find(':') + 1));
+  auto first = hash.find_first_not_of('0');
+  return rt_ok(Value::make_str("0x" + (first == std::string::npos ? "0" : hash.substr(first))));
 }
 
 EvalResult rt_builtin_map(const Value &a, const Value &b) {
@@ -699,13 +883,59 @@ EvalResult rt_quant(bool is_all, const Value &xs, const ElementFn &body) {
   return rt_ok(Value::make_bool(result));
 }
 
+EvalResult rt_find(const Value &xs, const ElementFn &pred) {
+  if (rt_is_null(xs)) return rt_ok(Value::null());
+  if (xs.t != VType::List) return rt_fault("find comprehension expects a list, got " + xs.describe());
+  for (const auto &el : *xs.items) {
+    EvalResult r = pred(el);
+    if (r.faulted) return r;
+    EvalResult b = rt_require_bool(r.value);
+    if (b.faulted) return b;
+    if (b.value.boolean) return rt_ok(el);
+  }
+  return rt_ok(Value::null());
+}
+
+EvalResult rt_sortc(const Value &xs, const ElementFn &key) {
+  if (rt_is_null(xs)) return rt_ok(Value::null());
+  if (xs.t != VType::List) {
+    return rt_fault("stable_sort_by comprehension expects a list, got " + xs.describe());
+  }
+  struct Item {
+    Value el;
+    td::RefInt256 k;
+  };
+  std::vector<Item> items;
+  items.reserve(xs.items->size());
+  for (const auto &el : *xs.items) {
+    EvalResult r = key(el);
+    if (r.faulted) return r;
+    if (rt_is_null(r.value)) return rt_fault("stable_sort_by key is null");
+    if (r.value.t != VType::Int && r.value.t != VType::Amount) {
+      return rt_fault("stable_sort_by key must be an integer or Amount, got " + r.value.describe());
+    }
+    if (r.value.num.is_null()) return rt_fault("stable_sort_by key is Amount(None)");
+    items.push_back(Item{el, r.value.num});
+  }
+  std::stable_sort(items.begin(), items.end(),
+                   [](const Item &a, const Item &b) { return cmp(a.k, b.k) < 0; });
+  std::vector<Value> out;
+  out.reserve(items.size());
+  for (auto &it : items) out.push_back(std::move(it.el));
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args) {
   static const std::map<std::string, int> arity = {
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
-      {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1},
+      {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1}, {"at", 2},
       {"asset_of", 1}, {"tail_unwrap", 1}, {"bytes_of", 1},
-      {"len", 1},     {"sum", 1},     {"zip", 2},   {"map", 2},
+      {"len", 1},     {"zip", 2},     {"map", 2},
       {"concat", 2}, {"contains", 2},
+      {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
+      {"uint_hex", 1}, {"ext_addr_str", 1},
+      {"txid_le_hex", 1},
+      {"addr_hash_hex", 1}, {"out_messages", 1}, {"state_init", 1},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -726,12 +956,21 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "bytes_of") return rt_builtin_bytes_of(args[0]);
   if (name == "first") return rt_builtin_first(args[0]);
   if (name == "last") return rt_builtin_last(args[0]);
+  if (name == "at") return rt_builtin_at(args[0], args[1]);
   if (name == "len") return rt_builtin_len(args[0]);
-  if (name == "sum") return rt_builtin_sum(args[0]);
   if (name == "zip") return rt_builtin_zip(args[0], args[1]);
   if (name == "map") return rt_builtin_map(args[0], args[1]);
   if (name == "concat") return rt_builtin_concat(args[0], args[1]);
   if (name == "contains") return rt_builtin_contains(args[0], args[1]);
+  if (name == "get") return rt_builtin_get(args[0], args[1]);
+  if (name == "tx_aborted") return rt_builtin_tx_aborted(args[0]);
+  if (name == "exit_code") return rt_builtin_exit_code(args[0]);
+  if (name == "uint_hex") return rt_builtin_uint_hex(args[0]);
+  if (name == "txid_le_hex") return rt_builtin_txid_le_hex(args[0]);
+  if (name == "ext_addr_str") return rt_builtin_ext_addr_str(args[0]);
+  if (name == "addr_hash_hex") return rt_builtin_addr_hash_hex(args[0]);
+  if (name == "out_messages") return rt_builtin_out_messages(args[0]);
+  if (name == "state_init") return rt_builtin_state_init(args[0]);
   return rt_fault("unreachable builtin " + name);
 }
 

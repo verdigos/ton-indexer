@@ -1,6 +1,6 @@
 #include "WalletRequest.h"
 
-#include "TraceLoader.h"
+#include "TraceModel.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"

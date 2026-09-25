@@ -5,13 +5,16 @@
 #include "ActionBuild.h"  // ActionRow
 #include "BlockTree.h"
 #include "BuildRuntime.h"
+#include "CelldbTier2Lookup.h"
 #include "IndexData.h"  // schema::Transaction
 #include "IrTables.h"
-#include "TraceLoader.h"
+#include "TraceModel.h"
 #include "Walker.h"  // WhereTable
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <map>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -20,7 +23,7 @@
 namespace mch {
 
 struct MchEnginePrep;
-class ParsedBlockLookupSource;
+class TieredLookupSource;
 
 // Trace-terminal failure categories used by production-classifier telemetry:
 //   - lookup_infra_fail:  two-phase lookup did not converge (infra error).
@@ -37,24 +40,140 @@ enum class FailureCategory {
   malformed_trace,
 };
 
-// One produced action with raw block pointers and fire-time auxiliary blocks.
-// The adapter renders block_key(anchor)/data/consumed/aux or builds an Action
-// row from `produced`. Pointers reference the caller's arena (TraceContext),
-// valid for as long as the caller keeps it alive.
+// Terminal per-trace outcome of the in-indexer classification stage. Exactly
+// one per admitted or rejected trace input. The first three carry rows
+// (possibly zero) and are written; every other outcome only counts.
+// Task replacement accepts persisted outcomes and broken, capped, or lone tick-tock
+// skips. Missing roots and other skips remain ineligible.
+//   classified / fallback / terminal_failure_empty: classify_schema_trace ran
+//     (normal rows / basic-action fallback rows / failure with nothing usable).
+//   skipped_*:            assembly-side rejections, never classified:
+//     missing_root  — no legitimate root transaction;
+//     broken        — the assembler published the trace as broken;
+//     evicted       — payload dropped under memory pressure; never classified;
+//     capped        — transaction count exceeded the per-trace cap;
+//     incomplete    — payload buffer count != assembler node count, or (task mode)
+//                     identity / count / end mismatch against the inventory;
+//     unexpected_trace — (task mode) completed trace absent from the inventory;
+//     lone_tick_tock: the trace is exactly one tick-tock transaction and is
+//                      skipped before matching. Tick-tock roots with
+//                      children are classified normally.
+enum class TraceOutcome {
+  classified,
+  fallback,
+  terminal_failure_empty,
+  skipped_missing_root,
+  skipped_broken,
+  skipped_evicted,
+  skipped_capped,
+  skipped_incomplete,
+  skipped_unexpected_trace,
+  skipped_lone_tick_tock,
+};
+
+constexpr bool should_persist_outcome(TraceOutcome o) {
+  return o == TraceOutcome::classified || o == TraceOutcome::fallback ||
+         o == TraceOutcome::terminal_failure_empty;
+}
+
+constexpr bool is_failure_outcome(TraceOutcome o) {
+  return o == TraceOutcome::fallback || o == TraceOutcome::terminal_failure_empty;
+}
+
+constexpr const char *failure_category_name(FailureCategory category) {
+  switch (category) {
+    case FailureCategory::none: return "none";
+    case FailureCategory::lookup_infra_fail: return "lookup_infra_fail";
+    case FailureCategory::engine_fault: return "engine_fault";
+    case FailureCategory::malformed_trace: return "malformed_trace";
+  }
+  return "?";
+}
+
+template <typename Key, typename Count, typename Name>
+std::string format_counts(const std::map<Key, Count> &counts, Name name) {
+  std::string out;
+  for (const auto &[key, count] : counts) {
+    if (!out.empty()) out += ",";
+    out += std::string(name(key)) + "=" + std::to_string(count);
+  }
+  return out;
+}
+
+template <typename Count>
+std::string format_counts(const std::map<std::string, Count> &counts) {
+  return format_counts(counts, [](const std::string &key) -> const std::string & { return key; });
+}
+
+struct ClassifyStats {
+  TieredLookupSource::LookupStats lookups;
+  Tier2Stats tier2;
+
+  ClassifyStats &operator+=(const ClassifyStats &other) {
+    lookups += other.lookups;
+    tier2 += other.tier2;
+    return *this;
+  }
+
+  std::string format() const;
+};
+
+struct TraceClassificationResult {
+  schema::Trace trace;
+  TraceOutcome outcome;
+  std::vector<Action> rows;
+  std::string failure_reason;
+  bool slow{false};  // Wall-clock telemetry; never changes the outcome or rows.
+  // The unknown action for the whole trace; ClassifierWriter writes it instead of
+  // `rows` when empty, rejected by PostgreSQL or unrenderable.
+  Action rescue;
+  ClassifyStats stats;
+  std::size_t skipped_payload_actions{0};
+};
+
+struct BlockClassification {
+  std::vector<TraceClassificationResult> traces;
+};
+
+struct RunReport {
+  std::map<TraceOutcome, std::uint64_t> outcomes;
+  std::uint64_t suppressed{0};
+  std::map<std::uint32_t, BlockClassification> blocks;
+};
+
+bool outcomes_allow_replacement(const BlockClassification &bc);
+
+constexpr const char *trace_outcome_name(TraceOutcome o) {
+  switch (o) {
+    case TraceOutcome::classified: return "classified";
+    case TraceOutcome::fallback: return "fallback";
+    case TraceOutcome::terminal_failure_empty: return "terminal_failure_empty";
+    case TraceOutcome::skipped_missing_root: return "skipped_missing_root";
+    case TraceOutcome::skipped_broken: return "skipped_broken";
+    case TraceOutcome::skipped_evicted: return "skipped_evicted";
+    case TraceOutcome::skipped_capped: return "skipped_capped";
+    case TraceOutcome::skipped_incomplete: return "skipped_incomplete";
+    case TraceOutcome::skipped_unexpected_trace: return "skipped_unexpected_trace";
+    case TraceOutcome::skipped_lone_tick_tock: return "skipped_lone_tick_tock";
+  }
+  return "?";
+}
+
+// One produced action with raw block pointers. The adapter renders the final
+// produced block or builds an Action row from it. Pointers reference the
+// caller's arena (TraceContext), valid for as long as the caller keeps it alive.
 struct CoreAction {
   std::string matcher_name;
   Block *anchor;
   Block *produced;
-  std::vector<Block *> aux;    // fire-time excess/bounce auto-append (anchor)
 };
 
 // Buffered atomic per-trace result. On a mid-trace exception the pipeline sets
 // `failure` and returns what it collected; production commits only on success.
 struct ClassifyResult {
   std::vector<CoreAction> actions;  // surviving post-pass, in fire order
-  // Post-pass spine and recursive child rows for production serialization.
-  // This differs from the matcher-fire `actions` view: this list is the
-  // post-processing spine used for serialization; `actions` records fires in order.
+  // Post-pass spine and recursive child rows for serialization. `actions`
+  // instead records matcher fires in order.
   std::vector<ActionRow> action_rows;
   bool failure = false;
   std::string failure_reason;
@@ -64,8 +183,7 @@ struct ClassifyResult {
   // with no matchers runs the
   // post-processor chain, serialized the same way as `action_rows`, so every row
   // is a basic btype (call_contract / contract_deploy / ton_transfer).
-  // Production commits these when classification fails. Ungated (corpus has no
-  // failing traces).
+  // Production commits these when classification fails.
   std::vector<ActionRow> fallback_rows;
   // Set when classification succeeds but neither normal nor ghost serialization
   // produces a row for a nonempty trace. The adapter emits an unknown action so
@@ -74,11 +192,13 @@ struct ClassifyResult {
 };
 
 struct SchemaClassifyResult {
-  bool failure{false};
+  TraceOutcome outcome{TraceOutcome::classified};
+  std::vector<Action> rows;
+  std::size_t skipped_payload_actions{0};
+  bool unknown_row{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
-  bool used_fallback{false};
-  std::size_t unported_btypes{0};
+  Action rescue;  // Built from schema transactions before classification.
 };
 
 // Trace-independent run prep computed once from the matcher table: the runnable
@@ -86,23 +206,18 @@ struct SchemaClassifyResult {
 // map, the generated where_expr table the walker evaluates, and the union of
 // referenced lookup kinds.
 struct ClassifySetup {
-  std::vector<int> included;  // indices into the matcher table, priority order
+  std::vector<int> included;  // indices into the matcher table, manifest order
   std::vector<std::pair<std::string, std::string>> skips;
-  std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
-  WhereTable where_fns;  // node global_id -> generated where fn (GenWheres.h)
+  std::unordered_map<int, BuildFn> build_fns;
+  WhereTable where_fns;  // node global_id -> where fn
   std::set<std::string> kinds;
-  bool table_missing = false;  // the three generated tables disagree on their source
-  bool fn_missing = false;     // an included matcher has no generated fn
-  std::string error;           // populated when table_missing/fn_missing
+  std::string error;
 };
-
-// Canonical BFS over the reachable graph, de-duplicated by block identity.
-std::vector<Block *> gather_blocks(Block *root);
 
 // Build the run prep from the compiled-in matcher table. No I/O. Pass the SAME
 // table classify_trace will get. `included` indexes into it. On a table/fn
-// mismatch, sets the *_missing flags + error and returns what it has (adapter
-// reports + exits; production is startup-fatal).
+// mismatch, sets error and returns what it has (adapter reports + exits;
+// production is startup-fatal).
 ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 
 // Classify one trace with the matcher loop and post-processing passes. The
@@ -110,13 +225,18 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 
+// Engine exceptions become terminal outcomes with no rows. Action construction
+// or payload validation skips only that action and retains a failure reason.
+// Rescue construction precedes classification and may throw on allocation failure.
+// Tier-2 read errors are lookup misses (logged once per address); they never change the outcome.
 // `prep` is process-lifetime const and shareable across threads.
 // The interface map behind `src` is shareable iff immutable.
 // `src` and its Tier2Hook capture are for one classify call on one thread only.
 SchemaClassifyResult classify_schema_trace(
     const MchEnginePrep &prep, const std::string &trace_id,
-    const std::vector<schema::Transaction> &txs, const ParsedBlockLookupSource &src,
-    std::vector<Action> &rows, std::vector<std::string> &matcher_names,
-    std::size_t &scrubbed, bool &unknown_row);
+    const std::vector<schema::Transaction> &txs, TieredLookupSource &src);
+
+std::string exception_message(std::exception_ptr error);
+std::string exception_message(std::exception_ptr error, bool prefix_exception);
 
 }  // namespace mch

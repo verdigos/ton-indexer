@@ -63,15 +63,19 @@ EvalResult rt_mul(const Value &l, const Value &r);
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args);
 EvalResult rt_builtin_account(const Value &x);
 // Comprehensions
-// Shared cores for `map(xs as e => body)` / `any|all(xs as e => body)`. `body`
-// is invoked once per element with that element bound; the core owns the
-// null, non-list, empty, and short-circuit semantics for both the interpreter
-// and generated code. A null xs produces null;
-// non-list xs -> fault; empty -> [] (map) / false (any) / true (all). Quantifiers
-// short-circuit like std::any_of/std::all_of and require a bool body.
+// Shared cores for `map|find|stable_sort_by(xs as e => body)` /
+// `any|all(xs as e => body)`. `body` is invoked once per element with that
+// element bound; the core owns the null, non-list, empty, and short-circuit
+// semantics for both the interpreter and generated code. A null xs produces
+// null; non-list xs -> fault; empty -> [] (map, sort) / null (find) /
+// false (any) / true (all). Quantifiers and find short-circuit and require a
+// bool body. Sort keys are Int or Amount (lowered to the integer); a null or
+// non-integer key faults.
 using ElementFn = std::function<EvalResult(const Value &)>;
 EvalResult rt_mapc(const Value &xs, const ElementFn &body);
 EvalResult rt_quant(bool is_all, const Value &xs, const ElementFn &body);
+EvalResult rt_find(const Value &xs, const ElementFn &pred);
+EvalResult rt_sortc(const Value &xs, const ElementFn &key);
 EvalResult rt_builtin_amount(const Value &x);
 EvalResult rt_builtin_asset(const Value &x);
 EvalResult rt_builtin_ton_asset();
@@ -82,11 +86,20 @@ EvalResult rt_builtin_tail_unwrap(const Value &x);
 EvalResult rt_builtin_bytes_of(const Value &x);
 EvalResult rt_builtin_first(const Value &x);
 EvalResult rt_builtin_last(const Value &x);
+EvalResult rt_builtin_at(const Value &xs, const Value &i);
 EvalResult rt_builtin_len(const Value &x);
-EvalResult rt_builtin_sum(const Value &x);
 EvalResult rt_builtin_zip(const Value &a, const Value &b);
 EvalResult rt_builtin_map(const Value &a, const Value &b);
 EvalResult rt_builtin_concat(const Value &a, const Value &b);
 EvalResult rt_builtin_contains(const Value &a, const Value &b);
+EvalResult rt_builtin_get(const Value &record, const Value &key);
+EvalResult rt_builtin_tx_aborted(const Value &x);
+EvalResult rt_builtin_exit_code(const Value &x);
+EvalResult rt_builtin_uint_hex(const Value &x);
+EvalResult rt_builtin_txid_le_hex(const Value &x);
+EvalResult rt_builtin_ext_addr_str(const Value &a);
+EvalResult rt_builtin_addr_hash_hex(const Value &a);
+EvalResult rt_builtin_out_messages(const Value &x);
+EvalResult rt_builtin_state_init(const Value &x);
 
 }  // namespace mch

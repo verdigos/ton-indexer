@@ -29,7 +29,7 @@ enum class VType {
   Cell,     // td::Ref<vm::Cell>
   List,
   Dict,     // pure key lookup
-  Obj,      // attribute access + .exit_code
+  Obj,      // attribute access
   Block,    // reference to a matched Block (msg/data/failed/broken/btype accessors)
 };
 

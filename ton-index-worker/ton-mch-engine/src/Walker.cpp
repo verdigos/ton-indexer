@@ -105,6 +105,10 @@ class MatchState {
     return r;
   }
 
+  void absorb_anchor_aux(Block *anchor) {
+    absorb_aux(anchor, m_.include_excess, m_.include_bounces);
+  }
+
  private:
   // Never raises/aborts: a fault or a non-bool result is simply False.
   bool eval_where(const CompiledNode &node, Block *block) const {
@@ -137,19 +141,16 @@ class MatchState {
           for (int b : node.branches) {
             if (test_head(b, block)) c++;
           }
-          ok = c == 1;
-        } else {
-          for (int b : node.branches) {
-            if (test_head(b, block)) {
-              ok = true;
-              break;
-            }
+          return c == 1;
+        }
+        for (int b : node.branches) {
+          if (test_head(b, block)) {
+            return true;
           }
         }
-        break;
+        return false;
       case NodeKind::Recursive:
-        ok = test_head(node.step, block);
-        break;
+        return test_head(node.step, block);
       case NodeKind::Pred: {
         auto it = host_predicates().find(node.pred_name);
         ok = it != host_predicates().end() && it->second(block);
@@ -196,6 +197,27 @@ class MatchState {
     }
     std::vector<Block *> working = canonical(block->next_blocks);
     for (int item : node.children) {
+      const auto &spec = m_.nodes[item];
+      if (spec.many) {
+        Mark start = mark();
+        std::vector<Block *> taken;
+        for (Block *cand : working) {
+          Mark mk = mark();
+          if (match_node(item, cand)) {
+            taken.push_back(cand);
+            if (spec.max > 0 && taken.size() > static_cast<std::size_t>(spec.max)) {
+              rollback(start);
+              taken.clear();
+              break;
+            }
+          } else {
+            rollback(mk);
+          }
+        }
+        if (taken.empty() && !spec.optional) return false;
+        for (Block *cand : taken) working.erase(std::find(working.begin(), working.end(), cand));
+        continue;
+      }
       bool matched = false;
       for (std::size_t i = 0; i < working.size(); i++) {
         Mark mk = mark();
@@ -229,6 +251,15 @@ class MatchState {
   }
 
   bool match_or(const CompiledNode &node, Block *block) {
+    if (node.exclusive) {
+      int passing = -1;
+      for (int bid : node.branches) {
+        if (!test_head(bid, block)) continue;
+        if (passing >= 0) return false;
+        passing = bid;
+      }
+      return passing >= 0 && match_node(passing, block);
+    }
     for (int bid : node.branches) {
       Mark mk = mark();
       if (match_node(bid, block)) {
@@ -240,17 +271,6 @@ class MatchState {
   }
 
   bool match_recursive(int nid, const CompiledNode &node, Block *entry) {
-    // Entry gate: the recursive node's own where clauses run against the entry
-    // block before the strategy dispatch.
-    if (!node.where_name.empty()) {
-      auto it = host_predicates().find(node.where_name);
-      if (it == host_predicates().end() || !it->second(entry)) {
-        return false;
-      }
-    }
-    if (node.has_where_expr && !eval_where(node, entry)) {
-      return false;
-    }
     if (node.strategy == RecStrategy::Cyclic) {
       return match_node(node.step, entry);
     }
@@ -298,10 +318,11 @@ class MatchState {
     }
   }
 
-  void absorb_aux(Block *block) {
+  void absorb_aux(Block *block, bool include_excess = true, bool include_bounces = true) {
     for (Block *nb : canonical(block->next_blocks)) {
       if (nb->btype == mch::btype::kCallContract && nb->opcode &&
-          (*nb->opcode == kExcessOpcode || *nb->opcode == kBounceOpcode)) {
+          ((*nb->opcode == kExcessOpcode && include_excess) ||
+           (*nb->opcode == kBounceOpcode && include_bounces))) {
         consume(nb);
       }
     }
@@ -435,11 +456,12 @@ std::optional<MatchResult> matcher_match(const CompiledMatcher &m, Block *anchor
     return std::nullopt;
   }
   MatchState st(m, gen, anchor);
-  // Root skips nested aux absorption (root-level excess/bounce are a build-
-  // result concern, appended after build, not part of the match consumed set).
+  // Root skips unconditional nested aux absorption; its own flags apply after
+  // the structural match succeeds.
   if (!st.match_node(0, anchor, /*absorb=*/false)) {
     return std::nullopt;
   }
+  st.absorb_anchor_aux(anchor);
   return st.finish();
 }
 

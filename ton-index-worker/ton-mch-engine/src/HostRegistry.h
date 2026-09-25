@@ -24,18 +24,24 @@ const std::map<std::string, HostPredFn> &host_predicates();
 // Host `fn` implementations: the build-time escape hatch. After fixed arity
 // is validated, arguments pass through unchanged and a null arg is not
 // short-circuited. Signature takes the BuildEnv so a fn can reach env.lookups
-// / env.consumed. A thrown/faulted result is a clean match rejection.
+// / env.consumed. Ordinary host errors, including VmError, and faulted results
+// are clean match rejections. Resource and other VM infrastructure exceptions
+// propagate.
 // Returning Null likewise rejects when the spec `reject when`s the null.
 using HostFn = EvalResult (*)(BuildEnv &, const std::vector<Value> &);
 
 struct HostFnEntry {
   HostFn fn;
-  int arity;  // -1 leaves arity validation to the host function
+  int arity;
 };
 
 // Registered host fns, name -> fn. The IR loader / build_skip_reason gate a
 // matcher's inclusion on this registry.
 const std::map<std::string, HostFnEntry> &host_fns();
+
+// Resolve a generated call site's fixed name once. A missing name returns
+// nullptr and rt_call_hostfn reports the usual runtime fault.
+const HostFnEntry *find_hostfn(const std::string &name);
 
 // Host `shape` implementations: a post-build topology pass. Captured blocks
 // are reached by name; an arena is needed to mint proxy blocks (C++ blocks

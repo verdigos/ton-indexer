@@ -1,4 +1,5 @@
 #include "BuildRuntime.h"
+#include "LookupKinds.h"
 
 #include "BlockTree.h"
 #include "MsgParse.h"
@@ -55,6 +56,27 @@ EvalResult soft_parse(const Block *b, const std::vector<std::string> &types, Val
   return soft_parse(r_body.move_as_ok(), types, out);
 }
 
+EvalResult parse_block(BuildEnv &env, const Block *block,
+                       const std::vector<std::string> &types) {
+  if (env.body_cache != nullptr) {
+    auto it = env.body_cache->find(block);
+    if (it != env.body_cache->end() && it->second.first == types) {
+      env.bodies[block] = it->second.second;
+      return rt_ok(Value::null());
+    }
+  }
+  Value body;
+  EvalResult r = soft_parse(block, types, body);
+  if (r.faulted) {
+    return r;
+  }
+  env.bodies[block] = body;
+  if (env.body_cache != nullptr) {
+    env.body_cache->insert_or_assign(block, BodyCache::mapped_type{types, std::move(body)});
+  }
+  return rt_ok(Value::null());
+}
+
 td::Result<td::Ref<vm::Cell>> parse_expr_cell(const Value &target) {
   if (target.t == VType::Block && target.block != nullptr) {
     return block_body_cell(target.block);
@@ -77,31 +99,22 @@ EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::s
       if (el.t != VType::Block || el.block == nullptr) {
         continue;  // null (gap) elements stay unparsed; non-blocks unreachable
       }
-      Value body;
-      EvalResult r = soft_parse(el.block, types, body);
+      EvalResult r = parse_block(env, el.block, types);
       if (r.faulted) {
         return r;
       }
-      env.bodies[el.block] = std::move(body);
     }
     return rt_ok(Value::null());
   }
   if (target.t == VType::Block && target.block != nullptr) {
-    Value body;
-    EvalResult r = soft_parse(target.block, types, body);
-    if (r.faulted) {
-      return r;
-    }
-    env.bodies[target.block] = std::move(body);
-    return rt_ok(Value::null());
+    return parse_block(env, target.block, types);
   }
   // Null and other non-block targets leave the body unset.
   return rt_ok(Value::null());
 }
 
-EvalResult rt_parse_expr(BuildEnv &env, const Value &target,
+EvalResult rt_parse_expr(const Value &target,
                          const std::vector<std::string> &types, bool nullable) {
-  (void)env;  // stateless: no env.bodies store, unlike the statement form
   auto r_cell = parse_expr_cell(target);
   if (r_cell.is_error()) {
     return nullable ? rt_ok(Value::null())
@@ -190,14 +203,7 @@ std::string lookup_key(const std::string &kind, const std::vector<Value> &args) 
       case VType::Amount:
         frame(key, 'm', a.num.is_null() ? "nan" : a.num->to_dec_string());
         break;
-      case VType::Null:
-      case VType::Bool:
-      case VType::Asset:
-      case VType::Cell:
-      case VType::List:
-      case VType::Dict:
-      case VType::Obj:
-      case VType::Block:
+      default:
         frame(key, '?', a.describe());
         break;
     }
@@ -217,22 +223,16 @@ Value CollectingLookupTable::get(const std::string &kind, const std::vector<Valu
 
 namespace {
 
-// The lookup kinds the artifact may reference. BuildDriver's
-// runnability gating and the production ParsedBlockLookupSource both key off
-// this exact set, so it stays lib-side while the fixture-backed source that
-// serves them lives in mch-fixtures.
-//
-// dedust_pool is fetched by the dedust_swap_legs host fn via the two-phase
-// table (not a `lookup` build-program node), so it is absent from any
-// matcher's ref_lookups. It is listed here so has() and runnability gating
-// recognise it even though no matcher references it as a lookup node.
-const std::set<std::string> kLookupKinds = {"jetton_wallet", "nft_item", "nominator_pool",
-                                            "jvault_assets", "dedust_pool", "nft_sale",
-                                            "nft_auction", "multisig_order"};
-
 }  // namespace
 
-const std::set<std::string> &lookup_kinds() { return kLookupKinds; }
+const std::set<std::string> &lookup_kinds() {
+  static const std::set<std::string> kinds = [] {
+    std::set<std::string> result;
+    for (const auto &kind : kLookupKindTable) result.emplace(kind.name);
+    return result;
+  }();
+  return kinds;
+}
 
 EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
                            const std::vector<Value> &args) {

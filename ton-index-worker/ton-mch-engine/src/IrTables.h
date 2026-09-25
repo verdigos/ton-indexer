@@ -17,6 +17,7 @@ namespace mch {
 
 // Engine-constructed btypes are valid independently of any one IR document.
 // Code generation and IR validation share that vocabulary from this table.
+// Keep in sync with LEAF_BTYPES in indexer/indexer/events/mch/btypes.py.
 inline constexpr std::array<std::string_view, 8> kLeafBtypes{
     "call_contract", "contract_deploy", "empty",     "gasless_request",
     "jetton_transfer", "root",          "tick_tock", "ton_transfer",
@@ -30,7 +31,6 @@ struct CompiledNode {
   NodeKind kind{NodeKind::Any};
   int global_id{-1};  // artifact-global node index (key of the generated where table)
   std::uint32_t opcode{0};   // contract (unsigned 32)
-  bool has_opcode{false};
   std::string btype;         // block_type
   std::string pred_name;     // pred kind (host predicate)
   std::string where_name;    // named `where` predicate (host predicate)
@@ -38,6 +38,8 @@ struct CompiledNode {
   int slot{-1};
   bool optional{false};
   bool peek{false};
+  bool many{false};
+  int max{0};
   int child{-1};
   std::vector<int> children;
   int parent{-1};
@@ -51,7 +53,6 @@ struct CompiledNode {
 struct CompiledMatcher {
   std::string name;
   int artifact_index{-1};  // index in the artifact `matchers` array (gen_builds key)
-  bool has_build_program{false};
   std::vector<std::string> produces;
 
   AnchorKind anchor_kind{AnchorKind::OpcodeSet};
@@ -73,7 +74,7 @@ struct CompiledMatcher {
 
   std::vector<CompiledNode> nodes;      // local pool, remapped, root == 0
   std::vector<std::string> slot_names;  // slot id -> capture name (decl order)
-  std::vector<std::string> cards;       // slot id -> "one"|"opt"|"many"
+  std::vector<std::string> cards;       // slot id -> "one"|"many"
 
   // Recursion capture ownership (per recursive node id -> owned slot ids).
   std::map<int, std::set<int>> step_slots;
@@ -82,13 +83,12 @@ struct CompiledMatcher {
 
   bool include_excess{true};
   bool include_bounces{true};
-  int priority{100};
 
   // Host bindings referenced. `ref_preds` is the MATCH-phase dependency set
   // (anchor predicates + every reachable `pred` / named-`where` node) and gates
   // inclusion via match_skip_reason(); the rest are BUILD-phase bindings, gated
   // by build_skip_reason().
-  std::set<std::string> ref_preds, ref_builders, ref_shapers;
+  std::set<std::string> ref_preds, ref_shapers;
   std::set<std::string> ref_msgtypes, ref_lookups, ref_fns;
 };
 

@@ -4,7 +4,8 @@
 // Loaders are elsewhere and are NOT interchangeable in kind: SchemaTraceLoader
 // is the production one (schema::Transaction -> Trace); the .lz4 fixture reader
 // is test-only and lives in fixtures/FixtureLoader.h, in the mch-fixtures
-// target, so that lz4/msgpack never reach a product binary.
+// target, so lz4 never reaches a product binary. The action payload writer also
+// uses msgpack in the product classifier.
 #pragma once
 
 #include "Value.h"
@@ -41,6 +42,7 @@ struct Message {
   std::optional<bool> bounce;
   bool bounced{false};
   bool has_extra_currencies{false};  // value_extra_currencies map is non-empty
+  std::map<std::uint32_t, std::string> extra_currencies;
   std::optional<MsgContent> content;
   // The StateInit BOC of a deploying message. Separate from `content`,
   // which is the body: TL-B unpacks the two independently. Read only by
@@ -87,6 +89,7 @@ struct Trace {
   // (B2). Msgpack scalars map: str->Str, int->Int, bool->Bool, nil->Null,
   // bin->Bytes, map->Dict, array->List; floats have no Value kind -> Null.
   std::map<std::string, Value> interfaces;
+  std::map<std::string, Value> code_hashes;
 };
 
 // Derives Trace's five aggregates from `trace.transactions`: min/max lt, min/max

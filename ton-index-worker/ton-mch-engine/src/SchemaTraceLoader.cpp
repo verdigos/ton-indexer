@@ -4,6 +4,8 @@
 
 #include "td/utils/base64.h"
 
+#include <algorithm>
+#include <set>
 #include <variant>
 
 namespace mch {
@@ -91,6 +93,9 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
                    ? std::nullopt
                    : std::optional<std::int64_t>(s.value->grams->to_long());
     m->has_extra_currencies = !s.value->extra_currencies.empty();
+    for (const auto &[id, amount] : s.value->extra_currencies) {
+      m->extra_currencies.emplace(id, amount->to_dec_string());
+    }
   }
   m->created_lt = s.created_lt ? std::optional<std::int64_t>(static_cast<std::int64_t>(*s.created_lt))
                                : std::nullopt;
@@ -113,25 +118,54 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
 
 }  // namespace
 
+void fill_transaction_fields(Transaction &tx, const schema::Transaction &st) {
+  tx.hash = b256(st.hash);
+  tx.account = canonicalize_or_passthrough(convert::to_raw_address(st.account));
+  tx.aborted = descr_info(st.description).aborted;
+}
+
+Action create_unknown_action(const std::string &trace_id, const std::vector<schema::Transaction> &txs) {
+  Action a;
+  a.type = "unknown";
+  a.action_id = trace_id;
+  std::set<std::string> accounts;
+  bool first = true;
+  for (const auto &tx : txs) {
+    a.tx_hashes.push_back(b256(tx.hash));
+    accounts.insert(canonicalize_or_passthrough(convert::to_raw_address(tx.account)));
+    if (descr_info(tx.description).aborted) a.success = false;
+    const auto lt = static_cast<std::int64_t>(tx.lt);
+    const auto utime = static_cast<std::int64_t>(tx.now);
+    const auto seqno = static_cast<std::int64_t>(tx.mc_seqno);
+    a.start_lt = first ? lt : std::min(a.start_lt, lt);
+    a.end_lt = first ? lt : std::max(a.end_lt, lt);
+    a.start_utime = first ? utime : std::min(a.start_utime, utime);
+    a.end_utime = first ? utime : std::max(a.end_utime, utime);
+    a.mc_seqno_end = first ? seqno : std::max(a.mc_seqno_end, seqno);
+    first = false;
+  }
+  std::sort(a.tx_hashes.begin(), a.tx_hashes.end());
+  a.tx_hashes.erase(std::unique(a.tx_hashes.begin(), a.tx_hashes.end()), a.tx_hashes.end());
+  a.accounts.assign(accounts.begin(), accounts.end());
+  return a;
+}
+
 td::Result<Trace> schema_to_trace(const std::string &trace_id,
                                   const std::vector<schema::Transaction> &txs) {
   Trace trace;
   trace.trace_id = trace_id;
   for (const auto &st : txs) {
     auto tx = std::make_unique<Transaction>();
-    tx->hash = b256(st.hash);
+    fill_transaction_fields(*tx, st);
     tx->lt = static_cast<std::int64_t>(st.lt);
     tx->now = static_cast<std::int64_t>(st.now);
     tx->mc_block_seqno = static_cast<std::int64_t>(st.mc_seqno);
-    // Same canonical-or-original path as Account values.
-    tx->account = canonicalize_or_passthrough(convert::to_raw_address(st.account));
     tx->orig_status = status_str(st.orig_status);
     tx->end_status = status_str(st.end_status);
     DescrInfo di = descr_info(st.description);
     tx->descr = di.descr;
     tx->compute_exit_code = di.exit_code;
     tx->skipped_reason = std::move(di.skipped_reason);
-    tx->aborted = di.aborted;
 
     Transaction *tx_raw = tx.get();
     if (st.in_msg) {

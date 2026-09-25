@@ -5,6 +5,7 @@
 #include "ExprRuntime.h"
 #include "Value.h"
 
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -13,6 +14,7 @@
 namespace mch {
 
 struct Block;  // BlockTree.h
+struct HostFnEntry;  // HostRegistry.h
 
 // rejected==true means a `reject when` fired or an EvalError surfaced; the
 // other fields are then meaningless. btype empty == non-switch matcher
@@ -47,15 +49,6 @@ class LookupTable {
   virtual ~LookupTable() = default;
   virtual bool has(const std::string &kind) const = 0;
   virtual Value get(const std::string &kind, const std::vector<Value> &args) const = 0;
-};
-
-// Harness table with every kind registered and every key unknown.
-class NullLookupTable : public LookupTable {
- public:
-  bool has(const std::string &) const override { return true; }
-  Value get(const std::string &, const std::vector<Value> &) const override {
-    return Value::null();
-  }
 };
 
 // Two-phase lookup runtime
@@ -112,10 +105,12 @@ class LookupSource {
 };
 
 // Every lookup kind the artifact may reference. Both the runnability gating in
-// BuildDriver and the production ParsedBlockLookupSource key off this set; the
+// BuildDriver and the production TieredLookupSource key off this set; the
 // fixture-backed source that serves it offline lives in mch-fixtures
 // (fixtures/FixtureLookupSource.h).
 const std::set<std::string> &lookup_kinds();
+
+using BodyCache = std::map<const Block *, std::pair<std::vector<std::string>, Value>>;
 
 struct BuildEnv {
   const Block *anchor{nullptr};
@@ -126,7 +121,13 @@ struct BuildEnv {
   // block identity -> parsed body (Null == every soft-parse alternative
   // failed). Filled by rt_parse, read by `.body`.
   std::map<const Block *, Value> bodies;
+  // Decoded bodies and their requested types shared by the passes of one build
+  // attempt. `bodies` stays per-pass so `.body` faults until that pass reaches
+  // its parse statement.
+  BodyCache *body_cache{nullptr};
 };
+
+using BuildFn = std::function<BuildOutcome(BuildEnv &)>;
 
 // `parse TARGET as T1|T2`: target null -> no-op; list -> parse each non-null
 // Block element; Block -> parse. Per element: first type whose parser
@@ -134,10 +135,10 @@ struct BuildEnv {
 // unregistered type name faults (rejection).
 EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::string> &types);
 
-// `[try] parse TARGET as T1|T2` as a build expression. Block, Cell, and
-// base64-BOC Str targets are accepted. The nullable form returns Null for
+// `parse?` / `parse!` expressions accept Block, Cell, and
+// base64-BOC Str targets. The nullable form returns Null for
 // target resolution or total parse failure; the strict form faults.
-EvalResult rt_parse_expr(BuildEnv &env, const Value &target,
+EvalResult rt_parse_expr(const Value &target,
                          const std::vector<std::string> &types, bool nullable);
 
 // Attribute access in build context: `.body` on a Block/List resolves through
@@ -156,6 +157,8 @@ EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
 // generated build code emits this for every `call` whose fn is not a builtin.
 EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
                           const std::vector<Value> &args);
+EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
+                          const HostFnEntry *entry, const std::vector<Value> &args);
 
 // Host-rejection observability
 // Host faults and null-gated results are clean match rejections. Emit the

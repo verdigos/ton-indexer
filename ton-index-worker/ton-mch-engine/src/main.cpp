@@ -7,11 +7,15 @@
 #include "crypto/vm/cp0.h"
 
 #include "AbiBridgeTest.h"
-#include "Classify.h"
-#include "EmuActionSerializeTest.h"
-#include "EmuCelldbLookupTest.h"
+#include "ActionJsonTest.h"
+#include "../harness/ClassifyDump.h"
+#include "RedisActionSerializeTest.h"
+#include "CelldbTier2LookupTest.h"
+#include "ClassifyCoreTest.h"
 #include "GhostExternalTest.h"
 #include "MsgParse.h"
+#include "ExprVectorsTest.h"
+#include "WalkerCasesTest.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -27,8 +31,12 @@ int main(int argc, char *argv[]) {
   bool actions_mode = false;
   bool abi_bridge_test_mode = false;
   bool actions_msgpack_test_mode = false;
+  bool actions_json_test_mode = false;
   bool celldb_tier2_test_mode = false;
   bool ghost_external_test_mode = false;
+  bool classify_core_test_mode = false;
+  bool walker_cases_test_mode = false;
+  std::string expr_vectors_test_path;
   std::vector<std::string> trace_paths;
   std::string actions_output_dir;
   std::string fixtures_manifest;
@@ -44,12 +52,21 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "actions-msgpack-test",
                "Write-back writer self-test (mch::Action -> the msgpack `actions` blob)",
                [&]() { actions_msgpack_test_mode = true; });
+  p.add_option('\0', "actions-json-test", "Action JSON rows against PostgreSQL DDL",
+               [&]() { actions_json_test_mode = true; });
   p.add_option('\0', "celldb-tier2-test",
                "Celldb tier-2 lookup self-test (tier shape equality, jvault chain, memo/budget)",
                [&]() { celldb_tier2_test_mode = true; });
   p.add_option('\0', "ghost-external-test",
                "Wallet request/ghost self-test (tg-wallet single/bulk/opcode/gasless)",
                [&]() { ghost_external_test_mode = true; });
+  p.add_option('\0', "classify-core-test",
+               "Classify core self-test (block-tree topology guards, failure fallback)",
+               [&]() { classify_core_test_mode = true; });
+  p.add_option('\0', "expr-vectors-test", "Generated expression vectors: <json>",
+               [&](td::Slice value) { expr_vectors_test_path = value.str(); });
+  p.add_option('\0', "walker-cases-test", "Walker and rejection cases",
+               [&]() { walker_cases_test_mode = true; });
   p.add_option('\0', "help", "prints help", [&]() {
     char b[10240];
     td::StringBuilder sb(td::MutableSlice{b, 10000});
@@ -89,11 +106,23 @@ int main(int argc, char *argv[]) {
   if (actions_msgpack_test_mode) {
     return mch::run_action_msgpack_test();
   }
+  if (actions_json_test_mode) {
+    return mch::run_actions_json_test();
+  }
   if (celldb_tier2_test_mode) {
     return mch::run_celldb_tier2_test();
   }
+  if (classify_core_test_mode) {
+    return mch::run_classify_core_test();
+  }
   if (ghost_external_test_mode) {
     return mch::run_ghost_external_test();
+  }
+  if (!expr_vectors_test_path.empty()) {
+    return mch::run_vectors_gen(expr_vectors_test_path);
+  }
+  if (walker_cases_test_mode) {
+    return mch::run_walker_cases_test();
   }
   return 0;
 }

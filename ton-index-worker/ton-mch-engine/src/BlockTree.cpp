@@ -170,6 +170,11 @@ void Block::compact_connections() {
       continue;
     }
     Block *tp = n->topmost_parent();
+    // A grandchild's topmost parent is this block. The resulting self-edge would
+    // make find_frontier loop; normal traces never reach it.
+    if (tp == this) {
+      continue;
+    }
     if (seen.insert(tp).second) {
       out.push_back(tp);
     }
@@ -223,11 +228,14 @@ std::vector<Block *> Block::find_frontier(const std::vector<Block *> &in_set) co
   while (!queue.empty()) {
     Block *cur = queue.front();
     queue.pop_front();
+    if (!seen.insert(cur).second) {
+      continue;  // Marks in-set nodes too, so a cycle in next_blocks terminates.
+    }
     if (set.count(cur) != 0) {
       for (Block *c : cur->next_blocks) {
         queue.push_back(c);
       }
-    } else if (seen.insert(cur).second) {
+    } else {
       out.push_back(cur);
     }
   }
@@ -340,8 +348,7 @@ Value account_or_null(const std::optional<std::string> &addr) {
 }
 
 // Leaf-block data dicts so a where_expr dotfield reads the same values.
-// extra_currencies remains omitted because its map is not decoded. For
-// ton_transfer, leaf_comment_info populates comment/encrypted/comment_encoded.
+// For ton_transfer, leaf_comment_info populates comment/encrypted/comment_encoded.
 Value leaf_data(const std::string &btype, const EventNode *node,
                 std::optional<std::uint32_t> op) {
   const Message *msg = node->msg;
@@ -366,6 +373,15 @@ Value leaf_data(const std::string &btype, const EventNode *node,
   fs.emplace_back("value", (msg != nullptr && msg->value)
                                ? Value::make_amount(td::make_refint(*msg->value))
                                : Value::make_amount_none());
+  if (btype == mch::btype::kTonTransfer || btype == mch::btype::kCallContract) {
+    Value::Fields currencies;
+    if (msg != nullptr) {
+      for (const auto &[id, amount] : msg->extra_currencies) {
+        currencies.emplace_back(std::to_string(id), Value::make_str(amount));
+      }
+    }
+    fs.emplace_back("extra_currencies", Value::make_dict(std::move(currencies)));
+  }
   if (btype == mch::btype::kTonTransfer) {
     // comment/encrypted/comment_encoded: needed by the getgems purchase
     // predicate + fn and the nft_transfer_parent_absorb shaper.
@@ -405,7 +421,10 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
   } else {
     // A tg-wallet request keeps its opcode behind the signature; the stored
     // one is meaningless for externals and relayed internals alike.
-    if (auto tg = get_tg_wallet_request_opcode(msg)) op = tg;
+    // JettonNotify and JettonInternalTransfer relay attacker bytes verbatim.
+    if (!(op && (*op == 0x7362d09c || *op == 0x178d4519))) {
+      if (auto tg = get_tg_wallet_request_opcode(msg)) op = tg;
+    }
     b = arena.make(mch::btype::kCallContract);
     b->opcode = op;
     b->failed = node_failed(node);
@@ -414,7 +433,7 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
     bool has_value = msg != nullptr && msg->value && *msg->value != 0;
     bool opcode_truthy = op && *op != 0;
     bool has_extra = msg != nullptr && msg->has_extra_currencies;
-    if (b->failed && !has_value && opcode_truthy && !has_extra) {
+    if (b->failed && !node->forced_failed && !has_value && opcode_truthy && !has_extra) {
       b->failed = false;
     }
     // Marker on the relayed request; the wallet's own sends stay separate.

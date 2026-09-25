@@ -1,6 +1,6 @@
 // Trace-level aggregate derivation shared by schema and fixture loaders.
 // Keeping it separate prevents the schema path from depending on lz4/msgpack.
-#include "TraceLoader.h"
+#include "TraceModel.h"
 
 #include <algorithm>
 
