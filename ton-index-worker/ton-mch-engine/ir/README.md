@@ -1,90 +1,61 @@
-# ir/: MCH policy and conformance generators
+# ir/: expression conformance vectors and IR build notes
 
-The production matcher IR is generated into the CMake build tree from the
-built-in ordered source list in `ir_emit.py`, the `.mch` specs, and the compiler
-frontend.
+This directory contains `generate_expr_vectors.py`. The script passes each
+expression through the compiler frontend and emits the expression conformance
+vectors. CMake writes them to:
 
-- `generate_expr_vectors.py` emits 229 expression conformance vectors through
-  the compiler frontend into `generated/expr_vectors.json` in the CMake build
-  tree. CMake compiles them into `ton-mch-engine`; ctest `mch_expr_vectors`
-  runs them with `--expr-vectors-test`.
-## Build-time mch_ir.json generation
+    <binary-dir>/ton-index-worker/ton-mch-engine/generated/expr_vectors.json
 
-On a normal build, CMake runs the emitter twice and writes:
+`mch-codegen --vectors` converts that JSON to
+`expr_vectors_test_generated.cpp`. The `mch_expr_vectors` test runs the
+generated corpus through the C++ engine.
+
+## Build-time IR generation
+
+`indexer.events.mch.ir_emit` compiles the production `.mch` specs and emits
+matchers in `indexer/indexer/events/mch/specs/manifest.yaml` order. CMake runs
+the emitter twice and writes:
 
     <binary-dir>/ton-index-worker/ton-mch-engine/generated/mch_ir.json
     <binary-dir>/ton-index-worker/ton-mch-engine/generated/mch_ir.second.json
 
-CMake also runs `generate_expr_vectors.py` and writes:
+The `mch_ir_equivalence` test byte-compares these files. The frontend test
+`test_manifest_emission_is_deterministic` also checks repeated manifest
+emission.
 
-    <binary-dir>/ton-index-worker/ton-mch-engine/generated/expr_vectors.json
+## Generated files
 
-`ir_emit.py`'s built-in source list places `specs/jettons_decl.mch` at its
-existing registration position among the other `specs/*.mch` files (minus the
-two excluded legacy jetton specs, see below); `frontend.source_files` echoes
-those paths. Matcher registration order follows the list; equal-`priority`
-matchers tie-break on it.
+CMake writes every generated file below to
+`<binary-dir>/ton-index-worker/ton-mch-engine/generated/`. These files are not
+tracked in git.
 
-The declarative jetton family sets `priority 90`, so it registers ahead of the
-priority-100 specs. `mch_ir_equivalence` byte-compares the two build-tree
-outputs, and `tests/mch/test_ir_emit.py::test_manifest_emission_is_deterministic`
-checks the manifest emission order.
+| input | generator | output |
+|---|---|---|
+| production `.mch` specs and `specs/manifest.yaml` | `python -m indexer.events.mch.ir_emit` | `mch_ir.json`, `mch_ir.second.json` |
+| `ir/generate_expr_vectors.py` | Python | `expr_vectors.json` |
+| `expr_vectors.json` | `mch-codegen --vectors` | `expr_vectors_test_generated.cpp` |
+| `MCH_CLASSIFY_ARTIFACT` | `mch-codegen --matchers --suffix ir` | `matchers_ir_generated.cpp` |
+| `MCH_CLASSIFY_ARTIFACT` | `mch-codegen --wheres --suffix ir` | `wheres_ir_generated.cpp` |
+| `MCH_CLASSIFY_ARTIFACT` | `mch-codegen --builds --suffix ir` | `builds_ir_generated.cpp` |
+| `MCH_CLASSIFY_ARTIFACT` | `mch-codegen --btypes` | `btypes_gen.h` |
+| `payload-keys.yaml` | `python -m indexer.events.mch.payload_keys cpp` | `payload_keys_generated.h` |
 
-## Codegen is a build step — never regenerate by hand
+Editing a `.mch` spec, the manifest, a frontend source, the vector generator,
+or `payload-keys.yaml` and rebuilding reruns the affected generator.
 
-Every generated source is produced by a CMake custom command into the build
-tree (`<binary-dir>/ton-mch-engine/generated/`) and is NOT in git:
+## Selecting the classification artifact
 
-| input                  | generator                              | output (build tree)           | table symbols                                             |
-|------------------------|----------------------------------------|-------------------------------|-----------------------------------------------------------|
-| generated/expr_vectors.json | mch-codegen --vectors             | expr_vectors_test_generated.cpp / vectors_generated.cpp | `gen_vectors()`                        |
-| generated/mch_ir.json† | mch-codegen --matchers --suffix ir     | matchers_ir_generated.cpp     | `gen_matchers_ir()`, `gen_matchers_ir_source_sha()`       |
-| generated/mch_ir.json† | mch-codegen --wheres --suffix ir       | wheres_ir_generated.cpp       | `gen_wheres_ir()`, `gen_wheres_ir_source_sha()`           |
-| generated/mch_ir.json† | mch-codegen --builds --suffix ir       | builds_ir_generated.cpp       | `gen_builds_ir()`, `gen_builds_ir_source_sha()`           |
-| tlb/mch-msgs.tlb       | tlbc                                   | mch-msgs-tlb.{cpp,h}          | `mchmsg::gen::*`                                          |
+The classify tables are chosen at configure time. By default,
+`MCH_CLASSIFY_ARTIFACT` is the generated `mch_ir.json`. Configure with
+`-DMCH_TESTBED_IR=<path/to/artifact.json>` to generate the matcher, build,
+where, and btype tables from another artifact.
 
-† the three CLASSIFY tables come from `MCH_CLASSIFY_ARTIFACT`, which is
-the generated `mch_ir.json` unless `-DMCH_TESTBED_IR` overrides it (see below).
+All four outputs use the same configured artifact. At startup,
+`prepare_classify` checks that the matcher, build, and where tables contain the
+same source SHA.
 
-Editing a `.mch` spec, frontend source, or the `.tlb` and rebuilding is the
-whole workflow — CMake reruns the affected generators automatically. Each IR
-table carries its own `--suffix` symbols. There is no run-time table SELECTION any
-more: the classify tables are chosen at configure time, and `prepare_classify`
-only cross-checks that the matcher / build / where tables agree on their source
-sha, which catches a half-finished regeneration.
+## Concurrent builds
 
-## Running against a different artifact
-
-Every mode runs the tables COMPILED INTO the binary, so "running another
-artifact" means building against it. The engine CLIs do not accept `-I`; use
-the **testbed artifact** option
-(`-DMCH_TESTBED_IR=<path/to/artifact.json>` cache variable):
-
-The classify tables (matchers + builds + wheres) are generated from that
-document instead, under the SAME symbols — swapping the input is all the knob
-does. The built-in source list still emits both build-tree IR copies, and
-`mch_ir_equivalence` continues to compare those two deterministic emissions.
-
-## Concurrency hazard
-
-Never share one binary dir across concurrent builds: a parallel
-edit of an input spec or the built-in source list mid-build can be
-captured by one generator run and not another (and Syncthing can revert a file
-with its mtime preserved, so ninja may not even rerun the generator).
-`prepare_classify`'s
-cross-table sha check catches the resulting mismatch at startup, but the fix is
-isolation: one binary dir per build.
-
-## Vector sources
-
-Source of truth for the production matcher IR lives in the indexer frontend and
-is consumed directly by CMake:
-
-- `generated/mch_ir.json` <- `ir_emit.py` built-in source list + `.mch` specs
-  + frontend
-- `generated/expr_vectors.json` comes from `generate_expr_vectors.py` in this
-  directory. Every vector's `expr` comes from the compiler frontend; `env` and
-  `expect` are authored in the generator.
-The `mch_expr_vectors` ctest runs the build-tree expression corpus through the
-C++ engine. The build also handles production `mch_ir.json`, generated table
-pairing, and the determinism copy.
+Do not share one binary directory across concurrent builds. An input edit
+between generator runs can leave mismatched outputs. Use one binary directory
+per build.

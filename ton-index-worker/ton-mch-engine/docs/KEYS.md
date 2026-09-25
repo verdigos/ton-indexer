@@ -1,5 +1,7 @@
 # Action payload key registry
 
+Generated from `payload-keys.yaml` by `python -m indexer.events.mch.payload_keys gen`; do not edit.
+
 Codec 1 is byte `01` followed by one MessagePack map. Keys are registry ids,
 sorted ascending at every map level. Ids 1..127 use positive fixint; ids
 128..255 use uint8. The empty payload is `01 80`. Nested records use the
@@ -13,6 +15,8 @@ a hand edit to `payload-keys.yaml` with the next id.
 integer up to uint64, then minimal big-endian binary. `string` and `bool`
 keep their MessagePack forms. `other` covers containers; keys inside maps
 still use ids and their declared types.
+
+`Shape` is the JSON form the API returns for the key.
 
 | id | Key | Type | Shape | Uses |
 |---:|---|---|---|---|

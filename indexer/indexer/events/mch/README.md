@@ -36,10 +36,12 @@ Matchers then run in manifest order.
 Each matcher gets a fresh breadth-first traversal, tests its anchor, walks its pattern, and on success runs its build program to produce one typed block that later matchers can consume.
 `ClassifyCore.h::classify_schema_trace` is the single entry a host calls; it returns one trace outcome, the action rows, the matchers that fired, and a rescue row.
 
-Two hosts run the engine in process.
+Four hosts run the engine in process.
 `ton-index-postgres` classifies confirmed traces under `--enable-classifier` and writes `actions` rows to PostgreSQL.
 `ton-trace-emulator` classifies emulated traces and writes msgpack rows to Redis through `RedisActionSerialize`.
-Both share the same compiled matcher table, so a spec change reaches both at once.
+`ton-trace-task-emulator` classifies traces produced by queued emulation tasks.
+`ton-mch-index` batch-classifies a node RocksDB masterchain seqno range.
+All four share the same compiled matcher table, so a spec change reaches all of them at once.
 
 ## 3. Walkthrough: `nft_transfer` from unmatched trace to landed matcher
 
@@ -48,10 +50,11 @@ Every later section quotes a piece of it.
 
 ### 3.1 Look at what the trace classifies to today
 
-Run the product binary over the fixture corpus and read the rows it writes:
+Run the gate and development harness, target `ton-mch-engine`, built at
+`build/ton-index-worker/ton-mch-engine/ton-mch-engine`, over the fixture corpus and read the rows it writes:
 
 ```
-ton-mch-engine --actions -T indexer/tests/traces -O /tmp/actions \
+build/ton-index-worker/ton-mch-engine/ton-mch-engine --actions -T indexer/tests/traces -O /tmp/actions \
     --fixtures ton-index-worker/ton-mch-engine/goldens/fixtures.json
 ```
 
@@ -383,7 +386,7 @@ Every build expression can read `anchor`, the anchor block, and `consumed`, the 
 `CAPTURE.msg` is the message envelope with `msg_hash`, `tx_hash`, `tx_lt`, `direction`, `source`, `destination`, `value`, `opcode`, `created_lt`, `created_at`, `bounce`, `bounced` and `transaction`.
 The envelope set is closed: a field the trace loader does not carry (such as `fwd_fee`) faults, so a spec reads only the fields listed above (`msg_envelope` in `ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp`).
 `CAPTURE.msg.transaction` carries `hash`, `lt`, `now`, `account`, `aborted`, `orig_status`, `end_status` and `compute_exit_code`.
-`msg.source`, `msg.destination` and `msg.transaction.account` are already `AccountId` values, so a spec never wraps them in `account(...)`.
+`msg.source`, `msg.destination` and `msg.transaction.account` are raw address strings; wrap them in `account(...)` to compare or emit them as `AccountId`.
 
 Constructors are `asset(master)`, `ton_asset()`, `account(addr)`, `amount(x)` and `addr_none()`.
 `account(null)` is `null`, a missing address; `addr_none()` is the present-but-empty address, so a field that must carry one is written `account(x) ?? addr_none()`.
@@ -521,11 +524,9 @@ writer under each Redis action row's binary `payload` field. It emits no `*_data
 by one MessagePack map, with numeric registry ids in ascending order at every
 depth and no `data` wrapper. The empty payload is `01 80`. Addresses, BOCs,
 and hashes use binary values; unsigned decimals use MessagePack uint through
-uint64, then minimal big-endian binary. The get-method integer fields `nft_index`,
-`price`, `full_price`, `marketplace_fee`, `max_bid`, `min_bid`, `mp_fee_base`,
-`mp_fee_factor`, `royalty_amount` and `royalty_fee_base` use signed decimal strings;
-`tick_spacing` is also an integer string. The action goldens still show names
-and decimal text.
+uint64, then minimal big-endian binary. Keys typed `string` with shape
+`integer_string` in `ton-index-worker/ton-mch-engine/docs/KEYS.md` carry signed
+decimal strings. The action goldens still show names and decimal text.
 
 An invalid payload value skips its action. Other actions in the trace remain
 classified, while the trace records the bounded payload error. If all actions

@@ -60,9 +60,9 @@ payload bytes separately under its binary `payload` key; the action golden shows
 the named flat `data` map. Codec `01` stores a single MessagePack map with numeric
 key ids in ascending order at every depth; `01 80` is the empty payload. Typed
 addresses, BOCs and hashes are binary, and unsigned decimals are compact uints
-or minimal big-endian binary above uint64. In encoded payloads, null fields and list elements
-are omitted recursively, except `legs` retains null placeholders before filled
-legs, trims trailing placeholders, and omits the key when all legs are empty.
+or minimal big-endian binary above uint64. Encoded payloads omit null map fields
+recursively; lists keep null elements. `legs` drops trailing null placeholders
+and is omitted when all legs are empty.
 For classified actions, `tx_hashes` starts with the initiating transaction, or the root-level block's earliest transaction by `tx->lt`, followed by the remaining hashes sorted ascending.
 A trace that classifies to nothing carries the
 synthetic `unknown` row; a trace whose classification throws writes
