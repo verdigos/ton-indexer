@@ -619,12 +619,6 @@ class Action(Base):
         Column("query_id", Numeric),
         Column("withdraw_amount", Numeric),
     ]))
-    wallet_v5_extension_data = Column(CompositeType("wallet_v5_extension_details", [
-        Column("wallet_id", Numeric),
-        Column("valid_until", Numeric),
-        Column("seqno", Numeric),
-        Column("signature_allowed", Boolean),
-    ]))
     trace_end_lt: int = Column(Numeric)
     trace_end_utime: int = Column(Numeric)
     trace_external_hash: str = Column(TonHash)

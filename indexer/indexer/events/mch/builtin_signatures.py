@@ -1,4 +1,4 @@
-"""Builtin expression names and arities shared by the compiler and evaluator."""
+"""Builtin expression names and arities used by the compiler."""
 
 BUILTIN_SIGNATURES: dict[str, int] = {
     "account": 1,
@@ -12,10 +12,19 @@ BUILTIN_SIGNATURES: dict[str, int] = {
     "bytes_of": 1,
     "first": 1,
     "last": 1,
+    "at": 2,
     "len": 1,
-    "sum": 1,
     "zip": 2,
     "concat": 2,
     "map": 2,
     "contains": 2,
+    "get": 2,
+    "tx_aborted": 1,
+    "exit_code": 1,
+    "uint_hex": 1,
+    "txid_le_hex": 1,
+    "ext_addr_str": 1,
+    "addr_hash_hex": 1,
+    "out_messages": 1,
+    "state_init": 1,
 }

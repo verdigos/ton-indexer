@@ -8,7 +8,6 @@ from indexer.events.mch.tokens import KEYWORDS, Token, TokenKind
 
 _SINGLE_CHAR: dict[str, TokenKind] = {
     "|": TokenKind.PIPE,
-    "^": TokenKind.CARET,
     "@": TokenKind.AT,
     "$": TokenKind.DOLLAR,
     "{": TokenKind.LBRACE,
@@ -24,8 +23,6 @@ _SINGLE_CHAR: dict[str, TokenKind] = {
     ",": TokenKind.COMMA,
     ":": TokenKind.COLON,
 }
-
-_DURATION_UNITS = set("smhd")
 
 
 class LexerError(Exception):
@@ -75,21 +72,23 @@ class _Cursor:
 
 def tokenize(text: str, path: str) -> Iterator[Token]:
     cur = _Cursor(text, path)
+    brackets: list[str] = []
 
     while not cur.at_end():
         ch = cur.peek()
 
-        # Comment: consume to (but not including) newline; the newline becomes a NEWLINE token below.
+        # Comments stop before the newline.
         if ch == "#":
             while not cur.at_end() and cur.peek() != "\n":
                 cur.advance()
             continue
 
-        # Newlines become NEWLINE tokens.
+        # The innermost bracket controls whether newlines separate items.
         if ch == "\n":
             start_i, start_line, start_col = cur.i, cur.line, cur.col
             cur.advance()
-            yield Token(TokenKind.NEWLINE, "\n", cur.span_from(start_i, start_line, start_col))
+            if not brackets or brackets[-1] == "{":
+                yield Token(TokenKind.NEWLINE, "\n", cur.span_from(start_i, start_line, start_col))
             continue
 
         # Other whitespace consumed silently.
@@ -107,10 +106,14 @@ def tokenize(text: str, path: str) -> Iterator[Token]:
         if ch in _SINGLE_CHAR:
             start_i, start_line, start_col = cur.i, cur.line, cur.col
             cur.advance()
+            if ch in "([{":
+                brackets.append(ch)
+            elif brackets and brackets[-1] == {")": "(", "]": "[", "}": "{"}.get(ch):
+                brackets.pop()
             yield Token(_SINGLE_CHAR[ch], ch, cur.span_from(start_i, start_line, start_col))
             continue
 
-        # Numeric: hex, decimal, or duration.
+        # Numeric: hex or decimal.
         if ch.isdigit():
             yield _read_number(cur)
             continue
@@ -183,32 +186,14 @@ def _read_number(cur: _Cursor) -> Token:
     # Hex.
     if cur.peek() == "0" and cur.peek(1) in ("x", "X"):
         cur.advance(); cur.advance()
-        digits_start = cur.i
         while not cur.at_end() and cur.peek() in "0123456789abcdefABCDEF":
             cur.advance()
-        if cur.i == digits_start:
-            raise LexerError(
-                "L001_BAD_NUMERIC",
-                "hex literal requires at least one hex digit",
-                cur.span_from(start_i, start_line, start_col),
-            )
         text = cur.text[start_i:cur.i]
         return Token(TokenKind.HEX, text, cur.span_from(start_i, start_line, start_col))
 
-    # Decimal (possibly followed by a duration unit).
+    # Decimal.
     while not cur.at_end() and cur.peek().isdigit():
         cur.advance()
-    if not cur.at_end() and cur.peek() in _DURATION_UNITS:
-        # Duration unit must NOT be followed by another ident char (i.e. "6s" vs "6sm").
-        if (
-            cur.i + 1 < len(cur.text)
-            and (cur.text[cur.i + 1].isalnum() or cur.text[cur.i + 1] == "_")
-        ):
-            text = cur.text[start_i:cur.i]
-            return Token(TokenKind.DEC, text, cur.span_from(start_i, start_line, start_col))
-        cur.advance()
-        text = cur.text[start_i:cur.i]
-        return Token(TokenKind.DURATION, text, cur.span_from(start_i, start_line, start_col))
 
     text = cur.text[start_i:cur.i]
     return Token(TokenKind.DEC, text, cur.span_from(start_i, start_line, start_col))
@@ -223,6 +208,8 @@ def _read_identifier_or_keyword(cur: _Cursor) -> Token:
         else:
             break
     text = cur.text[start_i:cur.i]
+    if text == "parse" and cur.peek() in ("?", "!"):
+        text += cur.advance()
     kind = KEYWORDS.get(text, TokenKind.IDENT)
     return Token(kind, text, cur.span_from(start_i, start_line, start_col))
 

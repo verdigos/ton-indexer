@@ -3,16 +3,26 @@
 This module is separate from ir_emit.py so the compiler can use it too: ir_emit
 imports the compiler, so the compiler cannot import ir_emit back. The compiled
 path converts a node's inline `where (expr)` to this encoding at compile time
-and evaluates it with the shared sync evaluator (mch/expr_eval.py). These are the exact
-artifact bytes the IR engine evaluates, so the two paths cannot drift.
-
-Frontend-only module (it walks ast_ nodes); mch_ir must not import it.
+for inclusion in the emitted artifact.
 """
 from __future__ import annotations
 
 from indexer.events.mch import ast_
 
-IR_VERSION = "1.1"
+IR_VERSION = "1.3"
+
+
+def _is_envelope_address(e: ast_.Expr) -> bool:
+    fields = []
+    while isinstance(e, ast_.FieldAccess):
+        fields.append(e.field)
+        e = e.target
+    if isinstance(e, ast_.FieldRef):
+        fields.append(e.field)
+    elif not isinstance(e, ast_.NameRef):
+        return False
+    return fields in (["source", "msg"], ["destination", "msg"],
+                      ["account", "transaction", "msg"])
 
 
 def emit_expr(e: ast_.Expr) -> dict:
@@ -26,22 +36,18 @@ def emit_expr(e: ast_.Expr) -> dict:
         return {"k": "null"}
     if isinstance(e, ast_.NameRef):
         return {"k": "name", "id": e.name}
+    if isinstance(e, ast_.DotSelf):
+        return {"k": "dotself"}
     if isinstance(e, ast_.FieldRef):
+        if e.field == "msg":
+            return {"k": "attr", "of": {"k": "dotself"}, "name": "msg"}
         return {"k": "dotfield", "name": e.field}
     if isinstance(e, ast_.FieldAccess):
-        return {"k": "attr", "of": emit_expr(e.target), "name": e.field}
+        path = {"k": "attr", "of": emit_expr(e.target), "name": e.field}
+        return {"k": "call", "fn": "account", "args": [path]} if _is_envelope_address(e) else path
     if isinstance(e, ast_.Call):
-        # eval.py's evaluator only ever calls a bare builtin name ("only
-        # builtin names are callable"); a non-name callee can be *parsed*
-        # (postfix chaining is generic in the grammar) but can never evaluate,
-        # so it has no faithful IR encoding here.
-        if not isinstance(e.callee, ast_.NameRef):
-            raise ValueError(
-                f"IR emission: Call callee must be a bare name (got "
-                f"{type(e.callee).__name__}); non-name callees never evaluate "
-                f"(see eval.py Evaluator._eval_call) and are not representable "
-                f"in IR {IR_VERSION}"
-            )
+        if e.callee.name == "account" and len(e.args) == 1 and _is_envelope_address(e.args[0]):
+            return emit_expr(e.args[0])
         return {"k": "call", "fn": e.callee.name, "args": [emit_expr(a) for a in e.args]}
     if isinstance(e, ast_.LookupExpr):
         return {"k": "lookup", "name": e.kind, "args": [emit_expr(a) for a in e.args]}
@@ -70,10 +76,12 @@ def emit_expr(e: ast_.Expr) -> dict:
             "nullable": e.nullable,
         }
     if isinstance(e, ast_.Comprehension):
-        # map -> `mapc`; any/all -> `quant` carrying the op.
+        payload = {"xs": emit_expr(e.xs), "var": e.var, "body": emit_expr(e.body)}
         if e.kind == "map":
-            return {"k": "mapc", "xs": emit_expr(e.xs), "var": e.var,
-                    "body": emit_expr(e.body)}
-        return {"k": "quant", "op": e.kind, "xs": emit_expr(e.xs), "var": e.var,
-                "body": emit_expr(e.body)}
+            return {"k": "mapc", **payload}
+        if e.kind == "find":
+            return {"k": "find", **payload}
+        if e.kind == "stable_sort_by":
+            return {"k": "sortc", **payload}
+        return {"k": "quant", "op": e.kind, **payload}
     raise ValueError(f"unsupported expression node {type(e).__name__} in IR emission")

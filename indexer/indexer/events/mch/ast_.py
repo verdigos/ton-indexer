@@ -51,6 +51,12 @@ class NameRef(Expr):
 
 
 @dataclass(frozen=True)
+class DotSelf(Expr):
+    """The candidate block inside an inline `where (expr)` clause."""
+    span: Span
+
+
+@dataclass(frozen=True)
 class FieldRef(Expr):
     """Leading-dot field access `.field`, the current block's data field
     (valid only as a primary inside an inline `where (expr)` clause)."""
@@ -115,8 +121,8 @@ class ListLit(Expr):
 class ParseExpr(Expr):
     """Parse a Block, Cell, or base64-BOC string against message types.
 
-    Strict parsing faults on an invalid target or total failure; `try parse`
-    sets `nullable` and returns null for those failures instead."""
+    `parse!` faults on an invalid target or total failure; `parse?` sets
+    `nullable` and returns null for those failures instead."""
     target: Expr
     msg_types: tuple[str, ...]
     span: Span
@@ -125,13 +131,13 @@ class ParseExpr(Expr):
 
 @dataclass(frozen=True)
 class Comprehension(Expr):
-    """`map|any|all(xs as e => body)` lambda comprehension.
+    """`map|any|all|find|stable_sort_by(xs as e => body)` lambda comprehension.
 
-    `kind` is "map" (list comprehension), "any" or "all" (quantifiers). `var` is
+    `kind` is "map", "any", "all", "find", or "stable_sort_by". `var` is
     the element binder, visible ONLY inside `body` (a new scope frame). No nested
-    comprehensions. Distinct from the `map(xs, "field")` builtin call, which the
+    comprehensions. Distinct from the `map(xs,"f")` builtin call, which the
     parser tells apart by the `as` keyword."""
-    kind: str  # "map" | "any" | "all"
+    kind: str  # "map" | "any" | "all" | "find" | "stable_sort_by"
     xs: Expr
     var: str
     body: Expr
@@ -185,6 +191,14 @@ class PatternExpr:
 
 
 @dataclass(frozen=True)
+class Relations:
+    children_all: PatternExpr | None
+    children_first: tuple[PatternExpr, ...] | None
+    parent: PatternExpr | None
+    span: Span
+
+
+@dataclass(frozen=True)
 class Node(PatternExpr):
     head: NodeHead
     capture: str | None
@@ -193,6 +207,8 @@ class Node(PatternExpr):
     # Inline `where (expr)` form. Mutually exclusive with the named
     # `where_predicate` form; the compiler ignores it in v0.
     where_expr: Expr | None = None
+    relations: Relations | None = None
+    parse_types: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -220,6 +236,14 @@ class Peek(PatternExpr):
 
 
 @dataclass(frozen=True)
+class Many(PatternExpr):
+    inner: PatternExpr
+    min: int
+    max: int | None
+    span: Span
+
+
+@dataclass(frozen=True)
 class Sequence(PatternExpr):
     """One-or-more atoms connected by edges.
 
@@ -236,6 +260,32 @@ class Alternative(PatternExpr):
     branches: tuple[PatternExpr, ...]
     span: Span
     exclusive: bool = False
+    opcode_set: bool = False
+
+
+def children(p: PatternExpr) -> tuple[PatternExpr, ...]:
+    if isinstance(p, Node):
+        if p.relations is None:
+            return ()
+        relations = p.relations
+        return tuple(
+            child
+            for child in (
+                relations.children_all,
+                *(relations.children_first or ()),
+                relations.parent,
+            )
+            if child is not None
+        )
+    if isinstance(p, (Maybe, Peek, Many)):
+        return (p.inner,)
+    if isinstance(p, Sequence):
+        return (p.head, *(child for _edge, child in p.tail))
+    if isinstance(p, Alternative):
+        return p.branches
+    if isinstance(p, ChildrenBlock):
+        return p.items
+    return ()
 
 
 @dataclass(frozen=True)
@@ -243,12 +293,23 @@ class OpcodeDecl:
     name: str
     value: int
     span: Span
+    exported: bool = False
 
 
 @dataclass(frozen=True)
 class PredicateDecl:
     name: str
     span: Span
+    exported: bool = False
+
+
+@dataclass(frozen=True)
+class FnDecl:
+    name: str
+    params: tuple[str, ...]
+    body: Expr
+    span: Span
+    exported: bool = False
 
 
 @dataclass(frozen=True)
@@ -262,6 +323,7 @@ class RuleDecl:
     # contextual modifier `rule NAME cyclic = …`; ignored for non-recursive
     # rules.
     strategy: str = "frontier"
+    exported: bool = False
 
 
 # Build statements appear in a matcher body after the pattern.
@@ -282,11 +344,6 @@ class ParseStmt(BuildStmt):
     msg_types: tuple[str, ...]
     span: Span
 
-    @property
-    def msg_type(self) -> str:
-        """First (or only) declared message type. Kept for single-type callers."""
-        return self.msg_types[0]
-
 
 @dataclass(frozen=True)
 class LetStmt(BuildStmt):
@@ -306,13 +363,6 @@ class RejectStmt(BuildStmt):
 @dataclass(frozen=True)
 class FailedStmt(BuildStmt):
     """`failed when expr`."""
-    condition: Expr
-    span: Span
-
-
-@dataclass(frozen=True)
-class BrokenStmt(BuildStmt):
-    """`broken when expr`."""
     condition: Expr
     span: Span
 
@@ -357,31 +407,22 @@ class SwitchStmt(BuildStmt):
 class MatcherDecl:
     name: str
     produces: tuple[str, ...]
-    # None when the matcher is declarative (build statements with an `out`
-    # block instead of a registered-builder reference).
-    build: str | None
-    entry: str | None
     include_excess: bool
     include_bounces: bool
     pattern: PatternExpr
     span: Span
-    # Build statements in source order. Empty for builder-based matchers.
+    # Build statements in source order.
     build_stmts: tuple[BuildStmt, ...] = ()
     # `shape IDENT` names a registered shaper invoked by the
     # engine after merge, for post-build tree surgery on the produced block's
     # region. None when absent.
     shape: str | None = None
-    # `priority DEC` directive: registration-order weight, lower
-    # runs earlier; ties broken by (file name, source position). Default 100.
-    priority: int = 100
 
-    @property
-    def produces_primary(self) -> str:
-        """First declared `produces` name. Convenience accessor for code that
-        needs a single type (e.g. `CompiledMatcher.produces_cls_name`); the
-        union is documentation plus registry validation, and
-        selecting among the declared types at build time is the builder's job."""
-        return self.produces[0]
+
+@dataclass(frozen=True)
+class ImportDecl:
+    path: str
+    span: Span
 
 
 @dataclass(frozen=True)
@@ -391,3 +432,5 @@ class File:
     predicates: tuple[PredicateDecl, ...]
     rules:      tuple[RuleDecl, ...]
     matchers:   tuple[MatcherDecl, ...]
+    fns:        tuple[FnDecl, ...] = ()
+    imports:    tuple[ImportDecl, ...] = ()

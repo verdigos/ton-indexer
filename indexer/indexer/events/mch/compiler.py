@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from indexer.events.mch import ast_
 from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
-from indexer.events.mch.recursion import RecursionStrategy, RecursiveMatcherStrategy
 from indexer.events.mch.registry import Registries
 from indexer.events.mch.resolver import (
     CaptureInfo,
     RecursionClass,
     ResolvedFile,
     ResolvedMatcher,
+    _alternative_is_exclusive,
+    _resolve_opcode_ref,
 )
 
 
@@ -22,8 +23,8 @@ class LNode:
 
     The frontend lowers `.mch` patterns straight into a graph of these plain
     records. No engine primitives are constructed. `ir_emit` walks the graph in
-    DFS pre-order to assign node ids and produce the JSON artifact; the v2 IR
-    engine (`mch_ir/`) is the only runtime that consumes it.
+    DFS pre-order to assign node ids and produce the JSON artifact consumed by
+    engine code generation.
 
     `kind` ∈ {"contract", "block_type", "pred", "any", "or", "recursive",
     "cyclic_ref"}. Field usage by kind:
@@ -52,6 +53,8 @@ class LNode:
     target: "LNode | None" = None          # cyclic_ref back-edge target
     optional: bool = False
     peek: bool = False
+    many: bool = False
+    max: int | None = None
     peek_span: Span | None = None
     capture: str | None = None
     where: str | None = None
@@ -65,8 +68,6 @@ class LNode:
 class CompiledMatcher:
     name: str
     root: LNode
-    build_fn_name: str | None
-    produces_cls_name: str
     source_span: Span
     produces: tuple[str, ...] = ()
     captures: tuple[tuple[str, str], ...] = ()
@@ -74,7 +75,6 @@ class CompiledMatcher:
     include_bounces: bool = True
     build_stmts: tuple = ()
     shape_fn_name: str | None = None
-    priority: int = 100
     # Anchor record representation. Exactly one of
     # these is set for a group/predicate anchor; a plain single op/btype anchor
     # leaves them all None and the emitter reads the root node's kind.
@@ -88,9 +88,8 @@ class CompiledMatcher:
 class CompileCtx:
     resolved: ResolvedFile
     registries: Registries
-    recursion: RecursionStrategy
     bag: DiagnosticBag
-    where_entry_capture: str = ""
+    where_anchor_capture: str = ""
     # Names of recursive rules currently being lowered; used to break cycles
     # by treating self-refs inside step/exit branches as a recursion sentinel.
     lowering_recursive: set[str] = None  # type: ignore[assignment]
@@ -103,7 +102,6 @@ class CompileCtx:
 def compile_(
     resolved: ResolvedFile,
     registries: Registries,
-    recursion: RecursionStrategy | None = None,
 ) -> list[CompiledMatcher]:
     """Compile a resolved file to a list of CompiledMatcher.
 
@@ -113,7 +111,6 @@ def compile_(
     ctx = CompileCtx(
         resolved=resolved,
         registries=registries,
-        recursion=recursion or RecursiveMatcherStrategy(),
         bag=bag,
     )
 
@@ -121,7 +118,7 @@ def compile_(
     for rm in resolved.matchers:
         out.append(_compile_matcher(rm, ctx))
 
-    if bag.has_errors:
+    if bag.items:
         raise CompileError(bag)
 
     return out
@@ -129,39 +126,14 @@ def compile_(
 
 def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     decl = rm.decl
-    ctx.where_entry_capture = rm.anchor_capture
+    ctx.where_anchor_capture = rm.anchor_capture
 
     _check_no_capture_after_recursion(decl.pattern, decl.span, ctx)
-    _check_no_bare_children_block(decl.pattern, ctx)
-    if ctx.bag.has_errors:
+    _check_children_block_placement(decl.pattern, ctx)
+    if ctx.bag.items:
         raise CompileError(ctx.bag)
 
-    if decl.produces_primary not in ctx.registries.block_types:
-        ctx.bag.error(
-            "C003_UNKNOWN_BLOCK_TYPE",
-            f"matcher {decl.name!r}: produces type {decl.produces_primary!r} is not registered",
-            decl.span,
-        )
-    if decl.build is not None and decl.build not in ctx.registries.builders:
-        ctx.bag.error(
-            "C002_UNKNOWN_BUILDER",
-            f"matcher {decl.name!r}: builder {decl.build!r} is not registered",
-            decl.span,
-        )
-    if decl.shape is not None and decl.shape not in ctx.registries.shapers:
-        ctx.bag.error(
-            "C011_UNKNOWN_SHAPER",
-            f"matcher {decl.name!r}: shaper {decl.shape!r} is not registered",
-            decl.span,
-        )
-
-    # Lower the pattern relative to the anchor atom. For set anchors, the whole
-    # exclusive alternative group is the anchor atom,
-    # so chain edges around it wire exactly as around a single anchor node.
-    anchor_atom: ast_.PatternExpr = (
-        rm.anchor_group if rm.anchor_group is not None else rm.anchor_node
-    )
-    parent_m, child_m, children_ms = _lower_relative_to_anchor(decl.pattern, anchor_atom, ctx)
+    parent_m, child_m, children_ms = _lower_surrounding_sequence(decl.pattern, ctx)
 
     head = rm.anchor_node.head
     anchor_pred: str | None = None
@@ -177,7 +149,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         any_where = any(w is not None for _k, _v, w in branch_descs)
         root = LNode(kind="any", child=child_m, parent=parent_m)
     elif isinstance(head, ast_.OpHead):
-        opcode = head.ref if isinstance(head.ref, int) else ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
+        opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
         root = LNode(
             kind="contract",
             opcode=opcode,
@@ -187,23 +159,17 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         )
     elif isinstance(head, ast_.BTypeHead):
         root = LNode(kind="block_type", btype=head.name, child=child_m, parent=parent_m)
-    elif isinstance(head, ast_.PredHead):
+    else:
         # Predicate anchors have no opcode/btype prefilter and are full-scanned.
         anchor_pred = head.name
         root = LNode(kind="any", child=child_m, parent=parent_m)
-    else:
-        # Resolver should have rejected this; defensive guard.
-        ctx.bag.error(
-            "C001_RECURSION_SHAPE_UNSUPPORTED",
-            f"matcher {decl.name!r}: unsupported anchor head {type(head).__name__}",
-            decl.span,
-        )
-        raise CompileError(ctx.bag)
 
     # Some heads carry children_matchers only post-hoc (only `contract` takes
     # them at construction); apply here if not already set.
     if children_ms is not None and root.children is None:
         root.children = children_ms
+    if rm.anchor_node.relations is not None:
+        _lower_relations(rm.anchor_node.relations, root, ctx)
     # Apply where-predicate on the anchor node, if any. For a set-membership
     # group anchor, the per-branch `where` is already folded into
     # the group's membership record; `anchor_node` is only a representative
@@ -246,19 +212,16 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     return CompiledMatcher(
         name=decl.name,
         root=root,
-        build_fn_name=decl.build,
-        produces_cls_name=decl.produces_primary,
         source_span=decl.span,
         produces=tuple(decl.produces),
         captures=tuple(
-            (cname, "many" if ci.list_binding else ("opt" if ci.optional else "one"))
+            (cname, "many" if ci.list_binding else "one")
             for cname, ci in rm.captures.items()
         ),
         include_excess=bool(decl.include_excess),
         include_bounces=bool(decl.include_bounces),
         build_stmts=tuple(decl.build_stmts),
         shape_fn_name=decl.shape,
-        priority=decl.priority,
         anchor_pred=anchor_pred,
         anchor_branches=anchor_branches,
         anchor_opcodes=anchor_opcodes,
@@ -266,263 +229,76 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     )
 
 
-def _lower_relative_to_anchor(
+def _lower_surrounding_sequence(
     pattern: ast_.PatternExpr,
-    anchor: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> tuple[LNode | None, LNode | None, list[LNode] | None]:
-    """Walk the pattern to figure out (parent_matcher, child_matcher, children_matchers).
-
-    `anchor` is compared by identity: a single anchor Node, or the whole
-    exclusive Alternative for opcode-set anchors.
-    """
-    parents = _find_anchor_path(pattern, anchor)
-    if parents is None:
+    if not isinstance(pattern, ast_.Sequence):
         return None, None, None
-    # `parents` ends with the anchor itself; its immediate parent is parents[-2].
-    if len(parents) < 2:
-        return None, None, None
-    immediate_parent = parents[-2]
-
-    child_chain, children_ms = _lower_child_chain_from(immediate_parent, pattern, anchor, ctx)
-    parent_chain = _lower_parent_chain_from(immediate_parent, pattern, anchor, ctx)
+    child_chain, children_ms = _lower_child_chain_from(pattern, ctx)
+    parent_chain = _lower_parent_chain_from(pattern, ctx)
     return parent_chain, child_chain, children_ms
-
-
-def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> list[ast_.PatternExpr] | None:
-    if pattern is anchor:
-        return None
-
-    def search(p: ast_.PatternExpr, path: list[ast_.PatternExpr]) -> list[ast_.PatternExpr] | None:
-        if p is anchor:
-            return path + [p]
-        if isinstance(p, ast_.Sequence):
-            r = search(p.head, path + [p])
-            if r:
-                return r
-            for _e, atom in p.tail:
-                r = search(atom, path + [p])
-                if r:
-                    return r
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
-            return search(p.inner, path + [p])
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                r = search(b, path + [p])
-                if r:
-                    return r
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                r = search(it, path + [p])
-                if r:
-                    return r
-        return None
-
-    return search(pattern, [])
-
-
-def _unwrap_modifiers(
-    p: ast_.PatternExpr,
-) -> tuple[ast_.PatternExpr, bool, bool, Span | None]:
-    optional = False
-    peek = False
-    peek_span: Span | None = None
-    while isinstance(p, (ast_.Maybe, ast_.Peek)):
-        if isinstance(p, ast_.Maybe):
-            optional = True
-        else:
-            peek = True
-            if peek_span is None:
-                peek_span = p.span
-        p = p.inner
-    return p, optional, peek, peek_span
 
 
 def _is_cb_atom(a: ast_.PatternExpr) -> bool:
     """Whether an atom attaches left without advancing the chain cursor.
     """
-    inner, _optional, _peek, _peek_span = _unwrap_modifiers(a)
-    return isinstance(inner, ast_.ChildrenBlock)
+    return isinstance(a, ast_.ChildrenBlock)
 
 
 def _lower_child_chain_from(
-    parent: ast_.PatternExpr,
-    pattern: ast_.PatternExpr,
-    anchor: ast_.PatternExpr,
+    sequence: ast_.Sequence,
     ctx: CompileCtx,
 ) -> tuple[LNode | None, list[LNode] | None]:
-    if isinstance(parent, ast_.Sequence):
-        # Collect child-edged atoms in the anchor's downstream slice. Stop at
-        # the first parent edge; later atoms belong to the parent chain
-        # (`_lower_parent_chain_from` consumes them).
-        # In `op A <- op B -> {C; D}`, the children belong to B's parent chain,
-        # not to anchor A.
-        downstream_atoms: list[ast_.PatternExpr] = []
-        if parent.head is anchor:
-            tail_slice = parent.tail
-        else:
-            if isinstance(parent.head, ast_.ChildrenBlock):
+    downstream_atoms: list[ast_.PatternExpr] = []
+    for edge, atom in sequence.tail:
+        if edge is ast_.Edge.PARENT:
+            if downstream_atoms:
                 ctx.bag.error(
-                    "C008_CHILDREN_BLOCK_BARE",
-                    "children block '{...}' cannot appear as the first element of a sequence; "
-                    "it must follow a node (e.g. 'op A -> {op B; op C}')",
-                    parent.head.span,
+                    "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+                    "a parent edge ('<-') following a child edge in the same "
+                    "chain is unsupported: the parent would test the anchor "
+                    "block and can never match; split the pattern",
+                    atom.span,
                 )
                 raise CompileError(ctx.bag)
-            anchor_idx = None
-            for i, (_e, atom) in enumerate(parent.tail):
-                if atom is anchor:
-                    anchor_idx = i
-                    break
-            if anchor_idx is None:
-                return None, None
-            tail_slice = parent.tail[anchor_idx + 1:]
-        for edge, atom in tail_slice:
-            if edge is ast_.Edge.PARENT:
-                if downstream_atoms and not all(_is_cb_atom(a) for a in downstream_atoms):
-                    # `op A -> op B <- op C`: the parent edge's left side is a
-                    # non-anchor node (B) reached through a preceding child edge.
-                    # Its only faithful lowering sets B.parent_matcher = C, which
-                    # at runtime tests B.previous_block (the anchor A) against
-                    # opcode C and can never be satisfied. Reject rather than
-                    # silently drop the `<- C` segment.
-                    # If everything before the parent edge is a children block,
-                    # the cursor never left the anchor. In
-                    # `op A -> {B; C} <- op P`, A has both
-                    # children_matchers and parent_matcher.
-                    ctx.bag.error(
-                        "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
-                        "a parent edge ('<-') following a child edge in the same "
-                        "chain is unsupported: the parent would test the anchor "
-                        "block and can never match; split the pattern or re-anchor",
-                        atom.span,
-                    )
-                    raise CompileError(ctx.bag)
-                break
-            downstream_atoms.append(atom)
-        if not downstream_atoms:
-            return None, None
-        first = downstream_atoms[0]
-        first_inner, _optional, _peek, _peek_span = _unwrap_modifiers(first)
-        if isinstance(first_inner, ast_.ChildrenBlock):
-            # Consume consecutive anchor-adjacent children blocks so
-            # `{B;C} {D;E}`
-            # all attach to the anchor's children_matchers in source order.
-            children_ms: list[LNode] = []
-            rest_idx = 0
-            while rest_idx < len(downstream_atoms):
-                atom = downstream_atoms[rest_idx]
-                inner, optional_items, peek_items, peek_span = _unwrap_modifiers(atom)
-                if not isinstance(inner, ast_.ChildrenBlock):
-                    break
-                for it in inner.items:
-                    lowered_it = _lower_atom(it, ctx)
-                    if optional_items:
-                        lowered_it.optional = True
-                    if peek_items:
-                        lowered_it.peek = True
-                        lowered_it.peek_span = peek_span
-                    children_ms.append(lowered_it)
-                rest_idx += 1
-            rest = downstream_atoms[rest_idx:]
-            if rest:
-                pairs = [(ast_.Edge.CHILD, a) for a in rest]
-                child = _lower_chain_with_children_attach(pairs, ctx)
-                return child, children_ms
-            return None, children_ms
-        pairs = [(ast_.Edge.CHILD, a) for a in downstream_atoms]
-        child = _lower_chain_with_children_attach(pairs, ctx)
-        return child, None
-
-    return None, None
+            break
+        downstream_atoms.append(atom)
+    if not downstream_atoms:
+        return None, None
+    first = downstream_atoms[0]
+    if isinstance(first, ast_.ChildrenBlock):
+        return None, [_lower_atom(it, ctx) for it in first.items]
+    pairs = [(ast_.Edge.CHILD, a) for a in downstream_atoms]
+    child = _lower_chain_with_children_attach(pairs, ctx)
+    return child, None
 
 
 def _lower_parent_chain_from(
-    parent: ast_.PatternExpr,
-    pattern: ast_.PatternExpr,
-    anchor: ast_.PatternExpr,
+    sequence: ast_.Sequence,
     ctx: CompileCtx,
 ) -> LNode | None:
-    """Lower consecutive PARENT edges from the anchor outward into a chain of
-    parent_matchers. Handles anchor-is-head and both anchor-in-tail variants.
-    """
-    if not isinstance(parent, ast_.Sequence):
+    idx = 0
+    if idx >= len(sequence.tail) or sequence.tail[idx][0] is not ast_.Edge.PARENT:
         return None
 
-    prepend_previous = False
-    start_idx = 0
-
-    if parent.head is anchor:
-        # Skip anchor-attached children blocks. They do not advance the chain
-        # cursor, so a parent edge after them still belongs to the
-        # anchor: `op A -> {B; C} <- op P`.
-        idx = 0
-        while (
-            idx < len(parent.tail)
-            and parent.tail[idx][0] is ast_.Edge.CHILD
-            and _is_cb_atom(parent.tail[idx][1])
-        ):
-            idx += 1
-        if idx >= len(parent.tail) or parent.tail[idx][0] is not ast_.Edge.PARENT:
-            return None
-        start_idx = idx
-    else:
-        anchor_idx = next(
-            (i for i, (_e, a) in enumerate(parent.tail) if a is anchor),
-            None,
-        )
-        if anchor_idx is None:
-            return None
-        edge_at_anchor, _ = parent.tail[anchor_idx]
-        if edge_at_anchor is ast_.Edge.PARENT:
-            # When the anchor's incoming edge is PARENT, the previous atom
-            # acts as the first parent link.
-            prepend_previous = True
-            start_idx = anchor_idx + 1
-        else:
-            # When the anchor's incoming edge is CHILD, an atom upstream
-            # of the anchor (`… -> op Anchor`) is the anchor's parent. Lowering
-            # only walks downstream from the anchor, so every upstream atom would
-            # be silently dropped. Reject
-            # rather than misbehave; re-anchor or restructure the pattern.
-            upstream_atom = (
-                parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
-            )
-            ctx.bag.error(
-                "C010_UPSTREAM_ATOMS_UNSUPPORTED",
-                "upstream atoms before the anchor are not lowered; re-anchor the "
-                "pattern or restructure — see specs/stonfi_v2_swap.mch",
-                upstream_atom.span if hasattr(upstream_atom, "span") else anchor.span,
-            )
-            raise CompileError(ctx.bag)
-
-    # Build the parent chain in one interleaved walk from the anchor's first
-    # parent link outward. PARENT edges extend the chain; CHILD-edged children
-    # blocks attach to the current chain tail without advancing the cursor, so
-    # `<- op X -> {CB} <- Y` gives X both
-    # children_matchers and parent_matcher, matching the grouped form
-    # `<- ( op X -> {CB} <- Y )`. A CHILD edge with a non-CB atom (a child branch
-    # off a parent node) is out of scope in v0 and stops the walk.
+    # Parent edges extend the chain. Children blocks attach to the current tail
+    # without advancing it; other child branches must be grouped with the
+    # parent target.
     chain_pairs: list[tuple[ast_.Edge, ast_.PatternExpr]] = []
-    if prepend_previous:
-        anchor_idx = next(i for i, (_e, a) in enumerate(parent.tail) if a is anchor)
-        previous_atom = parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
-        chain_pairs.append((ast_.Edge.PARENT, previous_atom))
-
-    saw_parent_link = prepend_previous
-    for edge, atom in parent.tail[start_idx:]:
+    for edge, atom in sequence.tail[idx:]:
         if edge is ast_.Edge.PARENT:
             chain_pairs.append((ast_.Edge.PARENT, atom))
-            saw_parent_link = True
-        elif edge is ast_.Edge.CHILD and saw_parent_link and _is_cb_atom(atom):
+        elif _is_cb_atom(atom):
             chain_pairs.append((ast_.Edge.CHILD, atom))
         else:
-            # A non-PARENT edge before any parent link, or a non-CB child branch
-            # off a parent node: out of scope in v0. Stop consuming.
-            break
-
-    if not saw_parent_link:
-        return None
+            ctx.bag.error(
+                "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+                "a child branch after a parent link must be grouped with its "
+                "parent target, e.g. `op A @a <- (op P -> op S)`",
+                atom.span,
+            )
+            raise CompileError(ctx.bag)
 
     return _lower_chain_with_children_attach(chain_pairs, ctx)
 
@@ -534,43 +310,29 @@ def _lower_chain_with_children_attach(
     """Walk an ordered list of `(edge, atom)` pairs and build a chained node graph.
 
     ChildrenBlock atoms attach their items to the immediately-preceding node's
-    `children`. Modifier-wrapped blocks apply those flags to each item root.
+    `children`.
     Bare ChildrenBlock at the head (no left sibling) emits C008. Non-CB atoms
-    chain via `_attach_as_child` or `_attach_as_parent`.
+    chain via child or parent edges.
     """
     head_matcher: LNode | None = None
     previous_lowered: LNode | None = None
 
     for edge, atom in pairs:
-        # Detect modifier-wrapped ChildrenBlock attach-to-left.
-        cb_items: list[ast_.PatternExpr] | None = None
-        optional_items = False
-        peek_items = False
-        peek_span: Span | None = None
-        inner, optional_items, peek_items, peek_span = _unwrap_modifiers(atom)
-        if isinstance(inner, ast_.ChildrenBlock):
-            cb_items = list(inner.items)
-
-        if cb_items is not None:
+        if isinstance(atom, ast_.ChildrenBlock):
             if previous_lowered is None:
                 # Bare ChildrenBlock with no left sibling.
                 ctx.bag.error(
                     "C008_CHILDREN_BLOCK_BARE",
                     "children block '{...}' must follow a node in a sequence "
                     "(e.g. 'op A -> {op B; op C}'); bare children blocks are not allowed",
-                    inner.span,
+                    atom.span,
                 )
                 raise CompileError(ctx.bag)
+            _reject_ignored_chain_tail(previous_lowered, atom.span, ctx)
             if previous_lowered.children is None:
                 previous_lowered.children = []
-            for item in cb_items:
-                lowered_item = _lower_atom(item, ctx)
-                if optional_items:
-                    lowered_item.optional = True
-                if peek_items:
-                    lowered_item.peek = True
-                    lowered_item.peek_span = peek_span
-                previous_lowered.children.append(lowered_item)
+            for item in atom.items:
+                previous_lowered.children.append(_lower_atom(item, ctx))
             # Do not update previous_lowered. A children block constrains the
             # preceding matcher, not a chain link.
             continue
@@ -580,69 +342,52 @@ def _lower_chain_with_children_attach(
             head_matcher = lowered
         else:
             if edge is ast_.Edge.PARENT:
-                _attach_as_parent(previous_lowered, lowered)
+                while previous_lowered.parent is not None:
+                    previous_lowered = previous_lowered.parent
+                _reject_ignored_chain_tail(previous_lowered, atom.span, ctx)
+                previous_lowered.parent = lowered
             else:
-                _attach_as_child(previous_lowered, lowered)
+                while previous_lowered.child is not None:
+                    previous_lowered = previous_lowered.child
+                _reject_ignored_chain_tail(previous_lowered, atom.span, ctx)
+                previous_lowered.child = lowered
         previous_lowered = lowered
 
     return head_matcher
 
 
-def _branches_eligible_for_exclusive_heuristic(
-    branches: tuple[ast_.PatternExpr, ...],
-    ctx: CompileCtx,
-) -> bool:
-    """Return True iff all branches are bare concrete Nodes with distinct resolved heads and no predicates."""
-    seen_opcodes: set[int] = set()
-    seen_btypes: set[str] = set()
-    for b in branches:
-        if not isinstance(b, ast_.Node):
-            return False
-        head = b.head
-        if not isinstance(head, (ast_.OpHead, ast_.BTypeHead)):
-            return False
-        if b.where_predicate is not None or b.where_expr is not None:
-            return False
-        if isinstance(head, ast_.OpHead):
-            ref = head.ref
-            opcode_int = ref if isinstance(ref, int) else (
-                ctx.resolved.opcodes.get(ref) or ctx.registries.opcodes.get(ref)
-            )
-            if opcode_int is None:
-                return False
-            if opcode_int in seen_opcodes:
-                return False
-            seen_opcodes.add(opcode_int)
-        elif isinstance(head, ast_.BTypeHead):
-            if head.name in seen_btypes:
-                return False
-            seen_btypes.add(head.name)
-    return True
+def _reject_ignored_chain_tail(host: LNode, span: Span, ctx: CompileCtx) -> None:
+    if host.kind not in {"or", "recursive"}:
+        return
+    ctx.bag.error(
+        "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+        "a choice or recursive rule cannot have a child, children set, or parent chain tail; "
+        "move the relation into each branch",
+        span,
+    )
+    raise CompileError(ctx.bag)
 
 
 def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> None:
-    """Emit W202 if two branches share the same concrete head (non-blocking warning)."""
+    """Reject explicit exclusive alternatives with duplicate concrete heads."""
     seen: dict[object, object] = {}
     for b in p.branches:
-        if not isinstance(b, ast_.Node):
+        if not isinstance(b, ast_.Node) or b.relations is not None:
             continue
         head = b.head
         if isinstance(head, ast_.OpHead):
-            ref = head.ref
-            opcode_int = ref if isinstance(ref, int) else (
-                ctx.resolved.opcodes.get(ref) or ctx.registries.opcodes.get(ref)
-            )
+            opcode_int = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
             key = ("op", opcode_int)
         elif isinstance(head, ast_.BTypeHead):
             key = ("btype", head.name)
         else:
             continue
         if key in seen:
-            ctx.bag.warning(
+            ctx.bag.error(
                 "W202_EXCLUSIVE_OR_REDUNDANT_HEADS",
                 f"two branches of this exclusive alternative share the same head "
                 f"({'opcode' if key[0] == 'op' else 'btype'} {key[1]!r}); "
-                f"ExclusiveOrMatcher's sum-check will never return True for this head",
+                f"use `or` for overlapping heads",
                 b.span,
             )
         else:
@@ -706,9 +451,7 @@ def _anchor_group_head_sets(
     for b in group.branches:
         head = b.head
         if isinstance(head, ast_.OpHead):
-            opcode = head.ref if isinstance(head.ref, int) else (
-                ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
-            )
+            opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
             opcode_set.add(opcode)
         else:
             btype_set.add(head.name)
@@ -728,9 +471,7 @@ def _anchor_group_branch_descs(
     for b in group.branches:
         head = b.head
         if isinstance(head, ast_.OpHead):
-            opcode = head.ref if isinstance(head.ref, int) else (
-                ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
-            )
+            opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
             descs.append(("op", opcode, b.where_predicate))
         else:
             descs.append(("btype", head.name, b.where_predicate))
@@ -738,32 +479,23 @@ def _anchor_group_branch_descs(
 
 
 def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
+    if isinstance(p, ast_.Many):
+        inner = _lower_atom(p.inner, ctx)
+        if inner.optional:
+            ctx.bag.error("C017_MANY", "write many[0..] / many[0..N]", p.span)
+            raise CompileError(ctx.bag)
+        inner.many = True
+        inner.max = p.max
+        if p.min == 0:
+            inner.optional = True
+        return inner
     if isinstance(p, ast_.Node):
         return _lower_node(p, ctx)
     if isinstance(p, ast_.Maybe):
-        # Bare `maybe {...}` wrapping a children block with no chain context is
-        # rejected. `_lower_chain_with_children_attach` handles the in-chain
-        # form `op A -> maybe {B; C}` first.
-        if isinstance(p.inner, ast_.ChildrenBlock):
-            ctx.bag.error(
-                "C008_CHILDREN_BLOCK_BARE",
-                "'maybe {...}' must follow a node in a sequence "
-                "(e.g. 'op A -> maybe {op B; op C}'); bare maybe-children blocks are not allowed",
-                p.inner.span,
-            )
-            raise CompileError(ctx.bag)
         inner = _lower_atom(p.inner, ctx)
         inner.optional = True
         return inner
     if isinstance(p, ast_.Peek):
-        if isinstance(p.inner, ast_.ChildrenBlock):
-            ctx.bag.error(
-                "C008_CHILDREN_BLOCK_BARE",
-                "'peek {...}' must follow a node in a sequence "
-                "(e.g. 'op A -> peek {op B; op C}'); bare peek-children blocks are not allowed",
-                p.inner.span,
-            )
-            raise CompileError(ctx.bag)
         inner = _lower_atom(p.inner, ctx)
         inner.peek = True
         inner.peek_span = p.span
@@ -773,7 +505,7 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         if p.exclusive:
             _check_redundant_exclusive_heads(p, ctx)
             return LNode(kind="or", branches=lowered_branches, exclusive=True)
-        if _branches_eligible_for_exclusive_heuristic(p.branches, ctx):
+        if _alternative_is_exclusive(p, ctx.resolved.opcodes, ctx.registries):
             return LNode(kind="or", branches=lowered_branches, exclusive=True)
         return LNode(kind="or", branches=lowered_branches, exclusive=False)
     if isinstance(p, ast_.Sequence):
@@ -783,14 +515,6 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         if result is None:
             raise AssertionError("Sequence lowered to None")
         return result
-    if isinstance(p, ast_.ChildrenBlock):
-        ctx.bag.error(
-            "C008_CHILDREN_BLOCK_BARE",
-            "children block '{...}' cannot appear as a standalone expression; "
-            "it must follow a node in a sequence (e.g. 'op A -> {op B; op C}')",
-            p.span,
-        )
-        raise CompileError(ctx.bag)
     if isinstance(p, ast_.RuleRef):
         target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
         if target is None:
@@ -807,15 +531,15 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         if p.name in ctx.lowering_recursive:
             return LNode(kind="any")
         rec_class = ctx.resolved.rule_recursion.get(p.name)
-        if rec_class is RecursionClass.INDIRECT_RECURSIVE:
-            ctx.bag.error(
-                "C005_INDIRECT_RECURSION_UNSUPPORTED",
-                f"rule {p.name!r}: indirect (mutual) recursion is not supported in v0; "
-                f"flatten the rule cycle or use a single self-referential rule",
-                p.span,
-            )
-            raise CompileError(ctx.bag)
         if rec_class is RecursionClass.DIRECT_RECURSIVE:
+            if isinstance(target.pattern, ast_.Alternative) and target.pattern.exclusive:
+                ctx.bag.error(
+                    "C017_RECURSIVE_RULE_XOR",
+                    f"rule {p.name!r}: a recursive rule body cannot be `xor`",
+                    target.pattern.span,
+                    suggestion="use `or`",
+                )
+                raise CompileError(ctx.bag)
             if target.strategy == "cyclic":
                 return _lower_cyclic_rule(p.name, ctx)
             return _lower_recursive_rule(p.name, ctx)
@@ -824,19 +548,16 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
 
 
 def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
-    """Compile-time mirror of the IR loader's _check_where_expr_sync.
+    """Check that an inline `where (expr)` can run synchronously.
 
-    An inline `where (expr)` composes onto the engine's synchronous test_self,
-    so async constructs (lookups, host fns) are compile errors here. The IR
-    loader rejects the same artifacts, keeping both paths failing at the same
-    compiler instead of silently never matching. Returns True
-    when the expression is sync-evaluable."""
+    Lookups, host functions, and build-only comprehensions are compile errors.
+    Returns True when the frontend can emit the expression."""
     if isinstance(e, ast_.NameRef):
-        if e.name != ctx.where_entry_capture:
+        if e.name != ctx.where_anchor_capture:
             ctx.bag.error(
                 "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY",
-                f"`where (expr)` may reference only entry capture "
-                f"@{ctx.where_entry_capture}; name {e.name!r} is not allowed",
+                f"`where (expr)` may reference only anchor capture "
+                f"@{ctx.where_anchor_capture}; name {e.name!r} is not allowed",
                 e.span,
             )
             return False
@@ -851,26 +572,26 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
     if isinstance(e, ast_.Comprehension):
         ctx.bag.error(
             "C013_WHERE_EXPR_NOT_SYNC",
-            "`where (expr)` cannot contain map/any/all comprehensions "
+            "`where (expr)` cannot contain map/any/all/find/stable_sort_by comprehensions "
             "(build-expression only)",
             span,
         )
         return False
     if isinstance(e, ast_.ParseExpr):
-        ctx.bag.error(
-            "C013_WHERE_EXPR_NOT_SYNC",
-            "`where (expr)` cannot contain a `parse` expression "
-            "(build-expression only)",
-            span,
-        )
-        return False
-    if isinstance(e, ast_.Call):
-        callee = e.callee
-        if not isinstance(callee, ast_.NameRef) or callee.name not in BUILTIN_SIGNATURES:
-            shown = callee.name if isinstance(callee, ast_.NameRef) else type(callee).__name__
+        if not e.nullable:
             ctx.bag.error(
                 "C013_WHERE_EXPR_NOT_SYNC",
-                f"`where (expr)` can only call builtins, not host fn {shown!r}",
+                "`where (expr)` allows only `parse?`",
+                span,
+            )
+            return False
+        return _check_where_expr_sync(e.target, span, ctx)
+    if isinstance(e, ast_.Call):
+        callee = e.callee
+        if callee.name not in BUILTIN_SIGNATURES:
+            ctx.bag.error(
+                "C013_WHERE_EXPR_NOT_SYNC",
+                f"`where (expr)` can only call builtins, not host fn {callee.name!r}",
                 span,
             )
             return False
@@ -896,10 +617,8 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
 def _set_where_expr(n: LNode, expr: ast_.Expr, span: Span, ctx: CompileCtx) -> None:
     """Store inline `where (expr)` on a node for IR emission.
 
-    The C013 sync check still runs. An async construct
-    (lookup/host fn) is a compile error, keeping the frontend and the IR loader
-    failing at the same stage. The IR engine evaluates the expression at match
-    time via the shared sync evaluator (expr_eval.py)."""
+    The C013 sync check rejects lookup and host-function calls before the
+    frontend emits the artifact."""
     if not _check_where_expr_sync(expr, span, ctx):
         return
     n.where_expr = expr
@@ -908,9 +627,7 @@ def _set_where_expr(n: LNode, expr: ast_.Expr, span: Span, ctx: CompileCtx) -> N
 def _lower_node(n: ast_.Node, ctx: CompileCtx) -> LNode:
     head = n.head
     if isinstance(head, ast_.OpHead):
-        opcode = head.ref if isinstance(head.ref, int) else (
-            ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
-        )
+        opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
         m = LNode(kind="contract", opcode=opcode)
     elif isinstance(head, ast_.BTypeHead):
         m = LNode(kind="block_type", btype=head.name)
@@ -926,33 +643,18 @@ def _lower_node(n: ast_.Node, ctx: CompileCtx) -> LNode:
         _set_where_expr(m, n.where_expr, n.span, ctx)
     if n.capture is not None:
         m.capture = n.capture
+    if n.relations is not None:
+        _lower_relations(n.relations, m, ctx)
     return m
 
 
-def _chain(matchers_iter) -> LNode | None:
-    matchers = [m for m in matchers_iter if m is not None]
-    if not matchers:
-        return None
-    first = matchers[0]
-    current = first
-    for nxt in matchers[1:]:
-        _attach_as_child(current, nxt)
-        current = nxt
-    return first
-
-
-def _attach_as_child(host: LNode, child: LNode) -> None:
-    if host.child is None:
-        host.child = child
-    else:
-        _attach_as_child(host.child, child)
-
-
-def _attach_as_parent(host: LNode, parent: LNode) -> None:
-    if host.parent is None:
-        host.parent = parent
-    else:
-        _attach_as_parent(host.parent, parent)
+def _lower_relations(r: ast_.Relations, m: LNode, ctx: CompileCtx) -> None:
+    if r.children_all is not None:
+        m.child = _lower_atom(r.children_all, ctx)
+    if r.children_first is not None:
+        m.children = [_lower_atom(item, ctx) for item in r.children_first]
+    if r.parent is not None:
+        m.parent = _lower_atom(r.parent, ctx)
 
 
 def _check_no_capture_after_recursion(
@@ -968,27 +670,17 @@ def _check_no_capture_after_recursion(
     def is_direct_recursive_ref(p: ast_.PatternExpr) -> bool:
         if isinstance(p, ast_.RuleRef):
             return ctx.resolved.rule_recursion.get(p.name) is RecursionClass.DIRECT_RECURSIVE
-        if isinstance(p, (ast_.Maybe, ast_.Peek)):
+        if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             return is_direct_recursive_ref(p.inner)
         return False
 
     def contains_capture(p: ast_.PatternExpr) -> bool:
-        if isinstance(p, ast_.Node):
-            return p.capture is not None
-        if isinstance(p, (ast_.Maybe, ast_.Peek)):
-            return contains_capture(p.inner)
-        if isinstance(p, ast_.Sequence):
-            if contains_capture(p.head):
-                return True
-            return any(contains_capture(a) for _e, a in p.tail)
-        if isinstance(p, ast_.Alternative):
-            return any(contains_capture(b) for b in p.branches)
-        if isinstance(p, ast_.ChildrenBlock):
-            return any(contains_capture(it) for it in p.items)
         if isinstance(p, ast_.RuleRef):
             target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
             return target is not None and contains_capture(target.pattern)
-        return False
+        return (
+            isinstance(p, ast_.Node) and p.capture is not None
+        ) or any(contains_capture(child) for child in ast_.children(p))
 
     def walk(p: ast_.PatternExpr) -> None:
         if isinstance(p, ast_.Sequence):
@@ -1005,30 +697,18 @@ def _check_no_capture_after_recursion(
                 if is_direct_recursive_ref(atom):
                     recursion_seen = True
                 walk(atom)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
-            walk(p.inner)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                walk(b)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                walk(it)
+        else:
+            for child in ast_.children(p):
+                walk(child)
 
     walk(pattern)
 
 
-def _check_no_bare_children_block(
+def _check_children_block_placement(
     pattern: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> None:
-    """Report C008 for a children block without a node on its left.
-    """
-
-    def is_modifier_wrapped_cb(p: ast_.PatternExpr) -> tuple[bool, ast_.Span]:
-        inner, _optional, _peek, _peek_span = _unwrap_modifiers(p)
-        if isinstance(inner, ast_.ChildrenBlock):
-            return True, inner.span
-        return False, p.span if hasattr(p, "span") else None  # type: ignore[return-value]
+    """Reject bare children blocks and edges after a children block."""
 
     def emit_c008(span: ast_.Span) -> None:
         ctx.bag.error(
@@ -1038,30 +718,31 @@ def _check_no_bare_children_block(
             span,
         )
 
+    def emit_c009(span: ast_.Span) -> None:
+        ctx.bag.error(
+            "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+            "an edge after a children block in the same chain is unsupported; "
+            "put the relations on the preceding node in a relation block",
+            span,
+        )
+
     def walk(p: ast_.PatternExpr, in_chain_left: bool) -> None:
         """`in_chain_left` is True when this atom has a non-CB left sibling in its
         enclosing Sequence tail (i.e. it's a valid attach-to-left position).
         """
-        is_cb, span = is_modifier_wrapped_cb(p)
-        if is_cb and not in_chain_left:
-            emit_c008(span)
+        if isinstance(p, ast_.ChildrenBlock) and not in_chain_left:
+            emit_c008(p.span)
         if isinstance(p, ast_.Sequence):
             walk(p.head, in_chain_left=False)
-            previous_was_atom = not is_modifier_wrapped_cb(p.head)[0]
+            previous_was_atom = not _is_cb_atom(p.head)
+            previous_was_children_block = _is_cb_atom(p.head)
             for _edge, atom in p.tail:
+                if previous_was_children_block and previous_was_atom:
+                    emit_c009(atom.span)
                 walk(atom, in_chain_left=previous_was_atom)
-                if not is_modifier_wrapped_cb(atom)[0]:
+                previous_was_children_block = _is_cb_atom(atom)
+                if not previous_was_children_block:
                     previous_was_atom = True
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
-            inner, _optional, _peek, _peek_span = _unwrap_modifiers(p)
-            if not isinstance(inner, ast_.ChildrenBlock):
-                walk(p.inner, in_chain_left=False)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                walk(b, in_chain_left=False)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                walk(it, in_chain_left=False)
         elif isinstance(p, ast_.RuleRef):
             # Check the rule body once at its definition site, with no chain
             # context. Its body must be self-contained or referenced from a
@@ -1070,6 +751,9 @@ def _check_no_bare_children_block(
             if target is not None and not _seen_rule(p.name, ctx):
                 _mark_rule_seen(p.name, ctx)
                 walk(target.pattern, in_chain_left=False)
+        else:
+            for child in ast_.children(p):
+                walk(child, in_chain_left=False)
 
     walk(pattern, in_chain_left=False)
 
@@ -1090,7 +774,7 @@ def _mark_rule_seen(name: str, ctx: CompileCtx) -> None:
 
 def _is_maybe_self_ref(p: ast_.PatternExpr, rule_name: str) -> bool:
     saw_maybe = False
-    while isinstance(p, (ast_.Maybe, ast_.Peek)):
+    while isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
         if isinstance(p, ast_.Maybe):
             saw_maybe = True
         p = p.inner
@@ -1105,6 +789,19 @@ def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.P
     """
     if _is_maybe_self_ref(branch, rule_name):
         return None
+
+    def strip_relation_child(node: ast_.Node) -> ast_.Node:
+        relations = node.relations
+        if (
+            relations is None
+            or relations.children_all is None
+            or not _is_maybe_self_ref(relations.children_all, rule_name)
+        ):
+            return node
+        return replace(node, relations=replace(relations, children_all=None))
+
+    if isinstance(branch, ast_.Node):
+        return strip_relation_child(branch)
     if isinstance(branch, ast_.Sequence):
         if branch.tail:
             last_edge, last_atom = branch.tail[-1]
@@ -1112,7 +809,14 @@ def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.P
                 new_tail = branch.tail[:-1]
                 if not new_tail:
                     return branch.head
-                return ast_.Sequence(head=branch.head, tail=new_tail, span=branch.span)
+                return replace(branch, tail=new_tail)
+            if isinstance(last_atom, ast_.Node):
+                stripped = strip_relation_child(last_atom)
+                if stripped is not last_atom:
+                    return replace(
+                        branch,
+                        tail=(*branch.tail[:-1], (last_edge, stripped)),
+                    )
     return branch
 
 
@@ -1129,7 +833,7 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
     name = target.name
 
     def is_self_ref(a: ast_.PatternExpr) -> bool:
-        if isinstance(a, (ast_.Maybe, ast_.Peek)):
+        if isinstance(a, (ast_.Maybe, ast_.Peek, ast_.Many)):
             return is_self_ref(a.inner)
         return isinstance(a, ast_.RuleRef) and a.name == name
 
@@ -1142,9 +846,11 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
             if p.capture is not None:
                 err(
                     f"capture @{p.capture} inside a cyclic rule body never binds; "
-                    f"drive the builder from Match._mch_consumed",
+                    f"use `consumed` in output expressions",
                     p.span,
                 )
+            for child in ast_.children(p):
+                walk(child)
         elif isinstance(p, ast_.Sequence):
             atoms = [p.head] + [a for _e, a in p.tail]
             for i, atom in enumerate(atoms):
@@ -1155,12 +861,9 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
                         atom.span,
                     )
                 walk(atom)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                walk(b)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                walk(it)
+        elif isinstance(p, (ast_.Alternative, ast_.ChildrenBlock)):
+            for child in ast_.children(p):
+                walk(child)
         elif isinstance(p, ast_.Maybe):
             if is_self_ref(p.inner):
                 err(
@@ -1170,7 +873,7 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
                     p.span,
                 )
             walk(p.inner)
-        elif isinstance(p, ast_.Peek):
+        elif isinstance(p, (ast_.Peek, ast_.Many)):
             if is_self_ref(p.inner):
                 err(
                     "`peek` on a self-reference inside a cyclic body is not "
@@ -1322,26 +1025,15 @@ def _split_recursion_branches(
             else:
                 exits.append(b)
         return steps, exits
-    # Sequence with an alternative inside its tail: search recursively.
+    # Splitting a tail Alternative would discard the sequence head and other atoms.
     if isinstance(pattern, ast_.Sequence):
-        # Look for an Alternative within the tail; if present, split it.
         for _e, atom in pattern.tail:
             if isinstance(atom, ast_.Alternative):
-                return _split_recursion_branches(atom, rule_name)
+                return [], []
     return [pattern], []
 
 
 def _contains_rule_ref(p: ast_.PatternExpr, name: str) -> bool:
     if isinstance(p, ast_.RuleRef):
         return p.name == name
-    if isinstance(p, (ast_.Maybe, ast_.Peek)):
-        return _contains_rule_ref(p.inner, name)
-    if isinstance(p, ast_.Sequence):
-        if _contains_rule_ref(p.head, name):
-            return True
-        return any(_contains_rule_ref(a, name) for _e, a in p.tail)
-    if isinstance(p, ast_.Alternative):
-        return any(_contains_rule_ref(b, name) for b in p.branches)
-    if isinstance(p, ast_.ChildrenBlock):
-        return any(_contains_rule_ref(it, name) for it in p.items)
-    return False
+    return any(_contains_rule_ref(child, name) for child in ast_.children(p))

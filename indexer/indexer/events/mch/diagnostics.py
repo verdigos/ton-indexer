@@ -1,53 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
 
-
-class Severity(Enum):
-    ERROR = "error"
-    WARNING = "warning"
-
-
-# Diagnostic codes are plain strings passed at each call site (R0xx resolver,
-# P0xx parser, L0xx lexer, C0xx/B0xx compiler). Build-language codes are named
-# here so there is one discoverable record of them.
-R010_UNRESOLVED_REFERENCE = "R010_UNRESOLVED_REFERENCE"
-"""A bare identifier in a build-statement expression does not resolve to a
-pattern capture or a previously declared `let` name."""
-
-R011_PARSE_TARGET_NOT_CAPTURE = "R011_PARSE_TARGET_NOT_CAPTURE"
-"""The target of a `parse X as T` statement is not a pattern capture."""
-
-R012_UNKNOWN_MESSAGE_TYPE = "R012_UNKNOWN_MESSAGE_TYPE"
-"""A message type named in `parse … as T` is not present in the host's
-message-type registry."""
-
-R013_DUP_LET = "R013_DUP_LET"
-"""A `let` name collides with a pattern capture or an earlier `let`."""
-
-R014_DUP_OUT_FIELD = "R014_DUP_OUT_FIELD"
-"""The same field name appears more than once in an `out` block."""
-
-R015_BUILD_AMBIGUOUS = "R015_BUILD_AMBIGUOUS"
-"""A matcher declares both a `build` directive (registered builder) and build
-statements. Use exactly one form."""
-
-R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
-"""A declarative matcher (no `build` directive) has build statements but no
-`out` block, so there is nothing to produce."""
-
-R017_MULTIPLE_OUT = "R017_MULTIPLE_OUT"
-"""More than one `out` block in a matcher body; exactly one is allowed."""
-
-R022_UNNORMALIZED_PRODUCES_CLASS = "R022_UNNORMALIZED_PRODUCES_CLASS"
-"""A PascalCase (class-name) `produces` token has no class->btype entry in
-mch/btypes.py CLASS_TO_BTYPE, so it cannot be normalized to the block's real
-btype. Left unresolved it would silently emit the class name itself as the
-produced btype, which the serializer and
-legacy blocks never key on. Add the entry, or use the bare btype string."""
-
-R023_PARSE_TARGET_COMPOSED_BLOCK = "R023_PARSE_TARGET_COMPOSED_BLOCK"
+R023_PARSE_TARGET_NOT_BASE_BLOCK = "R023_PARSE_TARGET_NOT_BASE_BLOCK"
 """A `parse X as T` statement targets a capture bound by a `btype` node: a
 composed block built by an earlier matcher. A produced block's `get_body()`
 reads `event_nodes[0]`, whose identity after the
@@ -56,36 +11,28 @@ re-parse does not round-trip and `.body` silently null-propagates. Read the
 prior matcher's fields via `X.data.<field>` instead of re-parsing."""
 
 R024_NESTED_COMPREHENSION = "R024_NESTED_COMPREHENSION"
-"""A `map|any|all(xs as e => body)` comprehension appears inside another
-comprehension (either the outer `xs` or `body`). Nested comprehensions are
-forbidden: exactly one bound element var per comprehension, no
+"""A `map|any|all|find|stable_sort_by(xs as e => body)` comprehension appears
+inside another comprehension (either the outer `xs` or `body`). Nested
+comprehensions are forbidden: exactly one bound element var per comprehension, no
 comprehension in the iterated list or the body."""
 
-P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
-"""A matcher declares the same at-most-once directive more than once
-(currently `shape`)."""
+# A capture has conflicting parser lists. Rule-body annotations contribute to
+# every matcher referencing the rule; each matcher has one list per capture.
+R028_PARSE_ANNOTATION_CONFLICT = "R028_PARSE_ANNOTATION_CONFLICT"
 
-P012_STITCH_REMOVED = "P012_STITCH_REMOVED"
-"""A `stitch` declaration was encountered. Cross-trace joining is unsupported;
-host post-process code merges paired results. The words `stitch partial final
-key ttl merge` remain reserved so this error is targeted."""
+# Only op nodes support parse annotations; composed bodies do not round-trip.
+R030_PARSE_ANNOTATION_ON_COMPOSED = "R030_PARSE_ANNOTATION_ON_COMPOSED"
 
-C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
-"""The `shape` directive names a shaper that is not present in the host's
-shaper registry."""
-
-C012_CYCLIC_RULE_SHAPE = "C012_CYCLIC_RULE_SHAPE"
-"""A `rule NAME cyclic = …` body violates the cyclic-descent shape rules:
-captures inside the body, a self-reference that is
-not the last atom of its chain, a `maybe`- or `peek`-wrapped self-reference, or a
-reference to another recursive rule."""
-
-C014_PEEK_SUBTREE_CONSUMES = "C014_PEEK_SUBTREE_CONSUMES"
-"""A `peek` node reaches another pattern node that is not itself `peek`, so
-the subtree would still consume blocks or absorb auxiliary siblings."""
-
-C015_WHERE_EXPR_CAPTURE_NOT_ENTRY = "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY"
-"""A capture name used in `where (expr)` is not the matcher's entry capture."""
+# Function bodies reference only parameters in value positions. Substitution is
+# call-by-name: bind expensive or faulting arguments with `let` before calling.
+R031_FN_BODY_FREE_NAME = "R031_FN_BODY_FREE_NAME"
+R033_FN_BODY_COMPREHENSION = "R033_FN_BODY_COMPREHENSION"
+R035_FN_NAME_COLLISION = "R035_FN_NAME_COLLISION"
+R036_FN_ARITY = "R036_FN_ARITY"
+R041_IMPORT_NAME_COLLISION = "R041_IMPORT_NAME_COLLISION"
+R042_MANIFEST_ORDER = "R042_MANIFEST_ORDER"
+R043_UNKNOWN_BTYPE = "R043_UNKNOWN_BTYPE"
+R044_UNDECLARED_PREDICATE = "R044_UNDECLARED_PREDICATE"
 
 
 @dataclass(frozen=True)
@@ -101,7 +48,6 @@ class Span:
 
 @dataclass(frozen=True)
 class Diagnostic:
-    severity: Severity
     code: str
     message: str
     span: Span
@@ -113,14 +59,7 @@ class DiagnosticBag:
     items: list[Diagnostic] = field(default_factory=list)
 
     def error(self, code: str, message: str, span: Span, suggestion: str | None = None) -> None:
-        self.items.append(Diagnostic(Severity.ERROR, code, message, span, suggestion))
-
-    def warning(self, code: str, message: str, span: Span, suggestion: str | None = None) -> None:
-        self.items.append(Diagnostic(Severity.WARNING, code, message, span, suggestion))
-
-    @property
-    def has_errors(self) -> bool:
-        return any(d.severity is Severity.ERROR for d in self.items)
+        self.items.append(Diagnostic(code, message, span, suggestion))
 
 
 class CompileError(Exception):
@@ -138,7 +77,7 @@ def format_diagnostic(d: Diagnostic, source_text: str) -> str:
     caret = caret_indent + "^" * span_len
     header = (
         f"{d.span.path}:{d.span.start_line}:{d.span.start_col}: "
-        f"{d.severity.value}: {d.message} ({d.code})"
+        f"error: {d.message} ({d.code})"
     )
     parts = [header, source_line, caret]
     if d.suggestion:
