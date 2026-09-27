@@ -88,7 +88,7 @@ td::Result<std::map<std::string, std::string>> parse_token_data(td::Ref<vm::Cell
   
   try {
     auto cs = vm::load_cell_slice_ref(cell);
-    switch (tokens::gen::t_FullContent.check_tag(*cs)) {
+    switch (.check_tag(*cs)) {
       case tokens::gen::FullContent::offchain: {
         tokens::gen::FullContent::Record_offchain offchain_record;
         if (!tlb::csr_unpack(cs, offchain_record)) {
