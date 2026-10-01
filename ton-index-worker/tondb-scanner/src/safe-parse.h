@@ -8,18 +8,13 @@
 #include "vm/dict.h"
 #include "vm/excno.hpp"
 
-// Helpers for parsing cells that come from contract get-methods or account data.
-// Such cells are controlled by whoever deployed the contract, so parsing must neither
-// throw out of a detector nor do unbounded work.
+// Parsing helpers for cells that come from contract get-methods or account data.
 namespace safe_parse {
 
-// A dictionary of n distinct cells can encode up to 2^n entries by pointing both
-// branches of a fork at the same subtree, so entries are capped independently of size.
+// Shared subtrees let a small dictionary hold a huge number of entries.
 constexpr std::size_t kDefaultMaxDictEntries = 1024;
 
-// Runs f() and turns any exception into an error prefixed with `what`.
-// Catching vm::VmError alone is not enough: vm::VmVirtError (pruned branch),
-// vm::CellBuilder::CellWriteError and vm::VmFatal do not derive from it.
+// Runs f() and converts any exception into an error.
 template <class F>
 auto guard(td::Slice what, F&& f) -> decltype(f()) {
   try {
@@ -35,9 +30,7 @@ auto guard(td::Slice what, F&& f) -> decltype(f()) {
   }
 }
 
-// Calls on_entry(key, key_len, value) for each dictionary entry in ascending key order.
-// key is valid only during the call. Fails after max_entries entries, on a malformed
-// dictionary, or on the first error returned by on_entry. Never throws.
+// Calls on_entry for each entry in key order, stops after max_entries entries.
 template <class F>
 td::Status for_each_dict_entry(td::Ref<vm::Cell> root, int key_bits, std::size_t max_entries, F&& on_entry) {
   return guard("dictionary", [&]() -> td::Status {

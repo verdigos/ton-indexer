@@ -7,8 +7,7 @@
 
 namespace {
 
-// Consecutive chunk indexes are looked up one by one, so bound the walk even when
-// chunks are empty and never fill the buffer.
+// Empty chunks never fill the buffer, so limit the number of lookups too.
 constexpr unsigned kMaxChunks = 8192;
 
 }  // namespace
