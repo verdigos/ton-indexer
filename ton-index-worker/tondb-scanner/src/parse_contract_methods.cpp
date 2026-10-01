@@ -5,7 +5,6 @@
 
 namespace {
 
-// Far above any real contract; only bounds crafted method dictionaries.
 constexpr std::size_t kMaxContractMethods = 4096;
 
 }  // namespace
