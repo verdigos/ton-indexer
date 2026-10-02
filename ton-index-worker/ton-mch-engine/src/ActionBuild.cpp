@@ -1191,6 +1191,15 @@ void fill_call_contract(const Value &d, Action &a) {
   fill_extra_currencies(d, a);
 }
 
+void fill_change_wallet_key(const Value &d, Action &a) {
+  a.value = av_amount(dg(d, "value"));
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "destination"));
+  a.data = mkdict({{"pubkey", dg(d, "new_public_key")},
+                   {"rotation_signature", dg(d, "rotation_signature")},
+                   {"encrypted_old_private_key", dg(d, "encrypted_old_private_key")}});
+}
+
 void fill_ton_transfer(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "value"));
   a.source = av_addr(dg(d, "source"));
@@ -1208,10 +1217,10 @@ void fill_tick_tock(const Value &d, Action &a) {
 bool fill_action(Block *b, Action &a) {
   const Value &d = b->data;
   const std::string &t = b->btype;
-  if (t == "call_contract" || t == "contract_deploy" || t == "gasless_request" ||
-      t == "change_wallet_key") {
-    fill_call_contract(d, a);  // the two wallet types carry only source/destination/value
+  if (t == "call_contract" || t == "contract_deploy" || t == "gasless_request") {
+    fill_call_contract(d, a);  // gasless_request carries only source/destination/value
   }
+  else if (t == "change_wallet_key") fill_change_wallet_key(d, a);
   else if (t == "ton_transfer") fill_ton_transfer(d, a);
   else if (t == "tick_tock") fill_tick_tock(d, a);
   else if (t == "jetton_transfer") fill_jetton_transfer(d, a);

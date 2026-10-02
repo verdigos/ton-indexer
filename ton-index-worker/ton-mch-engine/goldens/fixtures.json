@@ -486,11 +486,11 @@
    "name": "Simple ton transfer",
    "slug": "simple-ton-transfer"
   },
-  "CaitzDiXgDuUMWIvvPLZwCI8YcDfz_M5dbXyaOs7Occ=": {
+  "ybABMr-c9dJPt7wFMfUQyjd9HmweAIBz77Ym9Bh3M7Y=": {
    "group": "tg-wallet",
    "name": "Change wallet key requested by internal message",
    "slug": "change-wallet-key-requested-by-internal-message",
-   "note": "An internal request changes the wallet key and classifies as a key change and gasless request"
+   "note": "A relayed request changes the wallet key and classifies as a key change and gasless request"
   },
   "CjtIXjqazbSFrtPqqMMFBgMG6-huwp5CfNtXpQAf8xY=": {
    "group": "tonco",
@@ -713,11 +713,11 @@
    "name": "Ton supply",
    "slug": "ton-supply"
   },
-  "QilH-V1kzvOH8jquiL-36pCaUWypDuKINlUHbE3j79s=": {
+  "Qt9ZSd9dgRHWWR8BqRruoGWcV8XaxyMgQm-ZUtpbJ3A=": {
    "group": "tg-wallet",
    "name": "Change wallet key requested by external message",
    "slug": "change-wallet-key-requested-by-external-message",
-   "note": "An external request changes the wallet key and classifies as a key change"
+   "note": "An external request changes the wallet key, logged by an external out message"
   },
   "S4XM4TRqBSWvsrGUQY_NLEbIRM7q7iS6hx-uWg4Hv14=": {
    "group": "jetton-transfer",
@@ -1579,6 +1579,18 @@
    "name": "Stonfi v2 paired liquidity deposit",
    "slug": "stonfi-v2-provide-real-paired",
    "note": "Two deposit legs from one external message merge into one liquidity action"
+  },
+  "jo7cPL4zAPwOFVm5UJDT6PoAI7p3ilqC6ol2mUZm8Ps=": {
+   "group": "tg-wallet",
+   "name": "Change wallet key requested by external message, another wallet",
+   "slug": "change-wallet-key-requested-by-external-message-another-wallet",
+   "note": "An external request changes the key of the other Telegram wallet code version"
+  },
+  "dU1FT1bpCRfcSxDI8Qa6kF9ZTq5tM4YVbYjB4l1jdBU=": {
+   "group": "tg-wallet",
+   "name": "Change wallet key rejected without a log",
+   "slug": "change-wallet-key-rejected-without-log",
+   "note": "A relayed request the wallet rejects without the rotation log is no key change"
   }
  }
 }

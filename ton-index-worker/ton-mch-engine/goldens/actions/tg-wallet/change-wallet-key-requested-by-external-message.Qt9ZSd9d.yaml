@@ -1,0 +1,33 @@
+# tg-wallet / Change wallet key requested by external message
+# note: An external request changes the wallet key, logged by an external out message
+# trace: Qt9ZSd9dgRHWWR8BqRruoGWcV8XaxyMgQm-ZUtpbJ3A=
+actions:
+  - type: change_wallet_key
+    matcher: change_wallet_key
+    anchor: change_wallet_key@99611878000001
+    id: LSKguJstkV/WOhzq7IwoKpghkzFTXmr3RrlO5PKLw00=
+    success: true
+    source: null
+    source_secondary: null
+    destination: 0:1350B4C79830A1FC14F4DE2537A27911DC0FF37D9FDDC05AC3008F218D75F4DB
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    data:
+      encrypted_old_private_key: e24177a0281afdfeb6c68fe1997c59c219107ed9160964599930037abe472da1
+      pubkey: b6d9a952b4e2fd24a9d80995f145b3813f844ffd5d25001f253255c16f3f49ed
+      rotation_signature: 3128f0e1d3e99631b17b5a4904841da4670b110a67f1ac2705565fb0721e5487297b23a12b5f67dceee737587222379a9a349db5ab2c73273083916fdb14900a
+    tx_hashes:
+      - Qt9ZSd9dgRHWWR8BqRruoGWcV8XaxyMgQm+ZUtpbJ3A=
+    accounts:
+      - 0:1350B4C79830A1FC14F4DE2537A27911DC0FF37D9FDDC05AC3008F218D75F4DB
+    start_lt: 99611878000001
+    end_lt: 99611878000001
+    start_utime: 1790635537
+    end_utime: 1790635537
+    mc_seqno_end: 87837536

@@ -84,10 +84,12 @@ var actionDataPrefixes = map[string][]string{
 // rather than a typed detail field, so they land in RawAction.Extra where the API reads
 // them through extraString.
 var actionPayloadExtraKeys = map[string]bool{
-	"parent_gasless_action": true,
-	"btc_txid":              true,
-	"pubkey":                true,
-	"timestamp":             true,
+	"parent_gasless_action":     true,
+	"btc_txid":                  true,
+	"pubkey":                    true,
+	"timestamp":                 true,
+	"rotation_signature":        true,
+	"encrypted_old_private_key": true,
 }
 
 // actionPayloadLegFieldNames expands one `legs[i]` record member into the indexed

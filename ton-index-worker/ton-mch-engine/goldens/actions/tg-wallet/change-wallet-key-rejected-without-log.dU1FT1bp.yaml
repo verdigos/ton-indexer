@@ -1,0 +1,56 @@
+# tg-wallet / Change wallet key rejected without a log
+# note: A relayed request the wallet rejects without the rotation log is no key change
+# trace: dU1FT1bpCRfcSxDI8Qa6kF9ZTq5tM4YVbYjB4l1jdBU=
+actions:
+  - type: call_contract
+    anchor: call_contract#fbba99c7@99566680000002
+    id: 8gt83P0zrkpkW61br/mcfwfoeIENvinDoX74LQ6sZ90=
+    success: true
+    source: 0:E15488B65F7E904F1D14C84AC6F603CCC4A404B03BEFB568D5F5CC8ED6866887
+    source_secondary: null
+    destination: 0:02CE48BFD0410400DF7AD9902205BDC086AC73B032FD68A8024FF5BDCA3AEC52
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 50000000
+    opcode: 0xfbba99c7
+    tx_hashes:
+      - dU1FT1bpCRfcSxDI8Qa6kF9ZTq5tM4YVbYjB4l1jdBU=
+      - wLr7Ls7C1JVU9dzO/0W5fgHkjKwxKc8pAFYWdaA0h4o=
+    accounts:
+      - 0:02CE48BFD0410400DF7AD9902205BDC086AC73B032FD68A8024FF5BDCA3AEC52
+      - 0:E15488B65F7E904F1D14C84AC6F603CCC4A404B03BEFB568D5F5CC8ED6866887
+    start_lt: 99566680000002
+    end_lt: 99566680000003
+    start_utime: 1790617489
+    end_utime: 1790617489
+    mc_seqno_end: 87792348
+  - type: gasless_request
+    anchor: gasless_request@99566680000002
+    id: Z7ZEnd1QzNvbioDMxrugkAvq1MQEcD7D1gFma02Pp2s=
+    success: true
+    source: 0:E15488B65F7E904F1D14C84AC6F603CCC4A404B03BEFB568D5F5CC8ED6866887
+    source_secondary: null
+    destination: 0:02CE48BFD0410400DF7AD9902205BDC086AC73B032FD68A8024FF5BDCA3AEC52
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 50000000
+    opcode: null
+    tx_hashes:
+      - dU1FT1bpCRfcSxDI8Qa6kF9ZTq5tM4YVbYjB4l1jdBU=
+      - wLr7Ls7C1JVU9dzO/0W5fgHkjKwxKc8pAFYWdaA0h4o=
+    accounts:
+      - 0:02CE48BFD0410400DF7AD9902205BDC086AC73B032FD68A8024FF5BDCA3AEC52
+      - 0:E15488B65F7E904F1D14C84AC6F603CCC4A404B03BEFB568D5F5CC8ED6866887
+    start_lt: 99566680000002
+    end_lt: 99566680000003
+    start_utime: 1790617489
+    end_utime: 1790617489
+    mc_seqno_end: 87792348

@@ -369,7 +369,7 @@ keys:
 - id: 88
   name: pubkey
   type: hash_hex
-  uses: tgBTC
+  uses: tgBTC, Telegram wallet key change
 - id: 89
   name: query_id
   type: uint
@@ -523,3 +523,11 @@ keys:
   name: zro_fee
   type: uint
   uses: LayerZero
+- id: 125
+  name: encrypted_old_private_key
+  type: hash_hex
+  uses: Telegram wallet key change
+- id: 126
+  name: rotation_signature
+  type: string
+  uses: Telegram wallet key change

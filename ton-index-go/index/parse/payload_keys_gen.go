@@ -145,4 +145,6 @@ var payloadKeys = [256]payloadKeyInfo{
 	122: {Name: "worker_state", Type: payloadTypeString},
 	123: {Name: "worker_tokens", Type: payloadTypeUint},
 	124: {Name: "zro_fee", Type: payloadTypeUint},
+	125: {Name: "encrypted_old_private_key", Type: payloadTypeHashHex},
+	126: {Name: "rotation_signature", Type: payloadTypeString},
 }
