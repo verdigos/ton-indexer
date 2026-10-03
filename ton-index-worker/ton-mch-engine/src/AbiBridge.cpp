@@ -29,6 +29,7 @@
 #include "subscriptions_gen.h"
 #include "teleitem_gen.h"
 #include "tonco_gen.h"
+#include "tgwallet_gen.h"
 #include "tonstakers_gen.h"
 #include "vesting_gen.h"
 
@@ -536,6 +537,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
   namespace stonfi = ton_abi::gen::stonfi;
   namespace subscriptions = ton_abi::gen::subscriptions;
   namespace teleitem = ton_abi::gen::teleitem;
+  namespace tgwallet = ton_abi::gen::tgwallet;
   namespace tonco = ton_abi::gen::tonco;
   namespace tonstakers = ton_abi::gen::tonstakers;
 
@@ -633,6 +635,10 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"ToncoAccountV3AddLiquidity",
        &abi_parse_body<tonco::ToncoAccountV3AddLiquidity>},
       {"TeleitemStartAuction", &abi_parse_body<teleitem::TeleitemStartAuction>},
+      {"SignedChangePublicKeyRequest",
+       &abi_parse_body<
+           tgwallet::SignedRequest_ChangePublicKeyRequestI_ChangePublicKeyRequestE>},
+      {"OnKeyHasBeenChangedEvent", &abi_parse_body<tgwallet::OnKeyHasBeenChangedEvent>},
       {"SaleV1", &abi_parse_body<nft_sale::SaleV1>},
       {"SaleLegacy", &abi_parse_body<nft_sale::SaleLegacy>},
       {"SaleV4r1", &abi_parse_body<nft_sale::SaleV4r1>},

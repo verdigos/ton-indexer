@@ -57,8 +57,6 @@ const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
       {"TgBTCDkgCompletedEvent", parse_tgbtc_dkg_completed_event},
       {"TgBTCMintEvent", parse_tgbtc_mint_event},
       {"VestingSendMessage", parse_vesting_send_message},
-      {"TgWalletChangePublicKeyRequest", parse_tg_wallet_change_public_key_request},
-      {"TgWalletKeyChangedLog", parse_tg_wallet_key_changed_log},
   };
   return rows;
 }

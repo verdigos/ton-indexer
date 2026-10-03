@@ -46,7 +46,7 @@ inline const std::unordered_set<std::string> kBuiltins = {
     "account", "amount", "asset", "ton_asset", "addr_none", "b64",
     "asset_of", "tail_unwrap", "bytes_of", "first", "last", "at", "len",
     "zip", "map", "concat", "contains", "get", "tx_aborted", "exit_code",
-    "uint_hex", "ext_addr_str", "txid_le_hex", "addr_hash_hex", "out_messages",
+    "uint_hex", "ext_addr_str", "txid_le_hex", "hex", "addr_hash_hex", "out_messages",
     "state_init"};
 
 inline bool is_builtin_name(const std::string &name) {

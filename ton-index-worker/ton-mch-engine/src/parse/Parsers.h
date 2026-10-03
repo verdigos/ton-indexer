@@ -23,7 +23,4 @@ td::Result<Value> parse_tgbtc_mint_event(const td::Ref<vm::Cell> &body);
 
 td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body);
 
-td::Result<Value> parse_tg_wallet_change_public_key_request(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_tg_wallet_key_changed_log(const td::Ref<vm::Cell> &body);
-
 }  // namespace mch

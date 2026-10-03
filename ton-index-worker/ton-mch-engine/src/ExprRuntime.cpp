@@ -785,6 +785,36 @@ EvalResult rt_builtin_uint_hex(const Value &x) {
   return rt_ok(Value::make_str(td::hex_string(x.num, false)));
 }
 
+// Exactly n bytes as lowercase hex, from bytes, a refless bit cell, or a
+// nonnegative integer (big-endian, zero-padded).
+EvalResult rt_builtin_hex(const Value &x, const Value &n) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (n.t != VType::Int || n.num.is_null() || n.num->sgn() <= 0 || !n.num->unsigned_fits_bits(16)) {
+    return rt_fault("hex expects a positive byte count");
+  }
+  const auto size = static_cast<std::size_t>(n.num->to_long());
+  std::string raw;
+  vm::CellSlice cell_slice;
+  if (x.t == VType::Bytes) {
+    raw = x.str;
+  } else if (bi_open_cell(x, cell_slice)) {
+    if (cell_slice.size() != size * 8 || cell_slice.size_refs() != 0) {
+      return rt_fault("hex: cell must hold exactly " + std::to_string(size) + " bytes and no refs");
+    }
+    raw.resize(size);
+    cell_slice.fetch_bytes(reinterpret_cast<unsigned char *>(raw.data()), static_cast<int>(size));
+  } else if (x.t == VType::Int && !x.num.is_null() && x.num->sgn() >= 0) {
+    raw.resize(size);
+    if (!x.num->export_bytes(reinterpret_cast<unsigned char *>(raw.data()), size, /*sgnd=*/false)) {
+      return rt_fault("hex: integer does not fit in " + std::to_string(size) + " bytes");
+    }
+  } else {
+    return rt_fault("hex expects bytes, a cell or a nonnegative integer, got " + x.describe());
+  }
+  if (raw.size() != size) return rt_fault("hex: expected " + std::to_string(size) + " bytes");
+  return rt_ok(Value::make_str(td::hex_encode(raw)));
+}
+
 EvalResult rt_builtin_txid_le_hex(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
   unsigned char le[32] = {0};
@@ -934,7 +964,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"concat", 2}, {"contains", 2},
       {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
       {"uint_hex", 1}, {"ext_addr_str", 1},
-      {"txid_le_hex", 1},
+      {"txid_le_hex", 1}, {"hex", 2},
       {"addr_hash_hex", 1}, {"out_messages", 1}, {"state_init", 1},
   };
   auto ar = arity.find(name);
@@ -967,6 +997,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "exit_code") return rt_builtin_exit_code(args[0]);
   if (name == "uint_hex") return rt_builtin_uint_hex(args[0]);
   if (name == "txid_le_hex") return rt_builtin_txid_le_hex(args[0]);
+  if (name == "hex") return rt_builtin_hex(args[0], args[1]);
   if (name == "ext_addr_str") return rt_builtin_ext_addr_str(args[0]);
   if (name == "addr_hash_hex") return rt_builtin_addr_hash_hex(args[0]);
   if (name == "out_messages") return rt_builtin_out_messages(args[0]);
