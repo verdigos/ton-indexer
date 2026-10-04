@@ -240,10 +240,9 @@ void test_opcode_recovery_and_gasless_markers() {
   }
 }
 
-// A failed ChangePublicKey external classifies through the real matcher table
-// into a failed change_wallet_key action (no ghosts: the request carries no
-// messages).
-void test_failed_external_change_key() {
+// An aborted ChangePublicKey external classifies through the real matcher table
+// into no change_wallet_key action: only a successful rotation is one.
+void test_aborted_external_change_key() {
   TraceContext ctx;
   ctx.trace.trace_id = "failed-change-key-trace";
   auto tx = std::make_unique<Transaction>();
@@ -277,17 +276,10 @@ void test_failed_external_change_key() {
   FixtureLookupSource source(&ctx.trace.interfaces, &ctx.trace.code_hashes);
   ClassifyResult result = classify_trace(ctx, matchers, setup, source);
   bool found = false;
-  bool success = true;
   for (const ActionRow &row : result.action_rows) {
-    if (row.block == nullptr || row.block->btype != "change_wallet_key") continue;
-    Action action;
-    if (build_action(row, action)) {
-      found = true;
-      success = action.success;
-    }
+    if (row.block != nullptr && row.block->btype == "change_wallet_key") found = true;
   }
-  check("wallet_request/change_key/aborted_action_found", found);
-  check("wallet_request/change_key/aborted_action_failed", found && !success);
+  check("wallet_request/change_key/aborted_no_action", !found);
 }
 
 }  // namespace
@@ -298,7 +290,7 @@ int run_ghost_external_test() {
   test_bulk_chunk_order_and_ignored_count();
   test_no_payload_requests_and_malformed_bodies();
   test_opcode_recovery_and_gasless_markers();
-  test_failed_external_change_key();
+  test_aborted_external_change_key();
   std::printf("GHOST-EXTERNAL-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

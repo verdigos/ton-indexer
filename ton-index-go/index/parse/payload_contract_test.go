@@ -15,7 +15,7 @@ import (
 
 const (
 	contractPath = "testdata/payload_contract.jsonl.gz"
-	contractRows = 1229
+	contractRows = 1232
 )
 
 type payloadContractRow struct {

@@ -436,7 +436,7 @@ func TestDecodeCompactSkipsUnknownIds(t *testing.T) {
 	}
 	bigBin := strings.Repeat("AB", 4096)
 	// A record nested inside `legs` that itself carries an unknown id.
-	leg := recordBytesForTest(t, map[string]interface{}{"amount": "8"}, "7d 80")
+	leg := recordBytesForTest(t, map[string]interface{}{"amount": "8"}, "7f 80")
 	var legBody bytes.Buffer
 	writeCompactHeaderForTest(&legBody, 0x80, 0xde, 0xdf, 2)
 	legBody.WriteByte(payloadKeyIDByName["comment"])
@@ -455,7 +455,7 @@ func TestDecodeCompactSkipsUnknownIds(t *testing.T) {
 	}{
 		{
 			name: "unknown top-level id with a record value",
-			body: recordBytesForTest(t, named, "7d 82 02 05 06 c4 21 "+addressHex),
+			body: recordBytesForTest(t, named, "7f 82 02 05 06 c4 21 "+addressHex),
 			want: named,
 		},
 		{
@@ -547,7 +547,7 @@ func TestDecodeCompactHostileLengths(t *testing.T) {
 		{name: "map32 with a four billion count", body: "df ff ff ff ff", want: "map declares 4294967295 entries but only 0 bytes remain"},
 		{name: "map32 with a hundred count", body: "df 00 00 00 64", want: "map declares 100 entries but only 0 bytes remain"},
 		{name: "array32 in a record", body: "81 2c dd ff ff ff ff", want: "payload key legs (id 44)"},
-		{name: "array32 in an unknown id", body: "81 7d dd ff ff ff ff", want: "payload key id 125"},
+		{name: "array32 in an unknown id", body: "81 7f dd ff ff ff ff", want: "payload key id 127"},
 		{name: "bin32 with a four billion length", body: "81 06 c6 ff ff ff ff", want: "declares 4294967295 bytes"},
 		{name: "str32 with a four billion length", body: "81 0d db ff ff ff ff", want: "declares 4294967295 bytes"},
 	} {

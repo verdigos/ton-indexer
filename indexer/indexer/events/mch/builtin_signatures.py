@@ -23,6 +23,7 @@ BUILTIN_SIGNATURES: dict[str, int] = {
     "exit_code": 1,
     "uint_hex": 1,
     "txid_le_hex": 1,
+    "hex": 2,
     "ext_addr_str": 1,
     "addr_hash_hex": 1,
     "out_messages": 1,

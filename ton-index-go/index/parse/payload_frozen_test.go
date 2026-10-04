@@ -12,7 +12,7 @@ import (
 // fields; registry id or type changes therefore fail against the pinned output.
 const (
 	frozenPayloadPath   = "testdata/payload_frozen_v1.jsonl.gz"
-	frozenPayloadSHA256 = "35caf32938175163f97b23b566e6217cb94b7b36ef9739132a424eebc53db868"
+	frozenPayloadSHA256 = "1aaf019053df85f4a04fae675bb62ba67e3ef9597b8ce5533dd7798f12db780a"
 	frozenPayloadRows   = 1218
 )
 

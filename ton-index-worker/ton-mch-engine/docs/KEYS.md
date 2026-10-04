@@ -107,7 +107,7 @@ still use ids and their declared types.
 | 85 | `protocol_fee` | uint | integer_string | Tonco |
 | 86 | `provided_asset` | address | ton_address | Coffee |
 | 87 | `proxy` | address | ton_address | LayerZero |
-| 88 | `pubkey` | hash_hex | string | tgBTC |
+| 88 | `pubkey` | hash_hex | string | tgBTC, Telegram wallet key change |
 | 89 | `query_id` | uint | integer_string | protocol actions, DNS release |
 | 90 | `real_prev_owner` | address | ton_address | NFT |
 | 91 | `recipient_jetton_wallet` | address | ton_address | EVAA |
@@ -144,6 +144,8 @@ still use ids and their declared types.
 | 122 | `worker_state` | string | integer_string | Cocoon |
 | 123 | `worker_tokens` | uint | integer_string | Cocoon |
 | 124 | `zro_fee` | uint | integer_string | LayerZero |
+| 125 | `encrypted_old_private_key` | hash_hex | string | Telegram wallet key change |
+| 126 | `rotation_signature` | string | string | Telegram wallet key change |
 
 Encoded payloads omit null map fields recursively. Lists retain null elements.
 `legs` trims trailing null placeholders and omits the key when all legs are
