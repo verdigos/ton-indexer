@@ -5,8 +5,10 @@
 // delete), or op edit_content (.ton only; telemint rejects it). The writer is the in-message
 // source; the write with the highest lt wins.
 //
-// Reads go to production Postgres (hot and cold, read-only sessions) and production kvrocks
-// (GET/MGET/ZCARD/ZRANGEBYLEX only, paced). Writes go only to a local Redis on 127.0.0.1/localhost:
+// Two modes: an item set (-subject, -extra-items; per-item queries) or -scan (all messages with the
+// two opcodes, see scan.go). Reads go to production Postgres (hot and cold, read-only sessions) and
+// production kvrocks (GET/MGET/ZCARD/ZRANGEBYLEX only, paced). Writes go to the -local target, which
+// must be 127.0.0.1/localhost unless -allow-remote-write-target names it explicitly. They use
 // the same keys the worker writes (hash ton-index:v1:dns_wallet_writers:<item> with field
 // source_mc_seqno, string <key>:payload), through the worker's set_current script, so the backfill
 // and the live worker can run in any order and the higher source_mc_seqno wins.
@@ -159,20 +161,25 @@ func (k *prodKV) mgetPayloads(ctx context.Context, table string, ids []string) (
 	return res, nil
 }
 
-// localRedis is the only write target; it must be on the loopback host.
+// localRedis is the write target. It must be on the loopback host unless allowRemote names the
+// same address explicitly.
 type localRedis struct {
 	c *redis.Client
 }
 
-func newLocalRedis(addr string, db int) (*localRedis, error) {
+func newLocalRedis(addr string, db int, allowRemote string, passwordEnv string) (*localRedis, error) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
-	if host != "127.0.0.1" && host != "localhost" {
-		return nil, fmt.Errorf("refusing to write to %q: only 127.0.0.1 or localhost", host)
+	if host != "127.0.0.1" && host != "localhost" && addr != allowRemote {
+		return nil, fmt.Errorf("refusing to write to %q: only 127.0.0.1 or localhost unless -allow-remote-write-target=%s", addr, addr)
 	}
-	c := redis.NewClient(&redis.Options{Addr: addr, DB: db})
+	password := ""
+	if passwordEnv != "" {
+		password = os.Getenv(passwordEnv)
+	}
+	c := redis.NewClient(&redis.Options{Addr: addr, DB: db, Password: password})
 	if err := c.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
@@ -280,14 +287,15 @@ func openPG(ctx context.Context, envName string) (*pgx.Conn, error) {
 	return conn, nil
 }
 
-// explain returns the plan of writesQuery for one item and fails on a sequential scan.
-func explain(ctx context.Context, conn *pgx.Conn, item string) (string, error) {
+// explainQuery returns the plan of a query and fails on a sequential scan of a non-empty relation
+// or when the plan does not mention wantIndex.
+func explainQuery(ctx context.Context, conn *pgx.Conn, wantIndex string, sql string, args ...any) (string, error) {
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback(ctx)
-	rows, err := tx.Query(ctx, "explain "+writesQuery, item, int32(opChangeDNSRecord), int32(opEditContent))
+	rows, err := tx.Query(ctx, "explain "+sql, args...)
 	if err != nil {
 		return "", err
 	}
@@ -329,8 +337,8 @@ func explain(ctx context.Context, conn *pgx.Conn, item string) (string, error) {
 	if len(sizes) > 0 {
 		plan += "\n-- " + strings.Join(sizes, "; ")
 	}
-	if !strings.Contains(plan, "destination_opcode") {
-		return plan, fmt.Errorf("plan does not use the (destination, opcode) index")
+	if !strings.Contains(plan, wantIndex) {
+		return plan, fmt.Errorf("plan does not use an index matching %q", wantIndex)
 	}
 	return plan, nil
 }
@@ -405,12 +413,20 @@ func sameAddr(a, b *Address) bool {
 func main() {
 	subjectFlag := flag.String("subject", "", "raw address whose owner_wallet and wallet dns index members form the item set")
 	extraFlag := flag.String("extra-items", "", "file with extra item ids (raw addresses), one per line")
-	localFlag := flag.String("local", "127.0.0.1:16379", "local Redis to write to (127.0.0.1 or localhost only)")
-	localDB := flag.Int("local-db", 0, "local Redis db number")
+	localFlag := flag.String("local", "127.0.0.1:16379", "write target (127.0.0.1 or localhost unless -allow-remote-write-target)")
+	localDB := flag.Int("local-db", 0, "write target db number")
+	allowRemote := flag.String("allow-remote-write-target", "", "host:port; allows -local to be this non-loopback address (must be equal)")
+	passwordEnv := flag.String("write-password-env", "", "name of the environment variable holding the write target's password")
+	minMcSeqno := flag.Int("min-mc-seqno", 0, "scan mode: ignore writes with a lower mc seqno")
 	maxMcSeqno := flag.Int("max-mc-seqno", 0, "ignore writes with a higher mc seqno (0: no limit), to compare with an indexer run that ends there")
+	scanFlag := flag.Bool("scan", false, "scan all change_dns_record/edit_content in-messages by the (opcode, lt) index instead of an item set")
+	checkpointFlag := flag.String("checkpoint", "", "scan mode: checkpoint file (resumes from it when present)")
+	pageSize := flag.Int("page-size", 2000, "scan mode: messages per Postgres page")
+	pause := flag.Duration("pause", 100*time.Millisecond, "scan mode: pause between Postgres pages")
+	dryRun := flag.Bool("dry-run", false, "scan mode: compute writers and write -out, but do not write to the target")
 	explainOnly := flag.Bool("explain-only", false, "print EXPLAIN of the writes query for the first item on each database and exit")
 	copySubject := flag.Bool("copy-subject", false, "copy the subject's dns_entries rows, index members and address-book state to local Redis")
-	outFlag := flag.String("out", "", "write per-item results as JSON to this file")
+	outFlag := flag.String("out", "", "write per-item results as JSON to this file (scan mode: JSON lines of payloads)")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -427,8 +443,8 @@ func main() {
 
 	// The write target is checked before any production read.
 	var local *localRedis
-	if !*explainOnly {
-		l, err := newLocalRedis(*localFlag, *localDB)
+	if !*explainOnly && !*dryRun {
+		l, err := newLocalRedis(*localFlag, *localDB, *allowRemote, *passwordEnv)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -441,6 +457,15 @@ func main() {
 		log.Fatal(err)
 	}
 	defer kv.c.Close()
+
+	if *scanFlag {
+		opts := scanOptions{minMcSeqno: int32(*minMcSeqno), maxMcSeqno: int32(*maxMcSeqno), checkpoint: *checkpointFlag,
+			pageSize: *pageSize, pause: *pause, explainOnly: *explainOnly, out: *outFlag}
+		if err := runScan(ctx, kv, local, opts); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	// Item set: subject index members first, then extra items.
 	var items []string
@@ -519,7 +544,7 @@ func main() {
 
 	// Plan check on the first item before any real query.
 	for _, name := range dbNames {
-		plan, err := explain(ctx, conns[name], items[0])
+		plan, err := explainQuery(ctx, conns[name], "destination_opcode", writesQuery, items[0], int32(opChangeDNSRecord), int32(opEditContent))
 		fmt.Printf("=== EXPLAIN %s (item %s)\n%s\n", name, items[0], plan)
 		if err != nil {
 			log.Fatalf("%s: %v; not running queries", name, err)
