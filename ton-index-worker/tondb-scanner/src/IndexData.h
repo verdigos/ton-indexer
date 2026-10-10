@@ -673,6 +673,18 @@ struct NFTTransfer {
   td::Ref<vm::Cell> forward_payload;
 };
 
+// Successful write of a DNS item's `wallet` record; writer is the in-message source.
+struct DnsWalletWrite {
+  td::Bits256 trace_id;
+  td::Bits256 transaction_hash;
+  uint64_t transaction_lt;
+  uint32_t transaction_now;
+  uint32_t mc_seqno;
+  block::StdAddress nft_item_address;
+  std::string writer;
+  uint32_t op;
+};
+
 struct GetGemsNftAuctionData {
   block::StdAddress address;
   bool end;
@@ -806,6 +818,7 @@ struct MasterchainBlockDataState {
 using BlockchainEvent = std::variant<JettonTransfer,
                                      JettonBurn,
                                      NFTTransfer,
+                                     DnsWalletWrite,
                                      NominatorPoolEvent,
                                      NominatorPoolValidatorEvent,
                                      ValidatorEvent>;
