@@ -1,33 +1,19 @@
-// dns-wallet-writers records, for DNS NFT items, who last wrote the item's `wallet` record.
-//
-// A write is the in-message of a successful transaction on the item (not aborted, compute phase
-// successful, message not bounced) with op change_dns_record and key sha256("wallet") (set or
-// delete), or op edit_content (.ton only; telemint rejects it). The writer is the in-message
-// source; the write with the highest lt wins.
-//
-// Two modes: an item set (-subject, -extra-items; per-item queries) or -scan (all messages with the
-// two opcodes, see scan.go). Reads go to production Postgres (hot and cold, read-only sessions) and
-// production kvrocks (GET/MGET/ZCARD/ZRANGEBYLEX only, paced). Writes go to the -local target, which
-// must be 127.0.0.1/localhost unless -allow-remote-write-target names it explicitly. They use
-// the same keys the worker writes (hash ton-index:v1:dns_wallet_writers:<item> with field
-// source_mc_seqno, string <key>:payload), through the worker's set_current script, so the backfill
-// and the live worker can run in any order and the higher source_mc_seqno wins.
+// dns-wallet-writers backfills dns_wallet_writers: for each .ton/.t.me item, the sender of the last
+// successful change_dns_record (key sha256("wallet")) or edit_content in-message. telemint has no
+// edit_content handler (TelegramMessenger/telemint@1e47b28 func/nft-item.fc:267).
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,13 +33,7 @@ const (
 
 var walletKey = sha256.Sum256([]byte("wallet"))
 
-const writesQuery = `select t.hash, t.lt, t.mc_block_seqno, coalesce(t.aborted, true), coalesce(t.compute_success, false),
-       m.source, m.opcode, coalesce(m.bounced, false), m.body_hash
-from messages m
-join transactions t on t.hash = m.tx_hash and t.lt = m.tx_lt and t.mc_block_seqno = m.mc_seqno
-where m.destination = $1 and m.opcode in ($2, $3) and m.direction = 'in'`
-
-// Address is a parsed std address; String gives the raw form used by kvrocks payloads (0:UPPERHEX).
+// Address is a std address; String gives the raw form 0:UPPERHEX.
 type Address struct {
 	Workchain int32
 	Hash      [32]byte
@@ -82,64 +62,27 @@ func (a Address) String() string {
 	return fmt.Sprintf("%d:%X", a.Workchain, a.Hash[:])
 }
 
-func parseOptAddress(raw *string) *Address {
-	if raw == nil || *raw == "" {
-		return nil
-	}
-	a, err := ParseAddress(*raw)
-	if err != nil {
-		return nil
-	}
-	return &a
-}
-
-// prodKV is the production kvrocks reader: one connection, read commands only, paced batches.
-type prodKV struct {
+// sourceKV reads kvrocks: one connection, read commands only, paced batches.
+type sourceKV struct {
 	c *redis.Client
 }
 
-func newProdKV() (*prodKV, error) {
+func newSourceKV() (*sourceKV, error) {
 	host, port := os.Getenv("KV_ROCKS_HOST"), os.Getenv("KV_ROCKS_PORT")
 	if host == "" || port == "" {
 		return nil, fmt.Errorf("KV_ROCKS_HOST and KV_ROCKS_PORT must be set")
 	}
 	c := redis.NewClient(&redis.Options{
-		Addr:         net.JoinHostPort(host, port),
-		Password:     os.Getenv("KV_ROCKS_PASSWORD"),
-		PoolSize:     1,
-		MinIdleConns: 0,
-		ReadTimeout:  30 * time.Second,
+		Addr:        net.JoinHostPort(host, port),
+		Password:    os.Getenv("KV_ROCKS_PASSWORD"),
+		PoolSize:    1,
+		ReadTimeout: 30 * time.Second,
 	})
-	return &prodKV{c: c}, nil
-}
-
-func (k *prodKV) zcard(ctx context.Context, key string) (int64, error) {
-	time.Sleep(kvPause)
-	return k.c.ZCard(ctx, key).Result()
-}
-
-func (k *prodKV) zrangeAllByLex(ctx context.Context, key string) ([]string, error) {
-	n, err := k.zcard(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	res := make([]string, 0, n)
-	for off := int64(0); off < n; off += kvBatch {
-		time.Sleep(kvPause)
-		page, err := k.c.ZRangeByLex(ctx, key, &redis.ZRangeBy{Min: "-", Max: "+", Offset: off, Count: kvBatch}).Result()
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, page...)
-		if len(page) < kvBatch {
-			break
-		}
-	}
-	return res, nil
+	return &sourceKV{c: c}, nil
 }
 
 // mgetPayloads returns id -> payload for the ids found under <table>:<id>:payload.
-func (k *prodKV) mgetPayloads(ctx context.Context, table string, ids []string) (map[string]string, error) {
+func (k *sourceKV) mgetPayloads(ctx context.Context, table string, ids []string) (map[string]string, error) {
 	res := map[string]string{}
 	for start := 0; start < len(ids); start += kvBatch {
 		end := min(start+kvBatch, len(ids))
@@ -161,13 +104,12 @@ func (k *prodKV) mgetPayloads(ctx context.Context, table string, ids []string) (
 	return res, nil
 }
 
-// localRedis is the write target. It must be on the loopback host unless allowRemote names the
+// newTarget opens the write target. It must be on the loopback host unless allowRemote names the
 // same address explicitly.
-type localRedis struct {
-	c *redis.Client
-}
-
-func newLocalRedis(addr string, db int, allowRemote string, passwordEnv string) (*localRedis, error) {
+func newTarget(addr string, allowRemote string, passwordEnv string) (*redis.Client, error) {
+	if addr == "" {
+		return nil, fmt.Errorf("-target is required unless -dry-run")
+	}
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -179,16 +121,15 @@ func newLocalRedis(addr string, db int, allowRemote string, passwordEnv string) 
 	if passwordEnv != "" {
 		password = os.Getenv(passwordEnv)
 	}
-	c := redis.NewClient(&redis.Options{Addr: addr, DB: db, Password: password})
+	c := redis.NewClient(&redis.Options{Addr: addr, Password: password})
 	if err := c.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
-	return &localRedis{c: c}, nil
+	return c, nil
 }
 
-// Same text and KEYS/ARGV layout as the worker's kvrocks_set_current_script (KvrocksState.cpp):
-// KEYS = {<table>:<id>, <table>:<id>:payload}, ARGV = {source_mc_seqno, payload}. A write with a
-// lower source_mc_seqno than the stored one is ignored; an equal or higher one replaces it.
+// Copy of kvrocks_set_current_script (KvrocksState.cpp): KEYS = {row key, payload key},
+// ARGV = {source_mc_seqno, payload}; a lower source_mc_seqno than the stored one is ignored.
 var setCurrentScript = redis.NewScript(`
 local current = redis.call('HGET', KEYS[1], 'source_mc_seqno')
 if (not current) or tonumber(current) <= tonumber(ARGV[1]) then
@@ -207,40 +148,6 @@ func payloadKey(table, id string) string {
 	return rowKey(table, id) + ":payload"
 }
 
-func indexKey(table, name string) string {
-	return keyPrefix + ":idx:" + table + ":" + name
-}
-
-// itemFromLexMember takes the trailing raw address of a `<len>:<domain>:<item id>` member.
-func itemFromLexMember(member string) (string, bool) {
-	if len(member) < 66 || member[len(member)-65] != ':' {
-		return "", false
-	}
-	i := strings.LastIndexByte(member[:len(member)-65], ':')
-	return member[i+1:], true
-}
-
-type dnsEntry struct {
-	NftItemAddress string  `json:"nft_item_address"`
-	NftItemOwner   *string `json:"nft_item_owner"`
-	Domain         string  `json:"domain"`
-	DNSWallet      *string `json:"dns_wallet"`
-	Destroyed      bool    `json:"destroyed"`
-}
-
-type writeRow struct {
-	TxHash         string
-	Lt             int64
-	McSeqno        int32
-	Aborted        bool
-	ComputeSuccess bool
-	Source         *string
-	Opcode         int32
-	Bounced        bool
-	BodyHash       *string
-	DB             string
-}
-
 type writerPayload struct {
 	SchemaVersion  int    `json:"schema_version"`
 	SourceMcSeqno  int32  `json:"source_mc_seqno"`
@@ -249,21 +156,6 @@ type writerPayload struct {
 	WriteLt        string `json:"write_lt"`
 	WriteTxHash    string `json:"write_tx_hash"`
 	WriteOp        string `json:"write_op"`
-}
-
-type itemResult struct {
-	Item          string         `json:"item"`
-	Domain        string         `json:"domain"`
-	Owner         *string        `json:"owner"`
-	DNSWallet     *string        `json:"dns_wallet"`
-	Candidates    int            `json:"candidates"`
-	Successful    int            `json:"successful_writes"`
-	Write         *writerPayload `json:"write"`
-	CurrentRule   bool           `json:"current_rule_shows"`
-	NewRule       bool           `json:"new_rule_shows"`
-	FromSubject   bool           `json:"from_subject_index"`
-	Stored        string         `json:"stored,omitempty"`
-	MissingBodies int            `json:"missing_bodies,omitempty"`
 }
 
 func openPG(ctx context.Context, envName string) (*pgx.Conn, error) {
@@ -287,9 +179,9 @@ func openPG(ctx context.Context, envName string) (*pgx.Conn, error) {
 	return conn, nil
 }
 
-// explainQuery returns the plan of a query and fails on a sequential scan of a non-empty relation
-// or when the plan does not mention wantIndex.
-func explainQuery(ctx context.Context, conn *pgx.Conn, wantIndex string, sql string, args ...any) (string, error) {
+// explainQuery returns the plan of a query. It fails on a sequential scan of a non-empty relation
+// and when no index scan on rel (a table or one of its partitions) appears.
+func explainQuery(ctx context.Context, conn *pgx.Conn, rel string, sql string, args ...any) (string, error) {
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return "", err
@@ -299,70 +191,34 @@ func explainQuery(ctx context.Context, conn *pgx.Conn, wantIndex string, sql str
 	if err != nil {
 		return "", err
 	}
-	var lines []string
-	for rows.Next() {
-		var line string
-		if err := rows.Scan(&line); err != nil {
-			rows.Close()
-			return "", err
-		}
-		lines = append(lines, line)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
 		return "", err
 	}
 	plan := strings.Join(lines, "\n")
-	// The only sequential scans allowed are on default partitions that are empty.
-	var sizes []string
+	indexed := false
 	for _, line := range lines {
+		if strings.Contains(line, "Index") && strings.Contains(line, " on "+rel) {
+			indexed = true
+		}
 		_, rest, ok := strings.Cut(line, "Seq Scan on ")
 		if !ok {
 			continue
 		}
-		rel, _, _ := strings.Cut(rest, " ")
-		if !strings.HasSuffix(rel, "_default") {
-			return plan, fmt.Errorf("plan has a sequential scan on %s", rel)
-		}
+		seqRel, _, _ := strings.Cut(rest, " ")
 		var pages int64
 		var tuples float64
-		if err := tx.QueryRow(ctx, "select relpages::bigint, reltuples::float8 from pg_class where relname = $1", rel).Scan(&pages, &tuples); err != nil {
-			return plan, fmt.Errorf("pg_class %s: %w", rel, err)
+		if err := tx.QueryRow(ctx, "select relpages::bigint, reltuples::float8 from pg_class where relname = $1", seqRel).Scan(&pages, &tuples); err != nil {
+			return plan, fmt.Errorf("pg_class %s: %w", seqRel, err)
 		}
 		if pages > 0 || tuples > 0 {
-			return plan, fmt.Errorf("plan has a sequential scan on non-empty %s: relpages %d, reltuples %.0f", rel, pages, tuples)
+			return plan, fmt.Errorf("plan has a sequential scan on non-empty %s: relpages %d, reltuples %.0f", seqRel, pages, tuples)
 		}
-		sizes = append(sizes, fmt.Sprintf("seq scan on %s: relpages=%d reltuples=%.0f", rel, pages, tuples))
 	}
-	if len(sizes) > 0 {
-		plan += "\n-- " + strings.Join(sizes, "; ")
-	}
-	if !strings.Contains(plan, wantIndex) {
-		return plan, fmt.Errorf("plan does not use an index matching %q", wantIndex)
+	if !indexed {
+		return plan, fmt.Errorf("plan has no index scan on %s", rel)
 	}
 	return plan, nil
-}
-
-func queryWrites(ctx context.Context, conn *pgx.Conn, dbName string, item string) ([]writeRow, error) {
-	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	rows, err := tx.Query(ctx, writesQuery, item, int32(opChangeDNSRecord), int32(opEditContent))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var res []writeRow
-	for rows.Next() {
-		r := writeRow{DB: dbName}
-		if err := rows.Scan(&r.TxHash, &r.Lt, &r.McSeqno, &r.Aborted, &r.ComputeSuccess, &r.Source, &r.Opcode, &r.Bounced, &r.BodyHash); err != nil {
-			return nil, err
-		}
-		res = append(res, r)
-	}
-	return res, rows.Err()
 }
 
 // changesWalletKey reports whether a change_dns_record body targets key sha256("wallet").
@@ -390,420 +246,49 @@ func changesWalletKey(bodyB64 string) (bool, error) {
 	return bytes.Equal(key, walletKey[:]), nil
 }
 
-func readLines(path string) ([]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var res []string
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		if line := strings.TrimSpace(sc.Text()); line != "" && !strings.HasPrefix(line, "#") {
-			res = append(res, line)
-		}
-	}
-	return res, sc.Err()
-}
-
-func sameAddr(a, b *Address) bool {
-	return a != nil && b != nil && *a == *b
-}
-
 func main() {
-	subjectFlag := flag.String("subject", "", "raw address whose owner_wallet and wallet dns index members form the item set")
-	extraFlag := flag.String("extra-items", "", "file with extra item ids (raw addresses), one per line")
-	localFlag := flag.String("local", "127.0.0.1:16379", "write target (127.0.0.1 or localhost unless -allow-remote-write-target)")
-	localDB := flag.Int("local-db", 0, "write target db number")
-	allowRemote := flag.String("allow-remote-write-target", "", "host:port; allows -local to be this non-loopback address (must be equal)")
+	target := flag.String("target", "", "kvrocks host:port to write to; required unless -dry-run (127.0.0.1 or localhost unless -allow-remote-write-target)")
+	allowRemote := flag.String("allow-remote-write-target", "", "host:port; allows -target to be this non-loopback address (must be equal)")
 	passwordEnv := flag.String("write-password-env", "", "name of the environment variable holding the write target's password")
-	minMcSeqno := flag.Int("min-mc-seqno", 0, "scan mode: ignore writes with a lower mc seqno")
-	maxMcSeqno := flag.Int("max-mc-seqno", 0, "ignore writes with a higher mc seqno (0: no limit), to compare with an indexer run that ends there")
-	scanFlag := flag.Bool("scan", false, "scan all change_dns_record/edit_content in-messages by the (opcode, lt) index instead of an item set")
-	checkpointFlag := flag.String("checkpoint", "", "scan mode: checkpoint file (resumes from it when present)")
-	pageSize := flag.Int("page-size", 2000, "scan mode: messages per Postgres page")
-	pause := flag.Duration("pause", 100*time.Millisecond, "scan mode: pause between Postgres pages")
-	dryRun := flag.Bool("dry-run", false, "scan mode: compute writers and write -out, but do not write to the target")
-	explainOnly := flag.Bool("explain-only", false, "print EXPLAIN of the writes query for the first item on each database and exit")
-	copySubject := flag.Bool("copy-subject", false, "copy the subject's dns_entries rows, index members and address-book state to local Redis")
-	outFlag := flag.String("out", "", "write per-item results as JSON to this file (scan mode: JSON lines of payloads)")
+	minMcSeqno := flag.Int("min-mc-seqno", 0, "ignore writes in transactions with a lower mc seqno")
+	maxMcSeqno := flag.Int("max-mc-seqno", 0, "ignore writes in transactions with a higher mc seqno (0: no limit)")
+	checkpoint := flag.String("checkpoint", "", "checkpoint file (resumes from it when present)")
+	dryRun := flag.Bool("dry-run", false, "compute writers and write -out, but do not write to the target")
+	out := flag.String("out", "", "JSON lines of writer payloads; items left out for a missing body go to <out>.missing")
+	flag.Usage = func() {
+		fmt.Fprint(flag.CommandLine.Output(), `Usage: dns-wallet-writers [flags]
+
+Scans every in-message with op change_dns_record or edit_content in HOT_DB and COLD_DB (read-only
+sessions; each page query is EXPLAINed first), keeps the newest successful wallet write per .ton/.t.me
+item and writes dns_wallet_writers through the worker's set_current script, so the higher
+source_mc_seqno wins whatever the order of this run and the worker. kvrocks (nft_items,
+message_contents) is read with MGET batches of 100 and a pause between them.
+Environment: HOT_DB, COLD_DB, KV_ROCKS_HOST, KV_ROCKS_PORT, KV_ROCKS_PASSWORD.
+
+`)
+		flag.PrintDefaults()
+	}
 	flag.Parse()
-
 	ctx := context.Background()
-	log.SetFlags(log.LstdFlags)
 
-	var subject *Address
-	if *subjectFlag != "" {
-		a, err := ParseAddress(*subjectFlag)
+	// Validate the write target before any read.
+	var dst *redis.Client
+	if !*dryRun {
+		c, err := newTarget(*target, *allowRemote, *passwordEnv)
 		if err != nil {
 			log.Fatal(err)
 		}
-		subject = &a
+		defer c.Close()
+		dst = c
 	}
 
-	// The write target is checked before any production read.
-	var local *localRedis
-	if !*explainOnly && !*dryRun {
-		l, err := newLocalRedis(*localFlag, *localDB, *allowRemote, *passwordEnv)
-		if err != nil {
-			log.Fatal(err)
-		}
-		local = l
-		defer local.c.Close()
-	}
-
-	kv, err := newProdKV()
+	kv, err := newSourceKV()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer kv.c.Close()
 
-	if *scanFlag {
-		opts := scanOptions{minMcSeqno: int32(*minMcSeqno), maxMcSeqno: int32(*maxMcSeqno), checkpoint: *checkpointFlag,
-			pageSize: *pageSize, pause: *pause, explainOnly: *explainOnly, out: *outFlag}
-		if err := runScan(ctx, kv, local, opts); err != nil {
-			log.Fatal(err)
-		}
-		return
+	if err := runScan(ctx, kv, dst, int32(*minMcSeqno), int32(*maxMcSeqno), *checkpoint, *out); err != nil {
+		log.Fatal(err)
 	}
-
-	// Item set: subject index members first, then extra items.
-	var items []string
-	seen := map[string]bool{}
-	fromSubject := map[string]bool{}
-	indexMembers := map[string][]string{}
-	addItem := func(raw string, subj bool) {
-		a, err := ParseAddress(raw)
-		if err != nil {
-			log.Fatalf("item %q: %v", raw, err)
-		}
-		id := a.String()
-		if subj {
-			fromSubject[id] = true
-		}
-		if !seen[id] {
-			seen[id] = true
-			items = append(items, id)
-		}
-	}
-	if subject != nil {
-		for _, name := range []string{"owner_wallet:" + subject.String() + ":by_domain", "wallet:" + subject.String() + ":by_domain"} {
-			members, err := kv.zrangeAllByLex(ctx, indexKey("dns_entries", name))
-			if err != nil {
-				log.Fatalf("zrangebylex %s: %v", name, err)
-			}
-			indexMembers[name] = members
-			log.Printf("index %s: %d members", name, len(members))
-			for _, m := range members {
-				id, ok := itemFromLexMember(m)
-				if !ok {
-					log.Fatalf("unexpected index member %q", m)
-				}
-				addItem(id, true)
-			}
-		}
-	}
-	if *extraFlag != "" {
-		lines, err := readLines(*extraFlag)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, l := range lines {
-			addItem(l, false)
-		}
-	}
-	if len(items) == 0 {
-		log.Fatal("empty item set")
-	}
-	log.Printf("item set: %d items (%d from subject indexes)", len(items), len(fromSubject))
-
-	entryPayloads, err := kv.mgetPayloads(ctx, "dns_entries", items)
-	if err != nil {
-		log.Fatalf("mget dns_entries: %v", err)
-	}
-	entries := map[string]dnsEntry{}
-	for id, p := range entryPayloads {
-		var e dnsEntry
-		if err := json.Unmarshal([]byte(p), &e); err != nil {
-			log.Fatalf("decode dns_entries %s: %v", id, err)
-		}
-		entries[id] = e
-	}
-	log.Printf("dns_entries payloads: %d of %d", len(entryPayloads), len(items))
-
-	dbNames := []string{"HOT_DB", "COLD_DB"}
-	conns := map[string]*pgx.Conn{}
-	for _, name := range dbNames {
-		conn, err := openPG(ctx, name)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer conn.Close(ctx)
-		conns[name] = conn
-	}
-
-	// Plan check on the first item before any real query.
-	for _, name := range dbNames {
-		plan, err := explainQuery(ctx, conns[name], "destination_opcode", writesQuery, items[0], int32(opChangeDNSRecord), int32(opEditContent))
-		fmt.Printf("=== EXPLAIN %s (item %s)\n%s\n", name, items[0], plan)
-		if err != nil {
-			log.Fatalf("%s: %v; not running queries", name, err)
-		}
-	}
-	if *explainOnly {
-		return
-	}
-
-	if *copySubject {
-		if subject == nil {
-			log.Fatal("-copy-subject needs -subject")
-		}
-		if err := copySubjectData(ctx, kv, local, subject, indexMembers, entryPayloads, fromSubject); err != nil {
-			log.Fatalf("copy subject: %v", err)
-		}
-	}
-
-	// Writes per item from both databases, deduped by tx hash.
-	writes := map[string][]writeRow{}
-	rowCounts := map[string]int{}
-	for _, item := range items {
-		byHash := map[string]writeRow{}
-		for _, name := range dbNames {
-			rows, err := queryWrites(ctx, conns[name], name, item)
-			if err != nil {
-				log.Fatalf("%s writes for %s: %v", name, item, err)
-			}
-			rowCounts[name] += len(rows)
-			for _, r := range rows {
-				if *maxMcSeqno > 0 && r.McSeqno > int32(*maxMcSeqno) {
-					continue
-				}
-				if _, ok := byHash[r.TxHash]; !ok {
-					byHash[r.TxHash] = r
-				}
-			}
-		}
-		for _, r := range byHash {
-			writes[item] = append(writes[item], r)
-		}
-		sort.Slice(writes[item], func(i, j int) bool { return writes[item][i].Lt < writes[item][j].Lt })
-	}
-	log.Printf("pg rows: HOT_DB %d, COLD_DB %d", rowCounts["HOT_DB"], rowCounts["COLD_DB"])
-
-	// Bodies of successful change_dns_record messages.
-	var bodyHashes []string
-	seenBodies := map[string]bool{}
-	for _, rows := range writes {
-		for _, r := range rows {
-			if r.Opcode == opChangeDNSRecord && r.BodyHash != nil && successful(r) && !seenBodies[*r.BodyHash] {
-				seenBodies[*r.BodyHash] = true
-				bodyHashes = append(bodyHashes, *r.BodyHash)
-			}
-		}
-	}
-	bodyPayloads, err := kv.mgetPayloads(ctx, "message_contents", bodyHashes)
-	if err != nil {
-		log.Fatalf("mget message_contents: %v", err)
-	}
-	log.Printf("message bodies: %d of %d", len(bodyPayloads), len(bodyHashes))
-
-	results := make([]itemResult, 0, len(items))
-	for _, item := range items {
-		e, hasEntry := entries[item]
-		res := itemResult{Item: item, Domain: e.Domain, Owner: e.NftItemOwner, DNSWallet: e.DNSWallet,
-			Candidates: len(writes[item]), FromSubject: fromSubject[item]}
-		if !hasEntry {
-			res.Domain = "(no dns_entries row)"
-		}
-		var best *writeRow
-		for i := range writes[item] {
-			r := writes[item][i]
-			if !successful(r) || r.Source == nil {
-				continue
-			}
-			if r.Opcode == opChangeDNSRecord {
-				if r.BodyHash == nil {
-					continue
-				}
-				p, ok := bodyPayloads[*r.BodyHash]
-				if !ok {
-					res.MissingBodies++
-					continue
-				}
-				var mc struct {
-					Body string `json:"body"`
-				}
-				if err := json.Unmarshal([]byte(p), &mc); err != nil {
-					log.Fatalf("decode message_contents %s: %v", *r.BodyHash, err)
-				}
-				isWallet, err := changesWalletKey(mc.Body)
-				if err != nil {
-					log.Printf("item %s tx %s: bad body: %v", item, r.TxHash, err)
-					continue
-				}
-				if !isWallet {
-					continue
-				}
-			}
-			res.Successful++
-			if best == nil || r.Lt > best.Lt {
-				best = &writes[item][i]
-			}
-		}
-		if best != nil {
-			writer, err := ParseAddress(*best.Source)
-			if err != nil {
-				log.Fatalf("item %s writer: %v", item, err)
-			}
-			op := "change_dns_record"
-			if best.Opcode == opEditContent {
-				op = "edit_content"
-			}
-			res.Write = &writerPayload{SchemaVersion: 1, SourceMcSeqno: best.McSeqno, NftItemAddress: item,
-				Writer: writer.String(), WriteLt: strconv.FormatInt(best.Lt, 10), WriteTxHash: best.TxHash, WriteOp: op}
-		}
-		owner, wallet := parseOptAddress(e.NftItemOwner), parseOptAddress(e.DNSWallet)
-		res.CurrentRule = hasEntry && !e.Destroyed && sameAddr(owner, wallet)
-		if res.CurrentRule && res.Write != nil {
-			w, _ := ParseAddress(res.Write.Writer)
-			res.NewRule = sameAddr(owner, &w)
-		}
-		// A missing body could hide a later wallet write, so such an item gets no writer key.
-		if res.MissingBodies > 0 {
-			res.Stored = "skipped: missing bodies"
-		} else if res.Write != nil {
-			stored, err := storeWriter(ctx, local, res.Write)
-			if err != nil {
-				log.Fatalf("store writer %s: %v", item, err)
-			}
-			res.Stored = stored
-		}
-		results = append(results, res)
-	}
-
-	printTable(results)
-	if subject != nil {
-		printSubject(subject, indexMembers, results)
-	}
-	if *outFlag != "" {
-		data, _ := json.MarshalIndent(results, "", " ")
-		if err := os.WriteFile(*outFlag, data, 0o644); err != nil {
-			log.Fatal(err)
-		}
-	}
-}
-
-func successful(r writeRow) bool {
-	return !r.Aborted && r.ComputeSuccess && !r.Bounced
-}
-
-func storeWriter(ctx context.Context, local *localRedis, w *writerPayload) (string, error) {
-	data, err := json.Marshal(w)
-	if err != nil {
-		return "", err
-	}
-	keys := []string{rowKey("dns_wallet_writers", w.NftItemAddress), payloadKey("dns_wallet_writers", w.NftItemAddress)}
-	n, err := setCurrentScript.Run(ctx, local.c, keys, w.SourceMcSeqno, string(data)).Int()
-	if err != nil {
-		return "", err
-	}
-	if n == 1 {
-		return "written", nil
-	}
-	return "kept", nil
-}
-
-// copySubjectData copies what a local address-book query for the subject reads: the subject's
-// dns_entries payloads, both index keys with the same members (score 0), the subject's
-// latest_account_states payload and the contract_methods payload of its code hash.
-func copySubjectData(ctx context.Context, kv *prodKV, local *localRedis, subject *Address,
-	indexMembers map[string][]string, entryPayloads map[string]string, fromSubject map[string]bool) error {
-	pipe := local.c.TxPipeline()
-	nEntries := 0
-	for id := range fromSubject {
-		if p, ok := entryPayloads[id]; ok {
-			pipe.Set(ctx, payloadKey("dns_entries", id), p, 0)
-			nEntries++
-		}
-	}
-	nMembers := 0
-	for name, members := range indexMembers {
-		for _, m := range members {
-			pipe.ZAdd(ctx, indexKey("dns_entries", name), redis.Z{Score: 0, Member: m})
-			nMembers++
-		}
-	}
-	states, err := kv.mgetPayloads(ctx, "latest_account_states", []string{subject.String()})
-	if err != nil {
-		return err
-	}
-	nMethods := 0
-	if state, ok := states[subject.String()]; ok {
-		pipe.Set(ctx, payloadKey("latest_account_states", subject.String()), state, 0)
-		var row struct {
-			CodeHash *string `json:"code_hash"`
-		}
-		if err := json.Unmarshal([]byte(state), &row); err != nil {
-			return err
-		}
-		if row.CodeHash != nil {
-			methods, err := kv.mgetPayloads(ctx, "contract_methods", []string{*row.CodeHash})
-			if err != nil {
-				return err
-			}
-			if m, ok := methods[*row.CodeHash]; ok {
-				pipe.Set(ctx, payloadKey("contract_methods", *row.CodeHash), m, 0)
-				nMethods++
-			}
-		}
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		return err
-	}
-	log.Printf("copied: %d dns_entries, %d index members, %d latest_account_states, %d contract_methods",
-		nEntries, nMembers, len(states), nMethods)
-	return nil
-}
-
-func short(s *string) string {
-	if s == nil {
-		return "-"
-	}
-	if len(*s) > 12 {
-		return (*s)[:8] + ".." + (*s)[len(*s)-4:]
-	}
-	return *s
-}
-
-func printTable(results []itemResult) {
-	fmt.Printf("%-28s %-14s %-14s %-14s %-18s %-16s %s/%s\n", "domain", "owner", "dns_wallet", "writer", "op", "write_lt", "cur", "new")
-	for _, r := range results {
-		writer, op, lt := "-", "-", "-"
-		if r.Write != nil {
-			writer, op, lt = short(&r.Write.Writer), r.Write.WriteOp, r.Write.WriteLt
-		}
-		fmt.Printf("%-28s %-14s %-14s %-14s %-18s %-16s %v/%v\n", r.Domain, short(r.Owner), short(r.DNSWallet), writer, op, lt, r.CurrentRule, r.NewRule)
-	}
-}
-
-// printSubject compares the current primary domain (first owner_wallet member, i.e. the shortest)
-// with the shortest owner_wallet domain whose wallet-record writer is the subject.
-func printSubject(subject *Address, indexMembers map[string][]string, results []itemResult) {
-	byItem := map[string]itemResult{}
-	for _, r := range results {
-		byItem[r.Item] = r
-	}
-	members := indexMembers["owner_wallet:"+subject.String()+":by_domain"]
-	current, next := "(none)", "(none)"
-	if len(members) > 0 {
-		current = members[0]
-	}
-	for _, m := range members {
-		id, _ := itemFromLexMember(m)
-		if byItem[id].NewRule {
-			next = m
-			break
-		}
-	}
-	fmt.Printf("subject %s: current rule %s; new rule %s\n", subject, current, next)
 }

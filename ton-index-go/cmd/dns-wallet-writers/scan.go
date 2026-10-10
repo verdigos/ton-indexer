@@ -1,16 +1,7 @@
 package main
 
-// Scan mode: walk every in-message with op change_dns_record or edit_content in hot and cold
-// Postgres, keep the max-lt successful wallet write per .ton/.t.me item, then write all writers
-// through the worker's set_current script.
-//
-// Paging is keyset on the (opcode, coalesce(created_lt, tx_lt), msg_hash) index, one opcode at a
-// time. mc seqno chunks would not work on cold Postgres: it has a single 6e9-row partition and no
-// mc_seqno index, so every chunk would rescan the opcode's whole index range. The mc seqno bounds
-// are applied as filters (they prune the hot partitions) and turned into a generous lt range.
-
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/gob"
@@ -27,6 +18,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Keyset pages over (opcode, coalesce(created_lt, tx_lt), msg_hash), one opcode at a time. The mc
+// seqno bounds filter the transactions and are also turned into a widened lt range for the key.
 const scanQuery = `select m.mc_seqno, t.hash, t.lt, coalesce(m.created_lt, m.tx_lt), m.msg_hash, m.source, m.destination,
        coalesce(t.aborted, true), coalesce(t.compute_success, false), coalesce(m.bounced, false), m.body_hash
 from messages m
@@ -38,28 +31,18 @@ limit $7`
 
 const mcBlockLtQuery = `select start_lt, end_lt from blocks where workchain = -1 and seqno = $1 and mc_block_seqno = $1`
 
-// Shard blocks reference a recent masterchain block and have a higher lt, and messages arrive
-// within a few blocks; the lt range is widened by this many mc blocks on both sides.
-const ltMarginBlocks = 1000
+const (
+	pageSize  = 2000
+	pagePause = 100 * time.Millisecond
+	// The key is the message's created_lt, which can be far below its transaction's lt when the
+	// message waited in a queue, so the lower edge gets a wide margin.
+	ltMarginBelow = 100000 // mc blocks
+	ltMarginAbove = 1000   // mc blocks
+)
 
-var dnsRoots = []string{
-	"0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF", // .ton
-	"0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2", // .t.me
-}
-
-type scanOptions struct {
-	minMcSeqno, maxMcSeqno int32
-	checkpoint             string
-	pageSize               int
-	pause                  time.Duration
-	explainOnly            bool
-	out                    string
-}
-
-// startCursor sorts before every message with key lt >= lt. msg_hash cannot be empty (tonhash rejects
-// it), so the start uses lt-1 and the all-zero hash.
-func startCursor(lt int64) scanCursor {
-	return scanCursor{Lt: lt - 1, MsgHash: base64.StdEncoding.EncodeToString(make([]byte, 32))}
+var dnsRoots = map[string]bool{
+	"0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF": true, // .ton
+	"0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2": true, // .t.me
 }
 
 type scanCursor struct {
@@ -68,12 +51,24 @@ type scanCursor struct {
 	Done    bool
 }
 
+// startCursor sorts before every message with key lt >= lt. msg_hash cannot be empty (Postgres
+// tonhash rejects it), so the start uses lt-1 and the all-zero hash.
+func startCursor(lt int64) scanCursor {
+	return scanCursor{Lt: lt - 1, MsgHash: base64.StdEncoding.EncodeToString(make([]byte, 32))}
+}
+
 type bestWrite struct {
 	Lt      int64
 	McSeqno int32
 	Edit    bool
 	Writer  Address
-	TxHash  [32]byte
+	TxHash  string
+}
+
+type missingBody struct {
+	Item   string `json:"nft_item_address"`
+	Lt     int64  `json:"lt"`
+	TxHash string `json:"tx_hash"`
 }
 
 // scanState is everything a resumed run needs; it is saved with encoding/gob.
@@ -82,9 +77,9 @@ type scanState struct {
 	LtLo, LtHi             int64
 	Cursors                map[string]scanCursor // "<db>/<opcode>"
 	Best                   map[Address]bestWrite
-	MissingBody            map[Address]int64 // highest lt of a successful change_dns_record whose body was not found
+	MissingBody            map[Address]missingBody // newest successful change_dns_record without a body in kvrocks
 	IsDNS                  map[Address]bool
-	Rows, DNSRows, Pages   int64
+	Pages                  int64
 }
 
 type scanRow struct {
@@ -101,28 +96,27 @@ type scanRow struct {
 	BodyHash    *string
 }
 
-func loadScanState(path string, opts scanOptions) (*scanState, error) {
-	st := &scanState{MinMcSeqno: opts.minMcSeqno, MaxMcSeqno: opts.maxMcSeqno, Cursors: map[string]scanCursor{},
-		Best: map[Address]bestWrite{}, MissingBody: map[Address]int64{}, IsDNS: map[Address]bool{}}
+func loadScanState(path string, minMcSeqno, maxMcSeqno int32) (*scanState, error) {
+	st := &scanState{MinMcSeqno: minMcSeqno, MaxMcSeqno: maxMcSeqno, Cursors: map[string]scanCursor{},
+		Best: map[Address]bestWrite{}, MissingBody: map[Address]missingBody{}, IsDNS: map[Address]bool{}}
 	if path == "" {
 		return st, nil
 	}
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return st, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 	var saved scanState
-	if err := gob.NewDecoder(bufio.NewReader(f)).Decode(&saved); err != nil {
+	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&saved); err != nil {
 		return nil, fmt.Errorf("checkpoint %s: %w", path, err)
 	}
-	if saved.MinMcSeqno != opts.minMcSeqno || saved.MaxMcSeqno != opts.maxMcSeqno {
+	if saved.MinMcSeqno != minMcSeqno || saved.MaxMcSeqno != maxMcSeqno {
 		return nil, fmt.Errorf("checkpoint %s is for mc seqnos %d..%d", path, saved.MinMcSeqno, saved.MaxMcSeqno)
 	}
-	log.Printf("resuming from %s: %d pages, %d rows, %d writers", path, saved.Pages, saved.Rows, len(saved.Best))
+	log.Printf("resuming from %s: %d pages, %d writers", path, saved.Pages, len(saved.Best))
 	return &saved, nil
 }
 
@@ -130,53 +124,45 @@ func (st *scanState) save(path string) error {
 	if path == "" {
 		return nil
 	}
-	f, err := os.Create(path + ".tmp")
-	if err != nil {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(st); err != nil {
 		return err
 	}
-	w := bufio.NewWriter(f)
-	if err := gob.NewEncoder(w).Encode(st); err != nil {
-		f.Close()
-		return err
-	}
-	if err := w.Flush(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
+	if err := os.WriteFile(path+".tmp", buf.Bytes(), 0o644); err != nil {
 		return err
 	}
 	return os.Rename(path+".tmp", path)
 }
 
-// mcBlockLt returns start_lt and end_lt of a masterchain block from the first database that has it.
-func mcBlockLt(ctx context.Context, conns []*pgx.Conn, names []string, seqno int32) (int64, int64, bool, error) {
+// mcBlockLt returns start_lt and end_lt of a masterchain block from the first database that has it,
+// or zeros.
+func mcBlockLt(ctx context.Context, conns []*pgx.Conn, names []string, seqno int32) (int64, int64, error) {
 	for i, conn := range conns {
-		plan, err := explainQuery(ctx, conn, "Index", mcBlockLtQuery, seqno)
+		plan, err := explainQuery(ctx, conn, "blocks", mcBlockLtQuery, seqno)
 		fmt.Printf("=== EXPLAIN %s mc block lt\n%s\n", names[i], plan)
 		if err != nil {
-			return 0, 0, false, fmt.Errorf("%s: %w; not running queries", names[i], err)
+			return 0, 0, fmt.Errorf("%s: %w; not running queries", names[i], err)
 		}
 		tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 		if err != nil {
-			return 0, 0, false, err
+			return 0, 0, err
 		}
 		var start, end int64
 		err = tx.QueryRow(ctx, mcBlockLtQuery, seqno).Scan(&start, &end)
 		tx.Rollback(ctx)
 		if err == nil {
-			return start, end, true, nil
+			return start, end, nil
 		}
 		if err != pgx.ErrNoRows {
-			return 0, 0, false, err
+			return 0, 0, err
 		}
 	}
-	return 0, 0, false, nil
+	return 0, 0, nil
 }
 
-func runScan(ctx context.Context, kv *prodKV, local *localRedis, opts scanOptions) error {
-	if opts.maxMcSeqno <= 0 {
-		opts.maxMcSeqno = math.MaxInt32
+func runScan(ctx context.Context, kv *sourceKV, dst *redis.Client, minMcSeqno, maxMcSeqno int32, checkpoint, out string) error {
+	if maxMcSeqno <= 0 {
+		maxMcSeqno = math.MaxInt32
 	}
 	dbNames := []string{"COLD_DB", "HOT_DB"}
 	conns := make([]*pgx.Conn, 0, len(dbNames))
@@ -189,52 +175,39 @@ func runScan(ctx context.Context, kv *prodKV, local *localRedis, opts scanOption
 		conns = append(conns, conn)
 	}
 
-	st, err := loadScanState(opts.checkpoint, opts)
+	st, err := loadScanState(checkpoint, minMcSeqno, maxMcSeqno)
 	if err != nil {
 		return err
 	}
 	if st.LtHi == 0 {
 		st.LtLo, st.LtHi = 0, math.MaxInt64
-		if opts.minMcSeqno > ltMarginBlocks {
-			start, _, ok, err := mcBlockLt(ctx, conns, dbNames, opts.minMcSeqno-ltMarginBlocks)
-			if err != nil {
+		if minMcSeqno > ltMarginBelow {
+			if st.LtLo, _, err = mcBlockLt(ctx, conns, dbNames, minMcSeqno-ltMarginBelow); err != nil {
 				return err
-			}
-			if ok {
-				st.LtLo = start
 			}
 		}
-		if opts.maxMcSeqno < math.MaxInt32-ltMarginBlocks {
-			_, end, ok, err := mcBlockLt(ctx, conns, dbNames, opts.maxMcSeqno+ltMarginBlocks)
+		if maxMcSeqno < math.MaxInt32-ltMarginAbove {
+			_, end, err := mcBlockLt(ctx, conns, dbNames, maxMcSeqno+ltMarginAbove)
 			if err != nil {
 				return err
 			}
-			if ok {
+			if end > 0 {
 				st.LtHi = end
 			}
 		}
 	}
-	log.Printf("scan mc seqnos %d..%d, lt %d..%d", st.MinMcSeqno, opts.maxMcSeqno, st.LtLo, st.LtHi)
-
-	roots := map[Address]bool{}
-	for _, r := range dnsRoots {
-		a, _ := ParseAddress(r)
-		roots[a] = true
-	}
+	log.Printf("scan mc seqnos %d..%d, lt %d..%d", minMcSeqno, maxMcSeqno, st.LtLo, st.LtHi)
 
 	lastSave := time.Now()
 	for i, name := range dbNames {
 		conn := conns[i]
 		args := func(op int32, cur scanCursor) []any {
-			return []any{op, cur.Lt, cur.MsgHash, st.LtHi, opts.minMcSeqno, opts.maxMcSeqno, opts.pageSize}
+			return []any{op, cur.Lt, cur.MsgHash, st.LtHi, minMcSeqno, maxMcSeqno, pageSize}
 		}
-		plan, err := explainQuery(ctx, conn, "opcode_coalesce", scanQuery, args(opChangeDNSRecord, startCursor(st.LtLo))...)
+		plan, err := explainQuery(ctx, conn, "messages", scanQuery, args(opChangeDNSRecord, startCursor(st.LtLo))...)
 		fmt.Printf("=== EXPLAIN %s scan page\n%s\n", name, plan)
 		if err != nil {
 			return fmt.Errorf("%s: %w; not running queries", name, err)
-		}
-		if opts.explainOnly {
-			continue
 		}
 		for _, op := range []int32{opChangeDNSRecord, opEditContent} {
 			key := name + "/" + strconv.Itoa(int(op))
@@ -247,33 +220,30 @@ func runScan(ctx context.Context, kv *prodKV, local *localRedis, opts scanOption
 				if err != nil {
 					return fmt.Errorf("%s page after lt %d: %w", key, cur.Lt, err)
 				}
-				if err := st.process(ctx, kv, roots, op, rows); err != nil {
+				if err := st.process(ctx, kv, op, rows); err != nil {
 					return err
 				}
 				if len(rows) > 0 {
 					last := rows[len(rows)-1]
 					cur.Lt, cur.MsgHash = last.KeyLt, last.MsgHash
 				}
-				cur.Done = len(rows) < opts.pageSize
+				cur.Done = len(rows) < pageSize
 				st.Cursors[key] = cur
 				st.Pages++
 				if st.Pages%50 == 0 || cur.Done {
-					log.Printf("%s: lt %d, pages %d, rows %d, dns rows %d, items %d, writers %d", key, cur.Lt, st.Pages, st.Rows, st.DNSRows, len(st.IsDNS), len(st.Best))
+					log.Printf("%s: lt %d, pages %d, writers %d", key, cur.Lt, st.Pages, len(st.Best))
 				}
 				if cur.Done || time.Since(lastSave) > time.Minute {
-					if err := st.save(opts.checkpoint); err != nil {
+					if err := st.save(checkpoint); err != nil {
 						return err
 					}
 					lastSave = time.Now()
 				}
-				time.Sleep(opts.pause)
+				time.Sleep(pagePause)
 			}
 		}
 	}
-	if opts.explainOnly {
-		return nil
-	}
-	return st.writeAll(ctx, local, opts.out)
+	return st.writeAll(ctx, dst, out)
 }
 
 func queryScanPage(ctx context.Context, conn *pgx.Conn, args []any) ([]scanRow, error) {
@@ -286,21 +256,10 @@ func queryScanPage(ctx context.Context, conn *pgx.Conn, args []any) ([]scanRow, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var res []scanRow
-	for rows.Next() {
-		var r scanRow
-		if err := rows.Scan(&r.McSeqno, &r.TxHash, &r.Lt, &r.KeyLt, &r.MsgHash, &r.Source, &r.Destination,
-			&r.Aborted, &r.Success, &r.Bounced, &r.BodyHash); err != nil {
-			return nil, err
-		}
-		res = append(res, r)
-	}
-	return res, rows.Err()
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[scanRow])
 }
 
-// process classifies new destinations, decodes change_dns_record bodies and updates Best.
-func (st *scanState) process(ctx context.Context, kv *prodKV, roots map[Address]bool, op int32, rows []scanRow) error {
+func (st *scanState) process(ctx context.Context, kv *sourceKV, op int32, rows []scanRow) error {
 	type cand struct {
 		row  scanRow
 		item Address
@@ -309,7 +268,6 @@ func (st *scanState) process(ctx context.Context, kv *prodKV, roots map[Address]
 	var unknown []string
 	seenUnknown := map[Address]bool{}
 	for _, r := range rows {
-		st.Rows++
 		if r.Aborted || !r.Success || r.Bounced || r.Source == nil || r.Destination == nil {
 			continue
 		}
@@ -323,24 +281,22 @@ func (st *scanState) process(ctx context.Context, kv *prodKV, roots map[Address]
 		}
 		cands = append(cands, cand{r, item})
 	}
-	if len(unknown) > 0 {
-		payloads, err := kv.mgetPayloads(ctx, "nft_items", unknown)
-		if err != nil {
-			return fmt.Errorf("mget nft_items: %w", err)
+	items, err := kv.mgetPayloads(ctx, "nft_items", unknown)
+	if err != nil {
+		return fmt.Errorf("mget nft_items: %w", err)
+	}
+	for _, id := range unknown {
+		item, _ := ParseAddress(id)
+		var row struct {
+			CollectionAddress string `json:"collection_address"`
 		}
-		for _, id := range unknown {
-			item, _ := ParseAddress(id)
-			var row struct {
-				CollectionAddress *string `json:"collection_address"`
+		if p, ok := items[id]; ok {
+			if err := json.Unmarshal([]byte(p), &row); err != nil {
+				return fmt.Errorf("decode nft_items %s: %w", id, err)
 			}
-			if p, ok := payloads[id]; ok {
-				if err := json.Unmarshal([]byte(p), &row); err != nil {
-					return fmt.Errorf("decode nft_items %s: %w", id, err)
-				}
-			}
-			coll := parseOptAddress(row.CollectionAddress)
-			st.IsDNS[item] = coll != nil && roots[*coll]
 		}
+		coll, err := ParseAddress(row.CollectionAddress)
+		st.IsDNS[item] = err == nil && dnsRoots[coll.String()]
 	}
 
 	var dns []cand
@@ -349,30 +305,28 @@ func (st *scanState) process(ctx context.Context, kv *prodKV, roots map[Address]
 		if !st.IsDNS[c.item] {
 			continue
 		}
-		st.DNSRows++
-		if b, ok := st.Best[c.item]; ok && b.Lt >= c.row.Lt {
-			continue
-		}
 		dns = append(dns, c)
 		if op == opChangeDNSRecord && c.row.BodyHash != nil {
 			bodyHashes = append(bodyHashes, *c.row.BodyHash)
 		}
 	}
-	var bodies map[string]string
-	if len(bodyHashes) > 0 {
-		var err error
-		if bodies, err = kv.mgetPayloads(ctx, "message_contents", bodyHashes); err != nil {
-			return fmt.Errorf("mget message_contents: %w", err)
-		}
+	bodies, err := kv.mgetPayloads(ctx, "message_contents", bodyHashes)
+	if err != nil {
+		return fmt.Errorf("mget message_contents: %w", err)
 	}
 	for _, c := range dns {
+		if b, ok := st.Best[c.item]; ok && b.Lt >= c.row.Lt {
+			continue
+		}
 		if op == opChangeDNSRecord {
 			p, ok := "", false
 			if c.row.BodyHash != nil {
 				p, ok = bodies[*c.row.BodyHash]
 			}
 			if !ok {
-				st.MissingBody[c.item] = max(st.MissingBody[c.item], c.row.Lt)
+				if m := st.MissingBody[c.item]; m.Lt < c.row.Lt {
+					st.MissingBody[c.item] = missingBody{Item: c.item.String(), Lt: c.row.Lt, TxHash: c.row.TxHash}
+				}
 				continue
 			}
 			var mc struct {
@@ -390,16 +344,7 @@ func (st *scanState) process(ctx context.Context, kv *prodKV, roots map[Address]
 		if err != nil {
 			continue
 		}
-		hash, err := base64.StdEncoding.DecodeString(c.row.TxHash)
-		if err != nil || len(hash) != 32 {
-			return fmt.Errorf("tx hash %q: bad base64", c.row.TxHash)
-		}
-		if b, ok := st.Best[c.item]; ok && b.Lt >= c.row.Lt {
-			continue
-		}
-		bw := bestWrite{Lt: c.row.Lt, McSeqno: c.row.McSeqno, Edit: op == opEditContent, Writer: writer}
-		copy(bw.TxHash[:], hash)
-		st.Best[c.item] = bw
+		st.Best[c.item] = bestWrite{Lt: c.row.Lt, McSeqno: c.row.McSeqno, Edit: op == opEditContent, Writer: writer, TxHash: c.row.TxHash}
 	}
 	return nil
 }
@@ -410,61 +355,63 @@ func (b bestWrite) payload(item Address) writerPayload {
 		op = "edit_content"
 	}
 	return writerPayload{SchemaVersion: 1, SourceMcSeqno: b.McSeqno, NftItemAddress: item.String(), Writer: b.Writer.String(),
-		WriteLt: strconv.FormatInt(b.Lt, 10), WriteTxHash: base64.StdEncoding.EncodeToString(b.TxHash[:]), WriteOp: op}
+		WriteLt: strconv.FormatInt(b.Lt, 10), WriteTxHash: b.TxHash, WriteOp: op}
 }
 
-// writeAll writes every writer through set_current in pipelines of 100 (skipped when local is nil)
-// and, with out set, one JSON line per writer.
-func (st *scanState) writeAll(ctx context.Context, local *localRedis, out string) error {
-	items := make([]Address, 0, len(st.Best))
-	skipped := 0
-	for item, b := range st.Best {
-		if st.MissingBody[item] > b.Lt {
-			skipped++ // a later change_dns_record has no body: it may be a later wallet write
-			continue
+func writeJSONLines[T any](path string, rows []T) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for _, r := range rows {
+		if err := enc.Encode(r); err != nil {
+			return err
 		}
-		items = append(items, item)
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].String() < items[j].String() })
+	return os.WriteFile(path, buf.Bytes(), 0o644)
+}
 
-	var outFile *bufio.Writer
+// writeAll writes every writer through set_current in pipelines of 100 (skipped when dst is nil)
+// and, with out set, the payloads to out and the items left out for a missing body to out.missing.
+// Such an item's newest successful change_dns_record may be a later wallet write, so it gets no key.
+func (st *scanState) writeAll(ctx context.Context, dst *redis.Client, out string) error {
+	var payloads []writerPayload
+	var missing []missingBody
+	for item, m := range st.MissingBody {
+		if b, ok := st.Best[item]; !ok || m.Lt > b.Lt {
+			missing = append(missing, m)
+		}
+	}
+	for item, b := range st.Best {
+		if m, ok := st.MissingBody[item]; !ok || m.Lt < b.Lt {
+			payloads = append(payloads, b.payload(item))
+		}
+	}
+	sort.Slice(payloads, func(i, j int) bool { return payloads[i].NftItemAddress < payloads[j].NftItemAddress })
+	sort.Slice(missing, func(i, j int) bool { return missing[i].Item < missing[j].Item })
 	if out != "" {
-		f, err := os.Create(out)
-		if err != nil {
+		if err := writeJSONLines(out, payloads); err != nil {
 			return err
 		}
-		defer f.Close()
-		outFile = bufio.NewWriter(f)
-		defer outFile.Flush()
-	}
-	if local != nil {
-		if err := setCurrentScript.Load(ctx, local.c).Err(); err != nil {
+		if err := writeJSONLines(out+".missing", missing); err != nil {
 			return err
 		}
 	}
+
 	applied := 0
-	for start := 0; start < len(items); start += kvBatch {
-		end := min(start+kvBatch, len(items))
-		var pipe redis.Pipeliner
-		var cmds []*redis.Cmd
-		if local != nil {
-			pipe = local.c.Pipeline()
+	if dst != nil {
+		if err := setCurrentScript.Load(ctx, dst).Err(); err != nil {
+			return err
 		}
-		for _, item := range items[start:end] {
-			w := st.Best[item].payload(item)
-			data, err := json.Marshal(w)
-			if err != nil {
-				return err
-			}
-			if outFile != nil {
-				fmt.Fprintf(outFile, "%s\n", data)
-			}
-			if pipe != nil {
+		for start := 0; start < len(payloads); start += kvBatch {
+			pipe := dst.Pipeline()
+			var cmds []*redis.Cmd
+			for _, w := range payloads[start:min(start+kvBatch, len(payloads))] {
+				data, err := json.Marshal(w)
+				if err != nil {
+					return err
+				}
 				keys := []string{rowKey("dns_wallet_writers", w.NftItemAddress), payloadKey("dns_wallet_writers", w.NftItemAddress)}
 				cmds = append(cmds, setCurrentScript.EvalSha(ctx, pipe, keys, w.SourceMcSeqno, string(data)))
 			}
-		}
-		if pipe != nil {
 			if _, err := pipe.Exec(ctx); err != nil {
 				return err
 			}
@@ -476,17 +423,7 @@ func (st *scanState) writeAll(ctx context.Context, local *localRedis, out string
 			time.Sleep(kvPause)
 		}
 	}
-	log.Printf("writers: %d (applied %d, skipped for a missing body %d, written to target: %v); rows %d, dns rows %d, dns items %d of %d destinations",
-		len(items), applied, skipped, local != nil, st.Rows, st.DNSRows, countTrue(st.IsDNS), len(st.IsDNS))
+	log.Printf("writers %d, applied %d (target written: %v), items without a key for a missing body %d",
+		len(payloads), applied, dst != nil, len(missing))
 	return nil
-}
-
-func countTrue(m map[Address]bool) int {
-	n := 0
-	for _, v := range m {
-		if v {
-			n++
-		}
-	}
-	return n
 }
