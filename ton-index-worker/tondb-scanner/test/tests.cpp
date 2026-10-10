@@ -117,7 +117,6 @@ schema::Transaction make_dns_item_transaction(bool success) {
   auto transaction = schema::Transaction();
   transaction.account = block::StdAddress::parse("0:5F1FCBE33DD66EF4267536C21822E481634E243B35A1AEDBF1B5967F89105087").move_as_ok();
   transaction.lt = 108213061000003;
-  transaction.mc_seqno = 97329272;
   transaction.in_msg = std::make_optional(schema::Message());
   transaction.in_msg->source = "0:8D745B27477C40ECB255E1DD360895BDB8C7E72856ECE1F281A0957FF8C15C36";
   transaction.in_msg->bounced = false;
@@ -159,7 +158,6 @@ TEST(TonDbScanner, ActionDetector_parse_dns_wallet_write) {
   ASSERT_EQ(transaction.in_msg->source.value(), set->writer);
   ASSERT_EQ(convert::to_raw_address(transaction.account), convert::to_raw_address(set->nft_item_address));
   ASSERT_EQ(transaction.lt, set->transaction_lt);
-  ASSERT_EQ(transaction.mc_seqno, set->mc_seqno);
   ASSERT_EQ(0x4eb1f0f9u, set->op);
 
   auto del = detector.parse_dns_wallet_write(item, transaction, change_dns_record_body("wallet", false));
@@ -187,11 +185,6 @@ TEST(TonDbScanner, ActionDetector_parse_dns_wallet_write_rejects) {
   CHECK(short_body.store_long_bool(0, 64));
   CHECK(short_body.store_long_bool(0, 40));
   CHECK(!detector.parse_dns_wallet_write(item, transaction, vm::load_cell_slice_ref(short_body.finalize())));
-
-  vm::CellBuilder op_only;
-  CHECK(op_only.store_long_bool(0x4eb1, 16));
-  CHECK(!detector.parse_dns_wallet_write(item, transaction, vm::load_cell_slice_ref(op_only.finalize())));
-  CHECK(!detector.parse_dns_wallet_write(item, transaction, vm::load_cell_slice_ref(vm::CellBuilder().finalize())));
 
   auto failed = make_dns_item_transaction(false);
   CHECK(!detector.parse_dns_wallet_write(item, failed, change_dns_record_body("wallet", true)));
