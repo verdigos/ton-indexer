@@ -2771,6 +2771,9 @@ func main() {
 	flag.Int64Var(&kvrocks_replica_refresh_ms, "kvrocks-replica-refresh-ms", 300, "Kvrocks replica discovery and freshness poll interval in milliseconds")
 	flag.Parse()
 	settings.Request.Timeout = time.Duration(timeout_ms) * time.Millisecond
+	if settings.CacheServiceUrl != "" && settings.Request.DnsSelfAssignedOnly {
+		log.Fatal("-dns-self-assigned-only cannot be combined with -cache-service-url: the cache service does not apply it")
+	}
 	if settings.CacheServiceUrl == "" {
 		settings.UseCache = false
 	} else {

@@ -8,7 +8,7 @@ type DNSRecord struct {
 	Wallet         *AccountAddress `json:"dns_wallet"`
 	SiteAdnl       *string         `json:"dns_site_adnl"`
 	StorageBagID   *string         `json:"dns_storage_bag_id"`
-	SelfAssigned   *bool           `json:"self_assigned,omitempty"` // True if dns_wallet == nft_item_owner and the wallet record was last written by that account. Present only when the server runs with -dns-self-assigned-only.
+	SelfAssigned   *bool           `json:"self_assigned,omitempty"` // True if the wallet record equals the NFT owner and was last written by that account. Omitted unless self-assigned filtering is enabled.
 } // @name DNSRecord
 
 type DNSAuctionRecord struct {
