@@ -29,6 +29,7 @@ var (
 	serverPort               = flag.Int("port", 8085, "Server port")
 	prefork                  = flag.Bool("prefork", false, "Use prefork")
 	testnet                  = flag.Bool("testnet", false, "Use testnet")
+	dnsSelfAssignedOnly      = flag.Bool("dns-self-assigned-only", false, "Address book (Kvrocks): show a domain only if its wallet record was last written by the account itself")
 	pg                       = flag.String("pg", "", "PostgreSQL connection string")
 	kvrocksAddr              = flag.String("kvrocks", "", "Kvrocks address or Redis URL for enrichment reads")
 	kvrocksSentinels         = flag.String("kvrocks-sentinels", "", "Comma-separated Kvrocks Sentinel addresses")
@@ -103,9 +104,10 @@ func main() {
 	}
 
 	streamingv2.InitConfig(streamingv2.Config{
-		EnrichmentReader: enrichmentReader,
-		Testnet:          *testnet,
-		ImgProxyBaseURL:  *imgProxyBaseUrl,
+		EnrichmentReader:    enrichmentReader,
+		Testnet:             *testnet,
+		DnsSelfAssignedOnly: *dnsSelfAssignedOnly,
+		ImgProxyBaseURL:     *imgProxyBaseUrl,
 	})
 
 	v2Manager := streamingv2.NewClientManager(rdb)
