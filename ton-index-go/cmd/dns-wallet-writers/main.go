@@ -7,7 +7,9 @@
 //
 // Reads go to production Postgres (hot and cold, read-only sessions) and production kvrocks
 // (GET/MGET/ZCARD/ZRANGEBYLEX only, paced). Writes go only to a local Redis on 127.0.0.1/localhost:
-// ton-index:v1:dns_wallet_writers:<item>:payload, guarded by write_lt.
+// the same keys the worker writes (hash ton-index:v1:dns_wallet_writers:<item> with field
+// source_mc_seqno, string <key>:payload), through the worker's set_current script, so the backfill
+// and the live worker can run in any order and the higher source_mc_seqno wins.
 package main
 
 import (
@@ -162,7 +164,7 @@ type localRedis struct {
 	c *redis.Client
 }
 
-func newLocalRedis(addr string) (*localRedis, error) {
+func newLocalRedis(addr string, db int) (*localRedis, error) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -170,29 +172,32 @@ func newLocalRedis(addr string) (*localRedis, error) {
 	if host != "127.0.0.1" && host != "localhost" {
 		return nil, fmt.Errorf("refusing to write to %q: only 127.0.0.1 or localhost", host)
 	}
-	c := redis.NewClient(&redis.Options{Addr: addr})
+	c := redis.NewClient(&redis.Options{Addr: addr, DB: db})
 	if err := c.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
 	return &localRedis{c: c}, nil
 }
 
-// Writes the payload unless the stored write_lt is equal or higher. ARGV[1] is a decimal lt
-// without leading zeros, so length then lexical order is numeric order.
-var writerGuardScript = redis.NewScript(`
-local cur = redis.call('GET', KEYS[1])
-if cur then
-  local lt = cjson.decode(cur)['write_lt']
-  if type(lt) == 'string' and (#lt > #ARGV[1] or (#lt == #ARGV[1] and lt >= ARGV[1])) then
-    return 0
-  end
+// Same text and KEYS/ARGV layout as the worker's kvrocks_set_current_script (KvrocksState.cpp):
+// KEYS = {<table>:<id>, <table>:<id>:payload}, ARGV = {source_mc_seqno, payload}. A write with a
+// lower source_mc_seqno than the stored one is ignored; an equal or higher one replaces it.
+var setCurrentScript = redis.NewScript(`
+local current = redis.call('HGET', KEYS[1], 'source_mc_seqno')
+if (not current) or tonumber(current) <= tonumber(ARGV[1]) then
+  redis.call('HSET', KEYS[1], 'source_mc_seqno', ARGV[1])
+  redis.call('SET', KEYS[2], ARGV[2])
+  return 1
 end
-redis.call('SET', KEYS[1], ARGV[2])
-return 1
+return 0
 `)
 
+func rowKey(table, id string) string {
+	return keyPrefix + ":" + table + ":" + id
+}
+
 func payloadKey(table, id string) string {
-	return keyPrefix + ":" + table + ":" + id + ":payload"
+	return rowKey(table, id) + ":payload"
 }
 
 func indexKey(table, name string) string {
@@ -401,6 +406,8 @@ func main() {
 	subjectFlag := flag.String("subject", "", "raw address whose owner_wallet and wallet dns index members form the item set")
 	extraFlag := flag.String("extra-items", "", "file with extra item ids (raw addresses), one per line")
 	localFlag := flag.String("local", "127.0.0.1:16379", "local Redis to write to (127.0.0.1 or localhost only)")
+	localDB := flag.Int("local-db", 0, "local Redis db number")
+	maxMcSeqno := flag.Int("max-mc-seqno", 0, "ignore writes with a higher mc seqno (0: no limit), to compare with an indexer run that ends there")
 	explainOnly := flag.Bool("explain-only", false, "print EXPLAIN of the writes query for the first item on each database and exit")
 	copySubject := flag.Bool("copy-subject", false, "copy the subject's dns_entries rows, index members and address-book state to local Redis")
 	outFlag := flag.String("out", "", "write per-item results as JSON to this file")
@@ -421,7 +428,7 @@ func main() {
 	// The write target is checked before any production read.
 	var local *localRedis
 	if !*explainOnly {
-		l, err := newLocalRedis(*localFlag)
+		l, err := newLocalRedis(*localFlag, *localDB)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -543,6 +550,9 @@ func main() {
 			}
 			rowCounts[name] += len(rows)
 			for _, r := range rows {
+				if *maxMcSeqno > 0 && r.McSeqno > int32(*maxMcSeqno) {
+					continue
+				}
 				if _, ok := byHash[r.TxHash]; !ok {
 					byHash[r.TxHash] = r
 				}
@@ -667,7 +677,8 @@ func storeWriter(ctx context.Context, local *localRedis, w *writerPayload) (stri
 	if err != nil {
 		return "", err
 	}
-	n, err := writerGuardScript.Run(ctx, local.c, []string{payloadKey("dns_wallet_writers", w.NftItemAddress)}, w.WriteLt, string(data)).Int()
+	keys := []string{rowKey("dns_wallet_writers", w.NftItemAddress), payloadKey("dns_wallet_writers", w.NftItemAddress)}
+	n, err := setCurrentScript.Run(ctx, local.c, keys, w.SourceMcSeqno, string(data)).Int()
 	if err != nil {
 		return "", err
 	}
