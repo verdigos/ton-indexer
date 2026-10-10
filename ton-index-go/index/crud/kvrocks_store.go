@@ -1837,7 +1837,44 @@ func (s *KvrocksStore) QueryDNSRecords(ctx context.Context, req models.DNSRecord
 			return nil, err
 		}
 	}
-	return s.orderedDNSRecords(ctx, ids)
+	records, err := s.orderedDNSRecords(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	if settings.DnsSelfAssignedOnly {
+		if err := s.attachDNSSelfAssigned(ctx, ids, records); err != nil {
+			return nil, err
+		}
+	}
+	return records, nil
+}
+
+// attachDNSSelfAssigned sets SelfAssigned on each record: true iff the NFT
+// owner, the wallet record and the last wallet-record writer
+// (dns_wallet_writers) are the same account. Writers are read in one MGET.
+func (s *KvrocksStore) attachDNSSelfAssigned(ctx context.Context, ids []string, records []models.DNSRecord) error {
+	writers, err := s.getPayloads(ctx, "dns_wallet_writers", ids)
+	if err != nil {
+		return err
+	}
+	writerByItem := make(map[models.AccountAddress]string, len(writers))
+	for id, payload := range writers {
+		if item, err := models.ParseAccountAddress(id); err == nil && item != nil {
+			writerByItem[*item] = payload
+		}
+	}
+	for i := range records {
+		selfAssigned := false
+		if item, err := models.ParseAccountAddress(string(records[i].NftItemAddress)); err == nil && item != nil {
+			if payload, ok := writerByItem[*item]; ok && records[i].Wallet != nil &&
+				sameAccountAddress(records[i].NftItemOwner, *records[i].Wallet) &&
+				dnsWalletWriterIs(payload, *records[i].Wallet) {
+				selfAssigned = true
+			}
+		}
+		records[i].SelfAssigned = &selfAssigned
+	}
+	return nil
 }
 
 func (s *KvrocksStore) QueryDNSAuctions(ctx context.Context, req models.DNSAuctionsRequest, settings models.RequestSettings) ([]models.DNSAuction, *string, error) {
@@ -3015,11 +3052,8 @@ func (s *KvrocksStore) selfAssignedPrimaryDomains(ctx context.Context, addrList 
 			if !sameAccountAddress(row.NftItemOwner, addr) || !sameAccountAddress(row.Wallet, addr) {
 				continue
 			}
-			var writer struct {
-				Writer *models.AccountAddress `json:"writer"`
-			}
 			writerPayload, ok := writers[id]
-			if !ok || json.Unmarshal([]byte(writerPayload), &writer) != nil || !sameAccountAddress(writer.Writer, addr) {
+			if !ok || !dnsWalletWriterIs(writerPayload, addr) {
 				continue
 			}
 			domain := row.Domain
@@ -3028,6 +3062,18 @@ func (s *KvrocksStore) selfAssignedPrimaryDomains(ctx context.Context, addrList 
 		}
 	}
 	return domains, nil
+}
+
+// dnsWalletWriterIs reports whether a dns_wallet_writers payload names addr as
+// the writer. An unparsable payload never matches.
+func dnsWalletWriterIs(payload string, addr models.AccountAddress) bool {
+	var writer struct {
+		Writer *models.AccountAddress `json:"writer"`
+	}
+	if err := json.Unmarshal([]byte(payload), &writer); err != nil {
+		return false
+	}
+	return sameAccountAddress(writer.Writer, addr)
 }
 
 // sameAccountAddress reports whether raw parses to the same account as addr.
