@@ -2751,6 +2751,7 @@ func main() {
 	flag.StringVar(&settings.InstanceName, "name", "Go", "Instance name to show in Swagger UI")
 	flag.BoolVar(&settings.Prefork, "prefork", false, "Prefork workers")
 	flag.BoolVar(&settings.Request.IsTestnet, "testnet", false, "Use testnet address book")
+	flag.BoolVar(&settings.Request.DnsSelfAssignedOnly, "dns-self-assigned-only", false, "Address book (Kvrocks): show a domain only if its wallet record was last written by the account itself")
 	flag.BoolVar(&settings.Debug, "debug", false, "Run service in debug mode")
 	flag.IntVar(&timeout_ms, "query-timeout", 3000, "Query timeout in milliseconds")
 	flag.IntVar(&settings.Request.DefaultLimit, "default-limit", 100, "Default value for limit")

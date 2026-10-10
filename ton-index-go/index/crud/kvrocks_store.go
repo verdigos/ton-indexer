@@ -2871,11 +2871,22 @@ func (s *KvrocksStore) QueryVestingContracts(ctx context.Context, req models.Ves
 	return s.orderedVestingContracts(ctx, ids)
 }
 
-// batchPrimaryDomains resolves each address's primary domain in two round-trips
-func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []models.AccountAddress) (map[models.AccountAddress]*string, error) {
+// dnsSelfAssignedCandidates bounds the owner_wallet members read per address
+// when only self-assigned domains are shown.
+const dnsSelfAssignedCandidates = 256
+
+// batchPrimaryDomains resolves each address's primary domain in two round-trips.
+// With selfAssignedOnly, a domain counts only if its last wallet-record writer
+// (dns_wallet_writers) is the address itself; see selfAssignedPrimaryDomains.
+func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []models.AccountAddress, selfAssignedOnly bool) (map[models.AccountAddress]*string, error) {
 	domains := map[models.AccountAddress]*string{}
 	if s == nil || s.client == nil || len(addrList) == 0 {
 		return domains, nil
+	}
+
+	count := int64(1)
+	if selfAssignedOnly {
+		count = dnsSelfAssignedCandidates
 	}
 
 	// primary-domain ZRANGEBYLEX per address.
@@ -2884,7 +2895,7 @@ func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []model
 		cmds := make([]*redis.StringSliceCmd, len(addrList))
 		for i, raw := range addrList {
 			key := s.indexKey("dns_entries", "owner_wallet:"+raw.String()+":by_domain")
-			cmds[i] = pipe.ZRangeByLex(ctx, key, &redis.ZRangeBy{Min: "-", Max: "+", Offset: 0, Count: 1})
+			cmds[i] = pipe.ZRangeByLex(ctx, key, &redis.ZRangeBy{Min: "-", Max: "+", Offset: 0, Count: count})
 		}
 		if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
 			return nil, err
@@ -2914,6 +2925,9 @@ func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []model
 		addrIDs[i] = ids
 		allIDs = append(allIDs, ids...)
 	}
+	if selfAssignedOnly {
+		return s.selfAssignedPrimaryDomains(ctx, addrList, addrIDs, allIDs)
+	}
 	payloads, err := s.getPayloads(ctx, "dns_entries", allIDs)
 	if err != nil {
 		return nil, err
@@ -2934,6 +2948,102 @@ func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []model
 		}
 	}
 	return domains, nil
+}
+
+// selfAssignedPrimaryDomains fetches the dns_entries and dns_wallet_writers
+// payloads of all candidate items in one MGET. Per address it takes the first
+// candidate in index order that is not destroyed and whose NFT owner, wallet
+// record and last wallet-record writer all equal the address. A candidate
+// without a readable writer payload is skipped.
+func (s *KvrocksStore) selfAssignedPrimaryDomains(ctx context.Context, addrList []models.AccountAddress, addrIDs [][]string, allIDs []string) (map[models.AccountAddress]*string, error) {
+	domains := map[models.AccountAddress]*string{}
+	ids := make([]string, 0, len(allIDs))
+	seen := make(map[string]struct{}, len(allIDs))
+	for _, id := range allIDs {
+		ids = appendUniqueString(ids, seen, id)
+	}
+	if len(ids) == 0 {
+		return domains, nil
+	}
+	keys := make([]string, 0, 2*len(ids))
+	for _, id := range ids {
+		keys = append(keys, s.payloadKey("dns_entries", id))
+	}
+	for _, id := range ids {
+		keys = append(keys, s.payloadKey("dns_wallet_writers", id))
+	}
+	values, _, err := kvReadWithFallback(ctx, s, func(c redis.UniversalClient) ([]interface{}, error) {
+		return c.MGet(ctx, keys...).Result()
+	})
+	if err != nil {
+		return nil, err
+	}
+	entries := make(map[string]string, len(ids))
+	writers := make(map[string]string, len(ids))
+	for i, id := range ids {
+		if value := values[i]; value != nil {
+			payload, err := kvrocksPayloadString(value)
+			if err != nil {
+				return nil, fmt.Errorf("%w for %s", err, id)
+			}
+			entries[id] = payload
+		}
+		if value := values[len(ids)+i]; value != nil {
+			if payload, err := kvrocksPayloadString(value); err == nil {
+				writers[id] = payload
+			}
+		}
+	}
+
+	for i, addr := range addrList {
+		for _, id := range addrIDs[i] {
+			payload, ok := entries[id]
+			if !ok {
+				continue
+			}
+			destroyed, err := kvrocksPayloadDestroyed(id, "dns_entries", payload)
+			if err != nil {
+				return nil, err
+			}
+			if destroyed {
+				continue
+			}
+			var row models.DNSRecord
+			if err := json.Unmarshal([]byte(payload), &row); err != nil {
+				return nil, fmt.Errorf("decode dns_entries %s: %w", id, err)
+			}
+			if !sameAccountAddress(row.NftItemOwner, addr) || !sameAccountAddress(row.Wallet, addr) {
+				continue
+			}
+			var writer struct {
+				Writer *models.AccountAddress `json:"writer"`
+			}
+			writerPayload, ok := writers[id]
+			if !ok || json.Unmarshal([]byte(writerPayload), &writer) != nil || !sameAccountAddress(writer.Writer, addr) {
+				continue
+			}
+			domain := row.Domain
+			domains[addr] = &domain
+			break
+		}
+	}
+	return domains, nil
+}
+
+// sameAccountAddress reports whether raw parses to the same account as addr.
+func sameAccountAddress(raw *models.AccountAddress, addr models.AccountAddress) bool {
+	if raw == nil {
+		return false
+	}
+	parsed, err := models.ParseAccountAddress(string(*raw))
+	if err != nil || parsed == nil {
+		return false
+	}
+	canonical, err := models.ParseAccountAddress(string(addr))
+	if err != nil || canonical == nil {
+		return false
+	}
+	return *parsed == *canonical
 }
 
 func QueryAddressBookImplKvrocks(addrList []models.AccountAddress, store *KvrocksStore, settings models.RequestSettings) (models.AddressBook, error) {
@@ -2958,7 +3068,9 @@ func QueryAddressBookImplKvrocks(addrList []models.AccountAddress, store *Kvrock
 	if err != nil {
 		return nil, err
 	}
-	domains, err := store.batchPrimaryDomains(ctx, uniqueAddrList)
+	// DnsSelfAssignedOnly is applied here only; the cache service above and the
+	// PostgreSQL address book keep the owner == wallet rule.
+	domains, err := store.batchPrimaryDomains(ctx, uniqueAddrList, settings.DnsSelfAssignedOnly)
 	if err != nil {
 		return nil, err
 	}
