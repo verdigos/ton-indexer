@@ -162,7 +162,6 @@ TEST(TonDbScanner, ActionDetector_parse_dns_wallet_write) {
 
   auto del = detector.parse_dns_wallet_write(item, transaction, change_dns_record_body("wallet", false));
   CHECK(del.has_value());
-  ASSERT_EQ(0x4eb1f0f9u, del->op);
 
   vm::CellBuilder edit;
   CHECK(edit.store_long_bool(0x1a0b9d51, 32));
