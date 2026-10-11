@@ -203,10 +203,16 @@ func (s *KvrocksStore) getTablesPayloads(ctx context.Context, tables []string, i
 	if len(uniqueIDs) == 0 {
 		return payloads, nil
 	}
+	type keyRef struct {
+		table int
+		id    string
+	}
 	keys := make([]string, 0, len(tables)*len(uniqueIDs))
-	for _, table := range tables {
+	refs := make([]keyRef, 0, len(keys))
+	for t, table := range tables {
 		for _, id := range uniqueIDs {
 			keys = append(keys, s.payloadKey(table, id))
+			refs = append(refs, keyRef{table: t, id: id})
 		}
 	}
 
@@ -217,20 +223,20 @@ func (s *KvrocksStore) getTablesPayloads(ctx context.Context, tables []string, i
 		return nil, err
 	}
 
-	n := len(uniqueIDs)
 	missing := make([]int, 0)
 	for idx, value := range values {
+		ref := refs[idx]
 		if value == nil {
-			if _, refill := kvrocksRefillTables[tables[idx/n]]; refill {
+			if _, refill := kvrocksRefillTables[tables[ref.table]]; refill {
 				missing = append(missing, idx)
 			}
 			continue
 		}
 		payload, err := kvrocksPayloadString(value)
 		if err != nil {
-			return nil, fmt.Errorf("%w for %s", err, uniqueIDs[idx%n])
+			return nil, fmt.Errorf("%w for %s", err, ref.id)
 		}
-		payloads[idx/n][uniqueIDs[idx%n]] = payload
+		payloads[ref.table][ref.id] = payload
 	}
 
 	// A replica may not have received the newest immutable payloads yet;
@@ -255,12 +261,12 @@ func (s *KvrocksStore) getTablesPayloads(ctx context.Context, tables []string, i
 			if value == nil {
 				continue
 			}
-			idx := missing[i]
+			ref := refs[missing[i]]
 			payload, err := kvrocksPayloadString(value)
 			if err != nil {
-				return nil, fmt.Errorf("%w for %s", err, uniqueIDs[idx%n])
+				return nil, fmt.Errorf("%w for %s", err, ref.id)
 			}
-			payloads[idx/n][uniqueIDs[idx%n]] = payload
+			payloads[ref.table][ref.id] = payload
 		}
 	}
 	return payloads, nil
