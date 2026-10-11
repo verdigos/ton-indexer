@@ -170,14 +170,25 @@ func (s *KvrocksStore) payloadKey(table string, id string) string {
 }
 
 func (s *KvrocksStore) getPayloads(ctx context.Context, table string, ids []string) (map[string]string, error) {
-	payloads := make(map[string]string)
+	payloads, err := s.getTablesPayloads(ctx, []string{table}, ids)
+	if err != nil {
+		return nil, err
+	}
+	return payloads[0], nil
+}
+
+// getTablesPayloads reads the payloads of the same ids from several tables in one MGET.
+func (s *KvrocksStore) getTablesPayloads(ctx context.Context, tables []string, ids []string) ([]map[string]string, error) {
+	payloads := make([]map[string]string, len(tables))
+	for t := range payloads {
+		payloads[t] = make(map[string]string)
+	}
 	if s == nil || s.client == nil || len(ids) == 0 {
 		return payloads, nil
 	}
 
 	seen := make(map[string]struct{})
 	uniqueIDs := make([]string, 0, len(ids))
-	keys := make([]string, 0, len(ids))
 	for _, id := range ids {
 		id = strings.Trim(id, " ")
 		if id == "" {
@@ -188,10 +199,15 @@ func (s *KvrocksStore) getPayloads(ctx context.Context, table string, ids []stri
 		}
 		seen[id] = struct{}{}
 		uniqueIDs = append(uniqueIDs, id)
-		keys = append(keys, s.payloadKey(table, id))
 	}
-	if len(keys) == 0 {
+	if len(uniqueIDs) == 0 {
 		return payloads, nil
+	}
+	keys := make([]string, 0, len(tables)*len(uniqueIDs))
+	for _, table := range tables {
+		for _, id := range uniqueIDs {
+			keys = append(keys, s.payloadKey(table, id))
+		}
 	}
 
 	values, replica, err := kvReadWithFallback(ctx, s, func(c redis.UniversalClient) ([]interface{}, error) {
@@ -201,17 +217,20 @@ func (s *KvrocksStore) getPayloads(ctx context.Context, table string, ids []stri
 		return nil, err
 	}
 
+	n := len(uniqueIDs)
 	missing := make([]int, 0)
 	for idx, value := range values {
 		if value == nil {
-			missing = append(missing, idx)
+			if _, refill := kvrocksRefillTables[tables[idx/n]]; refill {
+				missing = append(missing, idx)
+			}
 			continue
 		}
 		payload, err := kvrocksPayloadString(value)
 		if err != nil {
-			return nil, fmt.Errorf("%w for %s", err, uniqueIDs[idx])
+			return nil, fmt.Errorf("%w for %s", err, uniqueIDs[idx%n])
 		}
-		payloads[uniqueIDs[idx]] = payload
+		payloads[idx/n][uniqueIDs[idx%n]] = payload
 	}
 
 	// A replica may not have received the newest immutable payloads yet;
@@ -220,7 +239,7 @@ func (s *KvrocksStore) getPayloads(ctx context.Context, table string, ids []stri
 	// written to kvrocks at all, so when the replica already covers the
 	// requested blocks a miss is a legitimate absence and nothing is refetched.
 	readOptions := kvrocksReadOptionsFromContext(ctx)
-	if _, refill := kvrocksRefillTables[table]; refill && replica != nil && len(missing) > 0 && replica.mayLagBehind(readOptions.maxKnownMcSeqno) {
+	if replica != nil && len(missing) > 0 && replica.mayLagBehind(readOptions.maxKnownMcSeqno) {
 		missingKeys := make([]string, len(missing))
 		for i, idx := range missing {
 			missingKeys[i] = keys[idx]
@@ -239,9 +258,9 @@ func (s *KvrocksStore) getPayloads(ctx context.Context, table string, ids []stri
 			idx := missing[i]
 			payload, err := kvrocksPayloadString(value)
 			if err != nil {
-				return nil, fmt.Errorf("%w for %s", err, uniqueIDs[idx])
+				return nil, fmt.Errorf("%w for %s", err, uniqueIDs[idx%n])
 			}
-			payloads[uniqueIDs[idx]] = payload
+			payloads[idx/n][uniqueIDs[idx%n]] = payload
 		}
 	}
 	return payloads, nil
@@ -2894,7 +2913,7 @@ func (s *KvrocksStore) QueryVestingContracts(ctx context.Context, req models.Ves
 	return s.orderedVestingContracts(ctx, ids)
 }
 
-// batchPrimaryDomains resolves each address's primary domain in two round-trips (three with selfAssignedOnly).
+// batchPrimaryDomains resolves each address's primary domain in two round-trips.
 func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []models.AccountAddress, selfAssignedOnly bool) (map[models.AccountAddress]*string, error) {
 	domains := map[models.AccountAddress]*string{}
 	if s == nil || s.client == nil || len(addrList) == 0 {
@@ -2942,16 +2961,18 @@ func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []model
 		addrIDs[i] = ids
 		allIDs = append(allIDs, ids...)
 	}
-	payloads, err := s.getPayloads(ctx, "dns_entries", allIDs)
+	tables := []string{"dns_entries"}
+	if selfAssignedOnly {
+		tables = append(tables, "dns_wallet_writers")
+	}
+	fetched, err := s.getTablesPayloads(ctx, tables, allIDs)
 	if err != nil {
 		return nil, err
 	}
+	payloads := fetched[0]
 	var writers map[string]string
 	if selfAssignedOnly {
-		writers, err = s.getPayloads(ctx, "dns_wallet_writers", allIDs)
-		if err != nil {
-			return nil, err
-		}
+		writers = fetched[1]
 	}
 
 	// decode per address, keep the primary (first) domain.
