@@ -1849,9 +1849,6 @@ func (s *KvrocksStore) QueryDNSRecords(ctx context.Context, req models.DNSRecord
 	return records, nil
 }
 
-// attachDNSSelfAssigned sets SelfAssigned: true iff the NFT owner, the wallet
-// record and the last wallet-record writer (dns_wallet_writers) are the same
-// account.
 func (s *KvrocksStore) attachDNSSelfAssigned(ctx context.Context, ids []string, records []models.DNSRecord) error {
 	writers, err := s.getPayloads(ctx, "dns_wallet_writers", ids)
 	if err != nil {
@@ -2897,9 +2894,7 @@ func (s *KvrocksStore) QueryVestingContracts(ctx context.Context, req models.Ves
 	return s.orderedVestingContracts(ctx, ids)
 }
 
-// batchPrimaryDomains resolves each address's primary domain in two round-trips.
-// With selfAssignedOnly, a domain counts only if its last wallet-record writer
-// (dns_wallet_writers) is the address itself, which takes a third round-trip.
+// batchPrimaryDomains resolves each address's primary domain in two round-trips (three with selfAssignedOnly).
 func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []models.AccountAddress, selfAssignedOnly bool) (map[models.AccountAddress]*string, error) {
 	domains := map[models.AccountAddress]*string{}
 	if s == nil || s.client == nil || len(addrList) == 0 {
@@ -2908,7 +2903,6 @@ func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []model
 
 	count := int64(1)
 	if selfAssignedOnly {
-		// Candidates checked per address for a self-written domain.
 		count = 256
 	}
 
@@ -2987,8 +2981,7 @@ func (s *KvrocksStore) batchPrimaryDomains(ctx context.Context, addrList []model
 	return domains, nil
 }
 
-// dnsWalletWriterIs reports whether a dns_wallet_writers payload names addr as
-// the writer. An unparsable payload never matches.
+// A missing or unparsable payload never matches.
 func dnsWalletWriterIs(payload string, addr models.AccountAddress) bool {
 	var row struct {
 		Writer models.AccountAddress `json:"writer"`
@@ -3018,8 +3011,6 @@ func QueryAddressBookImplKvrocks(addrList []models.AccountAddress, store *Kvrock
 	if err != nil {
 		return nil, err
 	}
-	// DnsSelfAssignedOnly is applied here only; the cache service above and the
-	// PostgreSQL address book keep the owner == wallet rule.
 	domains, err := store.batchPrimaryDomains(ctx, uniqueAddrList, settings.DnsSelfAssignedOnly)
 	if err != nil {
 		return nil, err

@@ -236,10 +236,9 @@ public:
     return transfer;
   }
 
-  // change_dns_record body: op, query_id, key:uint256, optional value ref (set or delete).
-  // edit_content replaces all records; telemint items throw on it.
-  // ton-blockchain/dns-contract@d081310 func/nft-item.fc:199-224;
-  // TelegramMessenger/telemint@1e47b28 func/nft-item.fc:130-142,257-267.
+  // edit_content replaces all records, telemint has no handler for it.
+  // ton-blockchain/dns-contract@d081310 func/nft-item.fc:199-224
+  // TelegramMessenger/telemint@1e47b28 func/nft-item.fc:130-142,257-267
   std::optional<schema::DnsWalletWrite> parse_dns_wallet_write(const schema::NFTItemDataV2& nft_item,
                                                                const schema::Transaction& transaction,
                                                                td::Ref<vm::CellSlice> in_msg_body_cs) {

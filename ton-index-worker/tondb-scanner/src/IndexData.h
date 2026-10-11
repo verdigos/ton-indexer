@@ -673,7 +673,6 @@ struct NFTTransfer {
   td::Ref<vm::Cell> forward_payload;
 };
 
-// Successful write of a DNS item's `wallet` record; writer is the in-message source.
 struct DnsWalletWrite {
   td::Bits256 transaction_hash;
   uint64_t transaction_lt;

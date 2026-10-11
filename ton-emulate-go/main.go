@@ -167,7 +167,7 @@ var (
 	serverPort          = flag.Int("port", 8080, "Server port")
 	prefork             = flag.Bool("prefork", false, "Use prefork")
 	testnet             = flag.Bool("testnet", false, "Use testnet")
-	dnsSelfAssignedOnly = flag.Bool("dns-self-assigned-only", false, "Address book (Kvrocks): show a domain only if its wallet record was last written by the account itself")
+	dnsSelfAssignedOnly = flag.Bool("dns-self-assigned-only", false, "Show only self-assigned DNS domains in the address book (Kvrocks only)")
 )
 
 var enrichmentReader crud.EnrichmentReader
@@ -436,7 +436,7 @@ func ExtractHeader(ctx *fiber.Ctx, header string) (string, bool) {
 func main() {
 	flag.Parse()
 	if *dnsSelfAssignedOnly && *kvrocksAddr == "" && *kvrocksSentinels == "" {
-		log.Fatal("-dns-self-assigned-only requires -kvrocks or -kvrocks-sentinels: the PostgreSQL address book does not apply it")
+		log.Fatal("-dns-self-assigned-only requires -kvrocks or -kvrocks-sentinels")
 	}
 
 	redisClient = redis.NewClient(&redis.Options{

@@ -1,6 +1,5 @@
-// dns-wallet-writers backfills dns_wallet_writers: for each .ton/.t.me item, the sender of the last
-// successful change_dns_record (key sha256("wallet")) or edit_content in-message. telemint has no
-// edit_content handler (TelegramMessenger/telemint@1e47b28 func/nft-item.fc:267).
+// dns-wallet-writers backfills dns_wallet_writers: the sender of the last successful wallet-record
+// write of each .ton and .t.me item.
 package main
 
 import (
@@ -33,7 +32,6 @@ const (
 
 var walletKey = sha256.Sum256([]byte("wallet"))
 
-// Address is a std address; String gives the raw form 0:UPPERHEX.
 type Address struct {
 	Workchain int32
 	Hash      [32]byte
@@ -62,7 +60,6 @@ func (a Address) String() string {
 	return fmt.Sprintf("%d:%X", a.Workchain, a.Hash[:])
 }
 
-// sourceKV reads kvrocks: one connection, read commands only, paced batches.
 type sourceKV struct {
 	c *redis.Client
 }
@@ -81,7 +78,6 @@ func newSourceKV() (*sourceKV, error) {
 	return &sourceKV{c: c}, nil
 }
 
-// mgetPayloads returns id -> payload for the ids found under <table>:<id>:payload.
 func (k *sourceKV) mgetPayloads(ctx context.Context, table string, ids []string) (map[string]string, error) {
 	res := map[string]string{}
 	for start := 0; start < len(ids); start += kvBatch {
@@ -104,8 +100,6 @@ func (k *sourceKV) mgetPayloads(ctx context.Context, table string, ids []string)
 	return res, nil
 }
 
-// newTarget opens the write target. It must be on the loopback host unless allowRemote names the
-// same address explicitly.
 func newTarget(addr string, allowRemote string, passwordEnv string) (*redis.Client, error) {
 	if addr == "" {
 		return nil, fmt.Errorf("-target is required unless -dry-run")
@@ -115,7 +109,7 @@ func newTarget(addr string, allowRemote string, passwordEnv string) (*redis.Clie
 		return nil, err
 	}
 	if host != "127.0.0.1" && host != "localhost" && addr != allowRemote {
-		return nil, fmt.Errorf("refusing to write to %q: only 127.0.0.1 or localhost unless -allow-remote-write-target=%s", addr, addr)
+		return nil, fmt.Errorf("remote target %q requires -allow-remote-write-target=%s", addr, addr)
 	}
 	password := ""
 	if passwordEnv != "" {
@@ -128,8 +122,7 @@ func newTarget(addr string, allowRemote string, passwordEnv string) (*redis.Clie
 	return c, nil
 }
 
-// Copy of kvrocks_set_current_script (KvrocksState.cpp): KEYS = {row key, payload key},
-// ARGV = {source_mc_seqno, payload}; a lower source_mc_seqno than the stored one is ignored.
+// Same seqno guard as kvrocks_set_current_script in KvrocksState.cpp.
 var setCurrentScript = redis.NewScript(`
 local current = redis.call('HGET', KEYS[1], 'source_mc_seqno')
 if (not current) or tonumber(current) <= tonumber(ARGV[1]) then
@@ -170,7 +163,7 @@ func openPG(ctx context.Context, envName string) (*pgx.Conn, error) {
 	cfg.RuntimeParams["default_transaction_read_only"] = "on"
 	cfg.RuntimeParams["statement_timeout"] = "30s"
 	cfg.RuntimeParams["jit"] = "off"
-	// Unnamed statements: every query is planned with its parameter values, like EXPLAIN.
+	// Plan every query with its parameter values, as EXPLAIN does.
 	cfg.DefaultQueryExecMode = pgx.QueryExecModeExec
 	conn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
@@ -179,8 +172,6 @@ func openPG(ctx context.Context, envName string) (*pgx.Conn, error) {
 	return conn, nil
 }
 
-// explainQuery returns the plan of a query. It fails on a sequential scan of a non-empty relation
-// and when no index scan on rel (a table or one of its partitions) appears.
 func explainQuery(ctx context.Context, conn *pgx.Conn, rel string, sql string, args ...any) (string, error) {
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -221,7 +212,6 @@ func explainQuery(ctx context.Context, conn *pgx.Conn, rel string, sql string, a
 	return plan, nil
 }
 
-// changesWalletKey reports whether a change_dns_record body targets key sha256("wallet").
 func changesWalletKey(bodyB64 string) (bool, error) {
 	boc, err := base64.StdEncoding.DecodeString(bodyB64)
 	if err != nil {
@@ -247,22 +237,19 @@ func changesWalletKey(bodyB64 string) (bool, error) {
 }
 
 func main() {
-	target := flag.String("target", "", "kvrocks host:port to write to; required unless -dry-run (127.0.0.1 or localhost unless -allow-remote-write-target)")
-	allowRemote := flag.String("allow-remote-write-target", "", "host:port; allows -target to be this non-loopback address (must be equal)")
-	passwordEnv := flag.String("write-password-env", "", "name of the environment variable holding the write target's password")
-	minMcSeqno := flag.Int("min-mc-seqno", 0, "ignore writes in transactions with a lower mc seqno")
-	maxMcSeqno := flag.Int("max-mc-seqno", 0, "ignore writes in transactions with a higher mc seqno (0: no limit)")
-	checkpoint := flag.String("checkpoint", "", "checkpoint file (resumes from it when present)")
-	dryRun := flag.Bool("dry-run", false, "compute writers and write -out, but do not write to the target")
-	out := flag.String("out", "", "JSON lines of writer payloads; items left out for a missing body go to <out>.missing")
+	target := flag.String("target", "", "kvrocks host:port to write to; required unless -dry-run")
+	allowRemote := flag.String("allow-remote-write-target", "", "remote host:port allowed as -target; must equal -target")
+	passwordEnv := flag.String("write-password-env", "", "environment variable with the target password")
+	minMcSeqno := flag.Int("min-mc-seqno", 0, "minimum transaction mc seqno")
+	maxMcSeqno := flag.Int("max-mc-seqno", 0, "maximum transaction mc seqno, 0 = no limit")
+	checkpoint := flag.String("checkpoint", "", "checkpoint file, resumed if it exists")
+	dryRun := flag.Bool("dry-run", false, "do not write to -target; -out is still written")
+	out := flag.String("out", "", "writer payloads as JSON lines; items with a missing body go to <out>.missing")
 	flag.Usage = func() {
 		fmt.Fprint(flag.CommandLine.Output(), `Usage: dns-wallet-writers [flags]
 
-Scans every in-message with op change_dns_record or edit_content in HOT_DB and COLD_DB (read-only
-sessions; each page query is EXPLAINed first), keeps the newest successful wallet write per .ton/.t.me
-item and writes dns_wallet_writers through the worker's set_current script, so the higher
-source_mc_seqno wins whatever the order of this run and the worker. kvrocks (nft_items,
-message_contents) is read with MGET batches of 100 and a pause between them.
+Backfills dns_wallet_writers from HOT_DB and COLD_DB into -target. Postgres and the source kvrocks
+are only read. The higher source_mc_seqno wins, so it can run alongside the worker.
 Environment: HOT_DB, COLD_DB, KV_ROCKS_HOST, KV_ROCKS_PORT, KV_ROCKS_PASSWORD.
 
 `)
@@ -271,7 +258,6 @@ Environment: HOT_DB, COLD_DB, KV_ROCKS_HOST, KV_ROCKS_PORT, KV_ROCKS_PASSWORD.
 	flag.Parse()
 	ctx := context.Background()
 
-	// Validate the write target before any read.
 	var dst *redis.Client
 	if !*dryRun {
 		c, err := newTarget(*target, *allowRemote, *passwordEnv)

@@ -18,8 +18,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Keyset pages over (opcode, coalesce(created_lt, tx_lt), msg_hash), one opcode at a time. The mc
-// seqno bounds filter the transactions and are also turned into a widened lt range for the key.
 const scanQuery = `select m.mc_seqno, t.hash, t.lt, coalesce(m.created_lt, m.tx_lt), m.msg_hash, m.source, m.destination,
        coalesce(t.aborted, true), coalesce(t.compute_success, false), coalesce(m.bounced, false), m.body_hash
 from messages m
@@ -34,8 +32,7 @@ const mcBlockLtQuery = `select start_lt, end_lt from blocks where workchain = -1
 const (
 	pageSize  = 2000
 	pagePause = 100 * time.Millisecond
-	// The key is the message's created_lt, which can be far below its transaction's lt when the
-	// message waited in a queue, so the lower edge gets a wide margin.
+	// A queued message's created_lt can be far below its transaction's lt.
 	ltMarginBelow = 100000 // mc blocks
 	ltMarginAbove = 1000   // mc blocks
 )
@@ -51,8 +48,7 @@ type scanCursor struct {
 	Done    bool
 }
 
-// startCursor sorts before every message with key lt >= lt. msg_hash cannot be empty (Postgres
-// tonhash rejects it), so the start uses lt-1 and the all-zero hash.
+// Postgres tonhash rejects an empty hash, so start at lt-1 with the all-zero hash.
 func startCursor(lt int64) scanCursor {
 	return scanCursor{Lt: lt - 1, MsgHash: base64.StdEncoding.EncodeToString(make([]byte, 32))}
 }
@@ -71,7 +67,6 @@ type missingBody struct {
 	TxHash string `json:"tx_hash"`
 }
 
-// scanState is everything a resumed run needs; it is saved with encoding/gob.
 type scanState struct {
 	MinMcSeqno, MaxMcSeqno int32
 	LtLo, LtHi             int64
@@ -134,14 +129,13 @@ func (st *scanState) save(path string) error {
 	return os.Rename(path+".tmp", path)
 }
 
-// mcBlockLt returns start_lt and end_lt of a masterchain block from the first database that has it,
-// or zeros.
+// mcBlockLt returns zeros when no database has the block.
 func mcBlockLt(ctx context.Context, conns []*pgx.Conn, names []string, seqno int32) (int64, int64, error) {
 	for i, conn := range conns {
 		plan, err := explainQuery(ctx, conn, "blocks", mcBlockLtQuery, seqno)
 		fmt.Printf("=== EXPLAIN %s mc block lt\n%s\n", names[i], plan)
 		if err != nil {
-			return 0, 0, fmt.Errorf("%s: %w; not running queries", names[i], err)
+			return 0, 0, fmt.Errorf("%s: %w", names[i], err)
 		}
 		tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 		if err != nil {
@@ -207,7 +201,7 @@ func runScan(ctx context.Context, kv *sourceKV, dst *redis.Client, minMcSeqno, m
 		plan, err := explainQuery(ctx, conn, "messages", scanQuery, args(opChangeDNSRecord, startCursor(st.LtLo))...)
 		fmt.Printf("=== EXPLAIN %s scan page\n%s\n", name, plan)
 		if err != nil {
-			return fmt.Errorf("%s: %w; not running queries", name, err)
+			return fmt.Errorf("%s: %w", name, err)
 		}
 		for _, op := range []int32{opChangeDNSRecord, opEditContent} {
 			key := name + "/" + strconv.Itoa(int(op))
@@ -369,9 +363,7 @@ func writeJSONLines[T any](path string, rows []T) error {
 	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
 
-// writeAll writes every writer through set_current in pipelines of 100 (skipped when dst is nil)
-// and, with out set, the payloads to out and the items left out for a missing body to out.missing.
-// Such an item's newest successful change_dns_record may be a later wallet write, so it gets no key.
+// An item whose newest change_dns_record has no body gets no key: that write may be a later wallet write.
 func (st *scanState) writeAll(ctx context.Context, dst *redis.Client, out string) error {
 	var payloads []writerPayload
 	var missing []missingBody
@@ -423,7 +415,7 @@ func (st *scanState) writeAll(ctx context.Context, dst *redis.Client, out string
 			time.Sleep(kvPause)
 		}
 	}
-	log.Printf("writers %d, applied %d (target written: %v), items without a key for a missing body %d",
+	log.Printf("writers %d, applied %d, target written %v, missing body %d",
 		len(payloads), applied, dst != nil, len(missing))
 	return nil
 }
