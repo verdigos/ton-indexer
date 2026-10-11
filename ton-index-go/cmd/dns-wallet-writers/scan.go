@@ -198,19 +198,24 @@ func runScan(ctx context.Context, kv *sourceKV, dst *redis.Client, minMcSeqno, m
 		args := func(op int32, cur scanCursor) []any {
 			return []any{op, cur.Lt, cur.MsgHash, st.LtHi, minMcSeqno, maxMcSeqno, pageSize}
 		}
-		plan, err := explainQuery(ctx, conn, "messages", scanQuery, args(opChangeDNSRecord, startCursor(st.LtLo))...)
-		fmt.Printf("=== EXPLAIN %s scan page\n%s\n", name, plan)
-		if err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
 		for _, op := range []int32{opChangeDNSRecord, opEditContent} {
 			key := name + "/" + strconv.Itoa(int(op))
 			cur, ok := st.Cursors[key]
 			if !ok {
 				cur = startCursor(st.LtLo)
 			}
+			firstPage := true
 			for !cur.Done {
-				rows, err := queryScanPage(ctx, conn, args(op, cur))
+				pageArgs := args(op, cur)
+				plan, err := explainQuery(ctx, conn, "messages", scanQuery, pageArgs...)
+				if firstPage || err != nil {
+					fmt.Printf("=== EXPLAIN %s scan page\n%s\n", key, plan)
+				}
+				if err != nil {
+					return fmt.Errorf("%s page after lt %d: %w", key, cur.Lt, err)
+				}
+				firstPage = false
+				rows, err := queryScanPage(ctx, conn, pageArgs)
 				if err != nil {
 					return fmt.Errorf("%s page after lt %d: %w", key, cur.Lt, err)
 				}
