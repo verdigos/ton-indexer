@@ -45,6 +45,9 @@ var (
 
 func main() {
 	flag.Parse()
+	if *dnsSelfAssignedOnly && *kvrocksAddr == "" && *kvrocksSentinels == "" {
+		log.Fatal("-dns-self-assigned-only requires -kvrocks or -kvrocks-sentinels: the PostgreSQL address book does not apply it")
+	}
 
 	options, err := redis.ParseURL(*redisAddr)
 	if err != nil {

@@ -2774,6 +2774,9 @@ func main() {
 	if settings.CacheServiceUrl != "" && settings.Request.DnsSelfAssignedOnly {
 		log.Fatal("-dns-self-assigned-only cannot be combined with -cache-service-url: the cache service does not apply it")
 	}
+	if settings.Request.DnsSelfAssignedOnly && kvrocks_addr == "" && kvrocks_sentinels == "" {
+		log.Fatal("-dns-self-assigned-only requires -kvrocks or -kvrocks-sentinels: the PostgreSQL address book does not apply it")
+	}
 	if settings.CacheServiceUrl == "" {
 		settings.UseCache = false
 	} else {

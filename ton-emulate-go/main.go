@@ -435,6 +435,9 @@ func ExtractHeader(ctx *fiber.Ctx, header string) (string, bool) {
 
 func main() {
 	flag.Parse()
+	if *dnsSelfAssignedOnly && *kvrocksAddr == "" && *kvrocksSentinels == "" {
+		log.Fatal("-dns-self-assigned-only requires -kvrocks or -kvrocks-sentinels: the PostgreSQL address book does not apply it")
+	}
 
 	redisClient = redis.NewClient(&redis.Options{
 		Addr: *redisAddr,
