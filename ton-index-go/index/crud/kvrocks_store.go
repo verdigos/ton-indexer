@@ -208,7 +208,7 @@ func (s *KvrocksStore) getTablesPayloads(ctx context.Context, tables []string, i
 		id    string
 	}
 	keys := make([]string, 0, len(tables)*len(uniqueIDs))
-	refs := make([]keyRef, 0, len(keys))
+	refs := make([]keyRef, 0, cap(keys))
 	for t, table := range tables {
 		for _, id := range uniqueIDs {
 			keys = append(keys, s.payloadKey(table, id))
