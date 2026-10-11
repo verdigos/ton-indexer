@@ -113,7 +113,7 @@ TEST(TonDbScanner, ActionDetector_parse_jetton_burn) {
 
 namespace {
 
-schema::Transaction make_dns_item_transaction(bool success) {
+schema::Transaction make_dns_item_transaction(bool success, bool aborted = false) {
   auto transaction = schema::Transaction();
   transaction.account = block::StdAddress::parse("0:5F1FCBE33DD66EF4267536C21822E481634E243B35A1AEDBF1B5967F89105087").move_as_ok();
   transaction.lt = 108213061000003;
@@ -122,7 +122,7 @@ schema::Transaction make_dns_item_transaction(bool success) {
   transaction.in_msg->bounced = false;
   auto* descr = std::get_if<schema::TransactionDescr_ord>(&transaction.description);
   CHECK(descr != nullptr);
-  descr->aborted = !success;
+  descr->aborted = aborted;
   schema::TrComputePhase_vm compute{};
   compute.success = success;
   descr->compute_ph = compute;
@@ -184,6 +184,9 @@ TEST(TonDbScanner, ActionDetector_parse_dns_wallet_write_rejects) {
   CHECK(short_body.store_long_bool(0, 64));
   CHECK(short_body.store_long_bool(0, 40));
   CHECK(!detector.parse_dns_wallet_write(item, transaction, vm::load_cell_slice_ref(short_body.finalize())));
+
+  auto aborted = make_dns_item_transaction(true, true);
+  CHECK(!detector.parse_dns_wallet_write(item, aborted, change_dns_record_body("wallet", true)));
 
   auto failed = make_dns_item_transaction(false);
   CHECK(!detector.parse_dns_wallet_write(item, failed, change_dns_record_body("wallet", true)));
