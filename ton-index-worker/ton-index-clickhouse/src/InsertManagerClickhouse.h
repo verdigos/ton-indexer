@@ -21,8 +21,10 @@ public:
   struct Options {};
 private:
   InsertManagerClickhouse::Credential credential_;
+  std::string dex_prices_database_;  // empty: no DEX pool snapshots
 public:
-  InsertManagerClickhouse(Credential credential) : credential_(credential) {}
+  InsertManagerClickhouse(Credential credential, std::string dex_prices_database = "")
+    : credential_(credential), dex_prices_database_(std::move(dex_prices_database)) {}
 
   void start_up() override;
 
