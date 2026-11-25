@@ -4,10 +4,11 @@ Trusted STON.fi v1/v2 and DeDust v1/v2 pools provide jetton prices in GRAM (Tonc
 
 - The indexer writes pool snapshots with spot and depth for supported curves to ClickHouse.
 - The aggregator turns those pool snapshots into minute prices in ClickHouse.
+- The API serves current prices and price history.
 
 Missing prices are NULL with a reason.
 
-Freshness uses the live head of indexed blocks, never the clock. A minute becomes final about 60 s after it starts, plus up to 5 s. Until then, the current minute is in `anchor_now` and `price_now`, recomputed every 5 s.
+Freshness uses the live head of indexed blocks, never the clock. A minute becomes final about 60 s after it starts, plus up to 5 s. Until then, the current minute has a history point with `final: false`, recomputed every 5 s.
 
 ## Components and data flow
 
@@ -55,7 +56,47 @@ The [aggregator](../../ton-index-price-api/cmd/dex-prices-aggregator/) runs as o
 - If a range contains outputs from an earlier attempt, it deletes them first.
 - Once caught up, it recomputes the current minute at each interval when the live head has moved.
 - It logs one line per finished range.
-- Stored prices use raw quote units per raw asset unit.
+- Stored prices use raw quote units per raw asset unit. The API scales them when decimals are known.
+
+### API
+
+`ton-index-price-api -clickhouse <dsn> -kvrocks <addr>` serves `/api/v3/jetton/prices` and `/api/v3/jetton/price_history`. You can also pass `-kvrocks-sentinels`, `-kvrocks-password`, and the other `-kvrocks-*` flags.
+
+- The API reads jetton decimals from kvrocks and keeps them in memory for 5 minutes per asset.
+- Assets are jetton master addresses or `gram` (Toncoin, by its current name; `ton` also works).
+- Quotes are `gram` and `usdt`.
+- Responses use `gram`, while ClickHouse tables keep the key `TON`.
+- In responses, `value` is in whole units and needs known decimals. `value_raw` is in raw units and is there whenever the asset has a price.
+
+#### `/api/v3/jetton/prices`
+
+- Serves a cached price snapshot of the newest prices for all assets.
+- After `-latest-refresh` (default 2 s), an incoming request starts a reload.
+- The reload reads the prices first and then the live head.
+- Requests use the previous price snapshot until its age reaches the larger of `-latest-refresh` and 30 s.
+- After that limit, requests wait for the reload and get 500 if it fails.
+- The endpoint reads decimals only for assets that have a price.
+
+#### `/api/v3/jetton/price_history`
+
+- Reads the row in force at the range start and the newest row of each step in one query.
+- Rounds the range outward to whole steps and treats any bound after now as now.
+- Clients asking for "the last 7 days" at different seconds therefore share one response.
+- The request timeout (`X-Timeout`) is at least 500 ms. A query keeps running for the cache after its request times out, so a client with a near-zero timeout could start queries without waiting for any of them.
+- Each cached response expires after 80% to 120% of `-history-cache-ttl` (24 to 36 s at the 30 s default).
+- The cache holds up to `-history-cache-mb` (default 1024 MiB).
+- It runs one query at a time per distinct request.
+- At 3,000 requests/s over 3,997 jettons, that keeps ClickHouse at about 3 threads.
+
+| Range length | Step |
+|---|---|
+| Under 6 h | 1 min |
+| Under 24 h | 5 min |
+| Under 15 days | 15 min |
+| Under 60 days | 1 h |
+| Under 240 days | 4 h |
+| Under 1440 days | 1 day |
+| Longer ranges | 1 week |
 
 ## Rules
 
@@ -91,10 +132,12 @@ The [aggregator](../../ton-index-price-api/cmd/dex-prices-aggregator/) runs as o
 - The price is the weighted median of the kept pools, or their weighted mean when fewer than 3 remain. A pool's weight is its smaller side, valued in TON at the reference price.
 - The TON/USDT anchor takes the weighted median of TON/USDT pools with at least 100,000 TON, and averages the last 5 minute medians.
 
-### State and constants
+### State, age, and constants
 
 - A pool state counts until the pool changes, however old it is.
 - Removed pools end their earlier state.
+- For a jetton price, `age_sec` counts from the newest state change among the pools used to the live head.
+- For GRAM/USDT and USDT/GRAM, `age_sec` counts from the start of the anchor minute to the live head.
 - `DexConstants.{h,cpp}` holds the compiled allowlists and quotes.
 - The USDT master and the TON aliases (pTON, DeDust native) are constants in `ton-index-price-api/prices`.
 - Aggregation thresholds live in [config.go](../../ton-index-price-api/aggregate/config.go).
@@ -127,10 +170,13 @@ B and S are masterchain block seqnos. The aggregator takes unix timestamps (in s
    dex-prices-aggregator -dsn clickhouse://<user>:<password>@<host>:9000/dex_prices -start <B's minute>
    ```
 
+4. Start `ton-index-price-api -clickhouse <dsn> -kvrocks ...`. Route `/api/v3/jetton/prices` and `/api/v3/jetton/price_history` to it at the gateway.
+
 Verify these signals after startup:
 
 - The `live` row of `ingest_head` moves about every 5 s while the indexer is in sync.
 - `aggregate_state` follows `ingest_head` about one minute behind.
+- `as_of_utime` in `/api/v3/jetton/prices` stays close to the clock.
 
 ### Pool list
 
@@ -208,3 +254,4 @@ DEX_PRICES_TEST_DSN=clickhouse://127.0.0.1:9000 go test ./aggregate/... ./prices
 - The tests run the real aggregation and read SQL on synthetic pools with prices worked out by hand.
 - A plain `mc_blocks` table stands in for the indexer's view.
 - Each test creates and drops its own database.
+- Before running `go test ./...`, generate the API docs. Build the `ton-index-price-api` target or run `swag init --parseDependency` from `ton-index-price-api`.

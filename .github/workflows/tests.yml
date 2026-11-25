@@ -122,7 +122,7 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build C++ libraries
-      run: touch suppression_mappings.txt && cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ton-index-postgres ton-index-postgres-migrate ton-index-clickhouse ton-trace-emulator ton-trace-task-emulator ton-index-go dex-prices-aggregator ton-streaming-go ton-mch-engine ton-dex-prices-test ton-dex-prices-backfill --parallel $(nproc)
+      run: touch suppression_mappings.txt && cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ton-index-postgres ton-index-postgres-migrate ton-index-clickhouse ton-trace-emulator ton-trace-task-emulator ton-index-go dex-prices-aggregator ton-index-price-api ton-streaming-go ton-mch-engine ton-dex-prices-test ton-dex-prices-backfill --parallel $(nproc)
 
     - name: Show ccache statistics
       if: always()

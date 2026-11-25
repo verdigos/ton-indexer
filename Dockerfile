@@ -81,6 +81,21 @@ FROM golang:trixie AS dex-prices-aggregator-builder
 ADD ton-index-price-api/ /go/app/
 RUN cd /go/app && CGO_ENABLED=0 go build -o dex-prices-aggregator ./cmd/dex-prices-aggregator
 
+## build price api service ton-index-price-api
+FROM golang:trixie AS price-api-builder
+
+RUN apt-get update -y \
+    && apt install -y dnsutils libpq-dev libsecp256k1-dev libsodium-dev libhiredis-dev \
+    && rm -rf /var/lib/{apt,dpkg,cache,log}/
+
+RUN go install github.com/swaggo/swag/cmd/swag@latest
+
+ADD ton-index-go/ /go/ton-index-go/
+ADD ton-index-price-api/ /go/app/
+COPY --from=core-builder /app/build/ton-marker/libton-marker* /usr/lib/
+COPY --from=core-builder /app/ton-marker/src/wrapper.h /usr/local/include/wrapper.h
+RUN cd /go/app && swag init --parseDependency && go build -o ton-index-price-api ./main.go
+
 ## build metadata cache service ton-metadata-cache
 FROM golang:trixie AS metadata-cache-builder
 
@@ -177,6 +192,17 @@ RUN apt-get update \
 COPY --from=dex-prices-aggregator-builder /go/app/dex-prices-aggregator /usr/local/bin/dex-prices-aggregator
 
 ENTRYPOINT ["dex-prices-aggregator"]
+
+## price api service image
+FROM ubuntu:24.04 AS price-api
+RUN apt-get update \
+    && apt install --yes curl dnsutils libpq5 libsecp256k1-1 libsodium23 libhiredis1.1.0 \
+    && rm -rf /var/lib/{apt,dpkg,cache,log}/
+
+COPY --from=core-builder /app/build/ton-marker/libton-marker* /usr/lib/
+COPY --from=price-api-builder /go/app/ton-index-price-api /usr/local/bin/ton-index-price-api
+
+ENTRYPOINT ["ton-index-price-api"]
 
 ## metadata cache service image
 FROM ubuntu:24.04 AS metadata-cache
