@@ -75,6 +75,12 @@ COPY --from=core-builder /app/build/ton-marker/libton-marker* /usr/lib/
 COPY --from=core-builder /app/ton-marker/src/wrapper.h /usr/local/include/wrapper.h
 RUN cd /go/app && swag init && go build -o ton-emulate-go ./main.go
 
+## build DEX price aggregator dex-prices-aggregator
+FROM golang:trixie AS dex-prices-aggregator-builder
+
+ADD ton-index-price-api/ /go/app/
+RUN cd /go/app && CGO_ENABLED=0 go build -o dex-prices-aggregator ./cmd/dex-prices-aggregator
+
 ## build metadata cache service ton-metadata-cache
 FROM golang:trixie AS metadata-cache-builder
 
@@ -161,6 +167,16 @@ COPY --from=emulate-api-builder /go/app/ton-emulate-go /usr/local/bin/ton-emulat
 COPY ton-emulate-go/entrypoint.sh /app/entrypoint.sh
 
 ENTRYPOINT [ "/app/entrypoint.sh" ]
+
+## DEX price aggregator image
+FROM ubuntu:24.04 AS dex-prices-aggregator
+RUN apt-get update \
+    && apt install --yes ca-certificates \
+    && rm -rf /var/lib/{apt,dpkg,cache,log}/
+
+COPY --from=dex-prices-aggregator-builder /go/app/dex-prices-aggregator /usr/local/bin/dex-prices-aggregator
+
+ENTRYPOINT ["dex-prices-aggregator"]
 
 ## metadata cache service image
 FROM ubuntu:24.04 AS metadata-cache

@@ -391,7 +391,14 @@ void InsertManagerClickhouse::start_up() {
             client.Execute(builder.as_cslice().str());
             LOG(INFO) << "Table jetton_burns created";
         }
-        
+        if (!dex_prices_database_.empty()) {
+            // The price aggregator finds its live head in this indexer's masterchain rows.
+            client.Execute("CREATE OR REPLACE VIEW " + dex_prices_database_ + ".mc_blocks AS "
+                           "SELECT seqno AS mc_seqno, gen_utime AS block_utime FROM " + credential_.dbname + ".blocks "
+                           "WHERE workchain = -1 AND shard = -9223372036854775808");
+            LOG(INFO) << "DEX prices schema created in " << dex_prices_database_;
+        }
+
         LOG(INFO) << "Clickhouse start_up finished";
     } catch (const std::exception& e) {
         LOG(FATAL) << "Clickhouse start_up error: " << e.what();
@@ -566,7 +573,8 @@ void InsertBatchClickhouse::start_up() {
     stop();
 }
 
-// A failed insert drops the batch's snapshots with an ERROR line (refill with ton-dex-prices-backfill); indexing goes on.
+// Before blocks: the price aggregator's live head passes a masterchain block only after its blocks row exists. A failed
+// insert drops the batch's snapshots with an ERROR line (refill with ton-dex-prices-backfill); indexing goes on.
 void InsertBatchClickhouse::insert_dex_pool_snapshots(clickhouse::Client &client) {
     if (dex_prices_database_.empty()) {
         return;

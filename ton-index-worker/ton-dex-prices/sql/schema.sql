@@ -110,3 +110,146 @@ AS SELECT
     (lp_fee + protocol_fee) / fee_denominator AS fee
 FROM dex_prices.pool_snapshots
 WHERE NOT removed AND fee_denominator > 0;
+
+-- The aggregator's work table, filled by aggregate/sql/pool_records.sql for each range.
+CREATE TABLE IF NOT EXISTS dex_prices.pool_records
+(
+    pool         String,
+    minute       DateTime,
+    ts           DateTime,
+    r0           Float64,
+    r1           Float64,
+    spot         Nullable(Float64),
+    usable       Bool,
+    priced_asset String,                                  -- the non-quote asset, '' when both or neither are quotes
+    inv          Bool,                                    -- asset0 is the quote: invert spot
+    via_usdt     Bool,                                    -- the quote is USDT
+    is_anchor    Bool,                                    -- a TON/USDT pool
+    ton0         Bool                                     -- asset0 is TON
+)
+ENGINE = Memory;
+
+-- The live head: the newest block the prices use. Ages count from it, not from the clock. The aggregator moves it forward
+-- from mc_blocks, a view over the indexer's masterchain blocks. ton-index-clickhouse --dex-prices-database creates
+-- that view, because it names the indexer's database.
+CREATE TABLE IF NOT EXISTS dex_prices.ingest_head
+(
+    writer      LowCardinality(String),
+    mc_seqno    UInt32,
+    block_utime DateTime,
+    updated_at  DateTime DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(mc_seqno)
+ORDER BY writer;
+
+CREATE TABLE IF NOT EXISTS dex_prices.anchor_1m
+(
+    minute         DateTime,
+    price_raw      Nullable(Float64),                     -- raw USDT per raw TON (TWAP of minute medians)
+    pools          UInt16,
+    stale          Bool,                                  -- no eligible anchor pool, price_raw is the last good value
+    tvl_raw        Nullable(Float64),                     -- both reserves of the anchor pools of the minute, raw TON (NULL when stale)
+    computed_at    DateTime DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(computed_at)
+ORDER BY minute
+SETTINGS min_age_to_force_merge_seconds = 600;
+
+-- Prices at the minutes where an asset's pools changed, a row when the price, pools, tvl or state changes. The
+-- USDT price is the TON price times the anchor of the same minute. Nothing is written between pool changes.
+CREATE TABLE IF NOT EXISTS dex_prices.price_1m
+(
+    asset           String,                               -- jetton master
+    minute          DateTime,
+    price_raw       Nullable(Float64),                    -- raw TON per raw asset at the minute's end
+    pools           UInt16,
+    tvl_quote       Nullable(Float64),                    -- both reserves of the included pools, raw TON units
+    newest_utime    DateTime,                             -- newest snapshot among included pools
+    stale           Bool,                                 -- the anchor used for USDT pools was stale (last good value)
+    reason          LowCardinality(String),               -- empty when priced, else no_eligible_pools | no_anchor
+    anchor_raw      Nullable(Float64),                    -- anchor_1m price of the minute (raw USDT per raw TON)
+    anchor_stale    Bool,                                 -- that anchor was stale
+    computed_at     DateTime DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(computed_at)
+ORDER BY (asset, minute)
+-- Each part costs every history read: parts older than 10 minutes are merged into one.
+SETTINGS min_age_to_force_merge_seconds = 600;
+
+-- The newest price row per asset, so current prices need no scan of the history.
+CREATE TABLE IF NOT EXISTS dex_prices.price_latest
+(
+    asset           String,
+    version         UInt64,                               -- minute << 32 | computed_at
+    minute          DateTime,
+    price_raw       Nullable(Float64),
+    pools           UInt16,
+    tvl_quote       Nullable(Float64),
+    newest_utime    DateTime,
+    stale           Bool,
+    reason          LowCardinality(String),
+    anchor_raw      Nullable(Float64),
+    anchor_stale    Bool,
+    computed_at     DateTime
+)
+ENGINE = ReplacingMergeTree(version)
+ORDER BY asset;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS dex_prices.price_latest_mv TO dex_prices.price_latest
+AS SELECT
+    asset,
+    bitOr(bitShiftLeft(toUInt64(toUInt32(minute)), 32), toUInt64(toUInt32(computed_at))) AS version,
+    minute, price_raw, pools, tvl_quote, newest_utime, stale, reason, anchor_raw, anchor_stale, computed_at
+FROM dex_prices.price_1m;
+
+-- Forward job price_1m has written every minute through done_minute. The row with the highest seq counts.
+CREATE TABLE IF NOT EXISTS dex_prices.aggregate_state
+(
+    job         LowCardinality(String),
+    done_minute DateTime,
+    seq         UInt64,
+    updated_at  DateTime DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(seq)
+ORDER BY job;
+
+-- The current minute, which is not over yet. The aggregator writes it into the *_next copies every few seconds, then
+-- swaps the tables.
+CREATE TABLE IF NOT EXISTS dex_prices.anchor_now
+(
+    minute         DateTime,
+    price_raw      Nullable(Float64),
+    pools          UInt16,
+    stale          Bool,
+    tvl_raw        Nullable(Float64)
+)
+ENGINE = Memory;
+
+CREATE TABLE IF NOT EXISTS dex_prices.anchor_next AS dex_prices.anchor_now;
+
+CREATE TABLE IF NOT EXISTS dex_prices.price_now
+(
+    asset           String,
+    minute          DateTime,
+    price_raw       Nullable(Float64),
+    pools           UInt16,
+    tvl_quote       Nullable(Float64),
+    newest_utime    DateTime,
+    stale           Bool,
+    reason          LowCardinality(String),
+    anchor_raw      Nullable(Float64),
+    anchor_stale    Bool
+)
+ENGINE = Memory;
+
+CREATE TABLE IF NOT EXISTS dex_prices.price_next AS dex_prices.price_now;
+
+-- The stored rows, then the rows of the current minute (is_final = false).
+CREATE OR REPLACE VIEW dex_prices.anchor_all AS
+SELECT minute, price_raw, pools, stale, tvl_raw, true AS is_final FROM dex_prices.anchor_1m FINAL
+UNION ALL
+SELECT minute, price_raw, pools, stale, tvl_raw, false FROM dex_prices.anchor_now
+WHERE minute > (SELECT max(minute) FROM dex_prices.anchor_1m);
+
+-- Readers use price_1m, price_latest and price_now.
+DROP VIEW IF EXISTS dex_prices.price_all;
